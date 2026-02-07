@@ -946,21 +946,4 @@ export class UsersService {
       }
     });
   }
-
-  // --- Helper Methods ---
-
-  private deleteOldFile(fileUrl: string) {
-    try {
-      // Safety check: only delete files in /uploads/
-      if (!fileUrl || !fileUrl.startsWith('/uploads/')) return;
-
-      const filePath = path.join(process.cwd(), fileUrl.substring(1)); // Remove leading slash
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        console.log(`[File Cleanup] Deleted old file: ${filePath}`);
-      }
-    } catch (error) {
-      console.error(`[File Cleanup Error] Failed to delete ${fileUrl}`, error);
-    }
-  }
 }
