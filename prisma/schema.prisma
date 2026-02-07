@@ -1,0 +1,507 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - stores user authentication and profile data
+model User {
+  id        String  @id @default(uuid())
+  email     String  @unique
+  password  String? // Nullable for OAuth users
+  username  String? @unique
+  firstName String?
+  lastName  String?
+  bio       String? // User biography
+  avatar    String?
+  bannerUrl String? // Profile banner image URL
+  interests String[] @default([]) // Selected Discovery Tags
+
+  // Social Links
+  instagram String?
+  github    String?
+  linkedin  String?
+  tiktok    String?
+  whatsapp  String?
+  facebook  String?
+  snapchat  String?
+
+  // Leveling System
+  xp          Int       @default(0)
+  level       Int       @default(1)
+  lastCheckIn DateTime?
+
+  provider      AuthProvider @default(EMAIL)
+  providerId    String? // OAuth provider ID (MAKE SURE THIS IS NULLABLE)
+  
+  role          Role         @default(USER)
+
+  emailVerified Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+
+  favorites Favorite[]
+  watchlist Watchlist[]
+
+  // Manga Relations
+  mangaList     UserManga[]
+  favoriteManga FavoriteManga[]
+
+  // Character Relations
+  favoriteCharacters FavoriteCharacter[]
+
+  // Friend Relations
+  sentRequests     Friend[] @relation("sentRequests")
+  receivedRequests Friend[] @relation("receivedRequests")
+
+  // Chat Relations
+  conversationsAsUser1 Conversation[] @relation("ConversationsAsUser1")
+  conversationsAsUser2 Conversation[] @relation("ConversationsAsUser2")
+  messages             Message[]
+
+  // Badge Relations
+  badges            UserBadge[]
+  VerificationToken VerificationToken[]
+
+  // News Relations
+  comments     Comment[]
+  reactions    Reaction[]
+  notifications Notification[] @relation("UserNotifications")
+  sentNotifications Notification[] @relation("SenderNotifications")
+
+  @@map("users")
+}
+
+model Badge {
+  id          String      @id @default(uuid())
+  code        String      @unique // e.g., "FIRST_FAVORITE", "ELITE_OTAKU"
+  name        String
+  description String
+  imageUrl    String
+  rarity      BadgeRarity @default(COMMON)
+  createdAt   DateTime    @default(now())
+
+  users UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  userId     String
+  badgeId    String
+  unlockedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+enum BadgeRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+model Friend {
+  id         String       @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     FriendStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now()) @updatedAt
+
+  sender   User @relation("sentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("receivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@map("friends")
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+// Verification Token for Email Auth
+model VerificationToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("verification_tokens")
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  FACEBOOK
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// Favorite anime tracking
+model Favorite {
+  id         String   @id @default(uuid())
+  userId     String
+  animeId    Int // MyAnimeList ID from Jikan API
+  animeTitle String
+  animeImage String?
+  addedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, animeId])
+  @@map("favorites")
+}
+
+// Watchlist tracking
+model Watchlist {
+  id         String      @id @default(uuid())
+  userId     String
+  animeId    Int // MyAnimeList ID from Jikan API
+  animeTitle String
+  animeImage String?
+  status     WatchStatus @default(PLAN_TO_WATCH)
+  addedAt    DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, animeId])
+  @@map("watchlist")
+}
+
+// Watch status enum
+enum WatchStatus {
+  WATCHING
+  COMPLETED
+  ON_HOLD
+  DROPPED
+  PLAN_TO_WATCH
+}
+
+// Contact form submissions
+model Contact {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("contacts")
+}
+
+// Anime Data Model (Cached/Static)
+model Anime {
+  id              Int      @id // MyAnimeList ID
+  title           String
+  titleEnglish    String?
+  titleJapanese   String?
+  synopsis        String?  @db.Text
+  type            String? // TV, Movie, OVA, etc.
+  episodes        Int?
+  status          String?
+  rating          String?
+  score           Float?
+  rank            Int?
+  popularity      Int?
+  imageUrl        String?
+  duration        String?
+  source          String?
+  airing          Boolean?
+  aired           Json? // Store full Jikan aired object
+  scoredBy        Int?
+  members         Int?
+  favorites       Int?
+  background      String?  @db.Text
+  year            Int?
+  season          String?
+  genres          Json // Store as JSON array
+  studios         Json // Store as JSON array
+  streamingLinks  Json // Store streaming platforms as JSON
+  characters      Json? // Cached characters list
+  recommendations Json? // Cached recommendations
+
+  lastUpdated DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("anime")
+}
+
+// Manga Data Model (Cached/Static)
+model Manga {
+  id            Int     @id // MyAnimeList ID
+  title         String
+  titleEnglish  String?
+  titleJapanese String?
+  synopsis      String? @db.Text
+  type          String? // Manga, Novel, etc.
+  chapters      Int?
+  volumes       Int?
+  status        String?
+  score         Float?
+  rank          Int?
+  popularity    Int?
+  imageUrl      String?
+  authors       Json // Store as JSON
+  genres        Json // Store as JSON
+  background    String? @db.Text
+  published     Json? // Store full Jikan published object
+  scoredBy      Int?
+  members       Int?
+  favorites     Int?
+
+  lastUpdated DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("manga")
+}
+
+// Manga tracking (Parallel structure to Watchlist)
+model UserManga {
+  id           String      @id @default(uuid())
+  userId       String
+  mangaId      Int // MyAnimeList ID
+  mangaTitle   String
+  mangaImage   String?
+  status       MangaStatus @default(PLAN_TO_READ)
+  chaptersRead Int         @default(0)
+  volumesRead  Int         @default(0)
+  score        Int? // User score 1-10
+  addedAt      DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mangaId])
+  @@map("user_manga")
+}
+
+// Favorite Manga
+model FavoriteManga {
+  id         String   @id @default(uuid())
+  userId     String
+  mangaId    Int
+  mangaTitle String
+  mangaImage String?
+  addedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mangaId])
+  @@map("favorite_manga")
+}
+
+// Favorite Characters (Shrine)
+model FavoriteCharacter {
+  id          String   @id @default(uuid())
+  userId      String
+  characterId Int // Jikan Character ID
+  name        String
+  imageUrl    String?
+  role        String? // Main, Supporting, etc.
+  addedAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, characterId])
+  @@map("favorite_characters")
+}
+
+enum MangaStatus {
+  READING
+  COMPLETED
+  ON_HOLD
+  DROPPED
+  PLAN_TO_READ
+}
+
+// Chat System Models
+model Conversation {
+  id           String   @id @default(uuid())
+  participant1 String
+  participant2 String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Clear chat trackers (ISO date of when the user cleared their history)
+  clearedAt1   DateTime?
+  clearedAt2   DateTime?
+
+  user1    User      @relation("ConversationsAsUser1", fields: [participant1], references: [id], onDelete: Cascade)
+  user2    User      @relation("ConversationsAsUser2", fields: [participant2], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([participant1, participant2])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String      @db.Text
+  messageType    MessageType @default(TEXT)
+  animeId        Int? // Legacy field, prefer mediaId
+
+  // Generic Media Sharing Fields
+  mediaId    String? // Stored as string to support both Int IDs and UUIDs
+  mediaType  String? // ANIME, MANGA, CHARACTER, PROFILE
+  mediaTitle String?
+  mediaImage String?
+
+  status    MessageStatus @default(SENT)
+  read      Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
+
+  // Advanced Messaging Fields
+  isEdited         Boolean  @default(false)
+  isDeletedForAll  Boolean  @default(false)
+  deletedBy        String[] @default([]) // List of user IDs who "Deleted for Me"
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  
+  reactions    Reaction[]
+
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  STICKER
+  ANIME_CARD // Legacy
+  MEDIA_CARD // New generic card
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+// --- NEWS FEED & ENGAGEMENT SYSTEM ---
+
+// News Engagement Stats (Aggregates)
+model NewsEngagement {
+  id        String   @id @default(uuid())
+  providerId String  @unique // Reddit ID or Jikan ID etc (e.g. "t3_12345")
+  views     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments  Comment[]
+  reactions Reaction[]
+
+  @@map("news_engagements")
+}
+
+// User Comments
+model Comment {
+  id        String   @id @default(uuid())
+  content   String   @db.Text
+  userId    String
+  providerId String   // External Provider ID (Reddit ID)
+  engagementId String?
+
+  parentId  String?  // For nested replies (Self-referencing)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engagement NewsEngagement? @relation(fields: [engagementId], references: [id])
+  
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
+
+  reactions  Reaction[]
+
+  @@map("comments")
+}
+
+// User Reactions (Likes, etc)
+model Reaction {
+  id           String       @id @default(uuid())
+  userId       String
+  type         ReactionType
+  
+  // Reacting to News OR Comment OR Message
+  providerId   String?      // If reacting directly to News (Reddit ID)
+  engagementId String?      // Relation to NewsEngagement
+  commentId    String?      // If reacting to a Comment
+  messageId    String?      // If reacting to a Chat Message
+
+  createdAt    DateTime     @default(now())
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engagement   NewsEngagement? @relation(fields: [engagementId], references: [id])
+  comment      Comment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  message      Message?        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId], map: "unique_user_news_reaction") 
+  @@unique([userId, commentId], map: "unique_user_comment_reaction")
+  @@unique([userId, messageId], map: "unique_user_message_reaction")
+  @@map("reactions")
+}
+
+// Notifications System
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String
+  senderId    String?          // Nullable (System notifications may have no sender)
+  type        NotificationType
+  read        Boolean          @default(false)
+  
+  // Context
+  message     String?
+  entityId    String?          // ID of relevant entity (Comment ID, Friend Request ID)
+  link        String?          // Direct link to content
+
+  createdAt   DateTime         @default(now())
+
+  recipient   User  @relation("UserNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender      User? @relation("SenderNotifications", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, read])
+  @@map("notifications")
+}
+
+enum ReactionType {
+  LIKE
+  DISLIKE
+  HAHA
+  GRRR
+  HEART
+  BROKEN_HEART
+}
+
+enum NotificationType {
+  REPLY
+  REACTION
+  MENTION
+  SYSTEM
+  FRIEND_REQUEST
+  FRIEND_ACCEPT
+}
