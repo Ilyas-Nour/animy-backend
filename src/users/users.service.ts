@@ -6,15 +6,15 @@ import {
 import { PrismaService } from "../database/prisma.service";
 import { Prisma, User, WatchStatus, MangaStatus } from "@prisma/client";
 import * as bcrypt from "bcrypt";
-import * as fs from 'fs';
-import * as path from 'path';
 import { XpService, XP_REWARDS } from "./xp.service";
+import { SupabaseService } from "../common/supabase.service";
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly xpService: XpService,
+    private readonly supabaseService: SupabaseService,
   ) { }
   // ... (start of methods)
 
@@ -305,10 +305,12 @@ export class UsersService {
     };
   }
 
-  // Upload avatar
+  // Upload avatar to Supabase
   async uploadAvatar(
     userId: string,
+    buffer: Buffer,
     filename: string,
+    contentType: string,
   ): Promise<Omit<User, "password">> {
     // Get current user to check for old avatar
     const currentUser = await this.prisma.user.findUnique({
@@ -316,21 +318,32 @@ export class UsersService {
       select: { avatar: true },
     });
 
-    const avatarUrl = `/uploads/avatars/${filename}`;
+    // Upload to Supabase
+    const avatarUrl = await this.supabaseService.uploadFile('avatars', buffer, filename, contentType);
+
+    if (!avatarUrl) {
+      throw new BadRequestException('Failed to upload avatar');
+    }
+
     const updatedUser = await this.update(userId, { avatar: avatarUrl });
 
-    // Clean up old file if it exists and is different (and is a local upload)
-    if (currentUser?.avatar && currentUser.avatar !== avatarUrl) {
-      this.deleteOldFile(currentUser.avatar);
+    // Clean up old file from Supabase if it exists
+    if (currentUser?.avatar && currentUser.avatar.includes('supabase')) {
+      const oldFilename = currentUser.avatar.split('/').pop();
+      if (oldFilename) {
+        await this.supabaseService.deleteFile('avatars', oldFilename);
+      }
     }
 
     return updatedUser;
   }
 
-  // Upload banner
+  // Upload banner to Supabase
   async uploadBanner(
     userId: string,
+    buffer: Buffer,
     filename: string,
+    contentType: string,
   ): Promise<Omit<User, "password">> {
     // Get current user to check for old banner
     const currentUser = await this.prisma.user.findUnique({
@@ -338,12 +351,21 @@ export class UsersService {
       select: { bannerUrl: true },
     });
 
-    const bannerUrl = `/uploads/banners/${filename}`;
+    // Upload to Supabase
+    const bannerUrl = await this.supabaseService.uploadFile('banners', buffer, filename, contentType);
+
+    if (!bannerUrl) {
+      throw new BadRequestException('Failed to upload banner');
+    }
+
     const updatedUser = await this.update(userId, { bannerUrl });
 
-    // Clean up old file if it exists and is different
-    if (currentUser?.bannerUrl && currentUser.bannerUrl !== bannerUrl) {
-      this.deleteOldFile(currentUser.bannerUrl);
+    // Clean up old file from Supabase if it exists
+    if (currentUser?.bannerUrl && currentUser.bannerUrl.includes('supabase')) {
+      const oldFilename = currentUser.bannerUrl.split('/').pop();
+      if (oldFilename) {
+        await this.supabaseService.deleteFile('banners', oldFilename);
+      }
     }
 
     return updatedUser;

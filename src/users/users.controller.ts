@@ -14,7 +14,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Request } from "express";
-import { diskStorage } from "multer";
+import { memoryStorage } from "multer";
 import { extname } from "path";
 import { UsersService } from "./users.service";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -264,15 +264,7 @@ export class UsersController {
   @Post("upload-avatar")
   @UseInterceptors(
     FileInterceptor("avatar", {
-      storage: diskStorage({
-        destination: "./uploads/avatars",
-        filename: (req, file, cb) => {
-          const user: any = req.user;
-          const ext = extname(file.originalname);
-          const filename = `user-${user.id}-${Date.now()}${ext}`;
-          cb(null, filename);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: imageFileFilter,
       limits: { fileSize: 4 * 1024 * 1024 }, // 4MB
     }),
@@ -285,22 +277,16 @@ export class UsersController {
       throw new BadRequestException("No file uploaded");
     }
     const user: any = req.user;
-    return this.usersService.uploadAvatar(user.id, file.filename);
+    const ext = extname(file.originalname);
+    const filename = `user-${user.id}-${Date.now()}${ext}`;
+    return this.usersService.uploadAvatar(user.id, file.buffer, filename, file.mimetype);
   }
 
   // Upload Banner
   @Post("upload-banner")
   @UseInterceptors(
     FileInterceptor("banner", {
-      storage: diskStorage({
-        destination: "./uploads/banners",
-        filename: (req, file, cb) => {
-          const user: any = req.user;
-          const ext = extname(file.originalname);
-          const filename = `user-${user.id}-${Date.now()}${ext}`;
-          cb(null, filename);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: imageFileFilter,
       limits: { fileSize: 4 * 1024 * 1024 }, // 4MB
     }),
@@ -313,7 +299,9 @@ export class UsersController {
       throw new BadRequestException("No file uploaded");
     }
     const user: any = req.user;
-    return this.usersService.uploadBanner(user.id, file.filename);
+    const ext = extname(file.originalname);
+    const filename = `user-${user.id}-${Date.now()}${ext}`;
+    return this.usersService.uploadBanner(user.id, file.buffer, filename, file.mimetype);
   }
   // Leaderboard
   @Public()
