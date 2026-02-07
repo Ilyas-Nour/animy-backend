@@ -57,15 +57,15 @@
     "resend": "^6.9.1",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
-    "@nestjs/cli": "^10.3.0"
+    "@nestjs/cli": "^10.3.0",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^2.0.0"
   },
   "devDependencies": {
     "@nestjs/schematics": "^10.1.0",
     "@nestjs/testing": "^10.3.0",
     "@types/bcrypt": "^5.0.2",
-    "@types/express": "^4.17.21",
     "@types/jest": "^29.5.11",
-    "@types/multer": "^2.0.0",
     "@types/node": "^20.11.0",
     "@types/passport-facebook": "^3.0.3",
     "@types/passport-google-oauth20": "^2.0.14",
