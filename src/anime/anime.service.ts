@@ -156,17 +156,18 @@ export class AnimeService {
       type,
       page: page.toString(),
       limit: "25",
-      order_by: "score",
-      sort: "desc",
+      order_by: "popularity",
+      sort: "asc",
       sfw: "true", // Enforce SFW explicitly
       genres_exclude: "9", // Exclude Ecchi
+      min_members: "10000", // Filter out obscure content (Higher threshold)
     });
     const res = await this.jikanService.get<any>(
       `/anime?${params.toString()}`,
       3600,
     );
 
-    // Manual filtering
+    // Manual filtering for restricted content
     if (res.data && Array.isArray(res.data)) {
       res.data = res.data.filter(
         (item: any) =>
