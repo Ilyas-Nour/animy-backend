@@ -89,7 +89,11 @@ export class StreamingController {
         if (!fullId) {
             throw new HttpException('Episode ID is required', HttpStatus.BAD_REQUEST);
         }
-        return this.streamingService.getEpisodeLinks(fullId, provider || 'hianime');
+        const protocol = req.protocol;
+        const host = req.get('host');
+        const proxyBaseUrl = `${protocol}://${host}/api/v1/streaming/proxy`;
+
+        return this.streamingService.getEpisodeLinks(fullId, provider || 'hianime', proxyBaseUrl);
     }
 
     /**

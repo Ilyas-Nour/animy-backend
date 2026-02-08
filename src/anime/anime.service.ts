@@ -35,6 +35,7 @@ export class AnimeService {
       ...(order_by && { order_by }),
       ...(sort && { sort }),
       genres_exclude: "9", // Exclude Ecchi
+      min_members: "100", // Basic quality filter
     }).toString();
 
     // Returns full Jikan response with pagination
@@ -160,7 +161,7 @@ export class AnimeService {
       sort: "asc",
       sfw: "true", // Enforce SFW explicitly
       genres_exclude: "9", // Exclude Ecchi
-      min_members: "10000", // Filter out obscure content (Higher threshold)
+      min_members: "1000", // Filter out obscure content
     });
     const res = await this.jikanService.get<any>(
       `/anime?${params.toString()}`,

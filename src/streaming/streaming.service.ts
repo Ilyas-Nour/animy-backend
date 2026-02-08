@@ -74,7 +74,7 @@ export class StreamingService {
      * @param episodeId - Provider-specific episode ID
      * @param provider - Streaming provider
      */
-    async getEpisodeLinks(episodeId: string, provider: 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
+    async getEpisodeLinks(episodeId: string, provider: 'hianime' | 'animepahe' | 'animekai' = 'animepahe', proxyBaseUrl?: string) {
         try {
             this.logger.debug(`Fetching links for episode ${episodeId} from ${provider}`);
 
@@ -97,6 +97,20 @@ export class StreamingService {
             if (!sources || !sources.sources || sources.sources.length === 0) {
                 this.logger.warn(`No sources found on ${provider} for episode ${episodeId}`);
                 throw new NotFoundException(`No sources found on ${provider}`);
+            }
+
+            // Rewrite sources to point to our proxy
+            if (proxyBaseUrl) {
+                sources.sources = sources.sources.map((source: any) => {
+                    // Only proxy m3u8 files
+                    if (source.url && (source.url.includes('.m3u8') || source.isM3U8)) {
+                        const originalUrl = source.url;
+                        const referer = sources.headers?.Referer || '';
+                        // Double encode to ensure safe transport through query params
+                        source.url = `${proxyBaseUrl}?url=${encodeURIComponent(originalUrl)}&referer=${encodeURIComponent(referer)}`;
+                    }
+                    return source;
+                });
             }
 
             return {
