@@ -17,10 +17,32 @@ export class AnimeService {
       query,
       page = 1,
       limit = 25,
+      type,
+      order_by,
+      sort,
     } = searchDto;
 
+    // Map Jikan 'type' to AniList 'format'
+    let format = null;
+    if (type) {
+      format = type.toUpperCase();
+      if (format === 'SPECIAL') format = 'SPECIAL'; // Verify AniList enum if needed, usually same
+    }
+
+    // Map Jikan 'order_by' to AniList 'sort'
+    let anilistSort = 'POPULARITY_DESC';
+    if (order_by === 'score') anilistSort = 'SCORE_DESC';
+    else if (order_by === 'title') anilistSort = 'TITLE_ENGLISH';
+    else if (order_by === 'start_date') anilistSort = 'START_DATE_DESC';
+    else if (order_by === 'favorites') anilistSort = 'FAVOURITES_DESC';
+    else if (order_by === 'rank') anilistSort = 'SCORE_DESC';
+
+    // Handle specific sort direction if needed (simplified for now)
+    if (sort === 'asc' && order_by === 'popularity') anilistSort = 'POPULARITY';
+
     // AniList equivalent search
-    const data = await this.anilistService.searchAnime(query || "", Number(page), Number(limit));
+    // Pass undefined for query if empty to allow pure filtering
+    const data = await this.anilistService.searchAnime(query || undefined, Number(page), Number(limit), format, anilistSort);
 
     // Map to Jikan-like response structure for frontend compatibility
     return {

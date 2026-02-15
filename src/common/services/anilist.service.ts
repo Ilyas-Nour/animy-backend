@@ -14,9 +14,19 @@ export class AnilistService {
     /**
      * Search for anime by query
      */
-    async searchAnime(query: string, page = 1, perPage = 20) {
+    /**
+     * Search for anime by query with filters
+     */
+    async searchAnime(query: string, page = 1, perPage = 20, format?: string, sort: string = 'POPULARITY_DESC') {
+        const variables: any = { page, perPage };
+        if (query) variables.search = query;
+        if (format) variables.format = format;
+
+        // Dynamic sort enum based on input
+        const sortValue = sort;
+
         const queryGql = gql`
-            query ($search: String, $page: Int, $perPage: Int) {
+            query ($search: String, $page: Int, $perPage: Int, $format: MediaFormat) {
                 Page(page: $page, perPage: $perPage) {
                     pageInfo {
                         total
@@ -25,7 +35,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false) {
                         id
                         idMal
                         title {
@@ -61,7 +71,7 @@ export class AnilistService {
         `;
 
         try {
-            const data: any = await this.client.request(queryGql, { search: query, page, perPage });
+            const data: any = await this.client.request(queryGql, variables);
             return data.Page;
         } catch (error) {
             this.logger.error(`Error searching anime "${query}":`, error);
