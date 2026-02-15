@@ -4,7 +4,7 @@ import { Public } from "../common/decorators/public.decorator";
 
 @Controller("seasons")
 export class SeasonsController {
-  constructor(private readonly seasonsService: SeasonsService) {}
+  constructor(private readonly seasonsService: SeasonsService) { }
 
   @Public()
   @Get("current")
@@ -29,7 +29,7 @@ export class SeasonsController {
   }
 
   @Public()
-  @Get("list")
+  @Get(["list", "/"])
   async getSeasonsList() {
     return this.seasonsService.getSeasonsList();
   }

@@ -1,11 +1,11 @@
 import { Module, Global } from "@nestjs/common";
 import { HttpModule } from "@nestjs/axios";
-import { JikanService } from "./services/jikan.service";
+import { AnilistService } from "./services/anilist.service";
 
 @Global()
 @Module({
   imports: [HttpModule],
-  providers: [JikanService],
-  exports: [JikanService, HttpModule],
+  providers: [AnilistService],
+  exports: [AnilistService, HttpModule],
 })
-export class CommonModule {}
+export class CommonModule { }

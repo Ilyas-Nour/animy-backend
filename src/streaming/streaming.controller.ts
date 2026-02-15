@@ -47,13 +47,13 @@ export class StreamingController {
     @Get('search')
     async searchAnime(
         @Query('query') query: string,
-        @Query('provider') provider?: 'hianime' | 'animepahe' | 'animekai',
+        @Query('provider') provider?: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai',
     ) {
         if (!query) {
             throw new HttpException('Query parameter is required', HttpStatus.BAD_REQUEST);
         }
 
-        return this.streamingService.searchAnime(query, provider || 'hianime');
+        return this.streamingService.searchAnime(query, provider || 'animepahe');
     }
 
     /**
@@ -63,13 +63,13 @@ export class StreamingController {
     @Get('anime/*')
     async getAnimeInfo(
         @Req() req: Request,
-        @Query('provider') provider?: 'hianime' | 'animepahe' | 'animekai',
+        @Query('provider') provider?: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai',
     ) {
         const fullId = req.params[0];
         if (!fullId) {
             throw new HttpException('Anime ID is required', HttpStatus.BAD_REQUEST);
         }
-        return this.streamingService.getAnimeInfo(fullId, provider || 'hianime');
+        return this.streamingService.getAnimeInfo(fullId, provider || 'animepahe');
     }
 
     /**
@@ -79,7 +79,7 @@ export class StreamingController {
     @Get('episode/*')
     async getEpisodeLinks(
         @Req() req: Request,
-        @Query('provider') provider?: 'hianime' | 'animepahe' | 'animekai',
+        @Query('provider') provider?: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai',
     ) {
         // Extract the full path after 'episode/' to handle encoded slashes in IDs
         const fullId = req.params[0];
@@ -93,7 +93,7 @@ export class StreamingController {
         const host = req.get('host');
         const proxyBaseUrl = `${protocol}://${host}/api/v1/streaming/proxy`;
 
-        return this.streamingService.getEpisodeLinks(fullId, provider || 'hianime', proxyBaseUrl);
+        return this.streamingService.getEpisodeLinks(fullId, provider || 'animepahe', proxyBaseUrl);
     }
 
     /**

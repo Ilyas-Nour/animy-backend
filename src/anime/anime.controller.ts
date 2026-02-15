@@ -8,6 +8,13 @@ export class AnimeController {
   constructor(private readonly animeService: AnimeService) { }
 
   @Public()
+  @Get()
+  async searchAnimeRoot(@Query() query: any) {
+    if (query.q) query.query = query.q;
+    return this.animeService.searchAnime(query);
+  }
+
+  @Public()
   @Get("search")
   async searchAnime(@Query() searchDto: SearchAnimeDto) {
     return this.animeService.searchAnime(searchDto);
@@ -32,6 +39,12 @@ export class AnimeController {
   @Get("series")
   async getSeries(@Query("page") page?: number) {
     return this.animeService.getAnimeByType("tv", page);
+  }
+
+  @Public()
+  @Get(":id/full")
+  async getAnimeFullById(@Param("id") id: string) {
+    return this.animeService.getAnimeById(parseInt(id, 10));
   }
 
   @Public()

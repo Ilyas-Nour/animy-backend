@@ -5,6 +5,7 @@ import axios from 'axios';
 @Injectable()
 export class StreamingService {
     private readonly logger = new Logger(StreamingService.name);
+    private readonly kickassanime = new ANIME.KickAssAnime();
     private readonly hianime = new ANIME.Hianime();
     private readonly animepahe = new ANIME.AnimePahe();
     private readonly animekai = new ANIME.AnimeKai();
@@ -14,7 +15,7 @@ export class StreamingService {
      * @param query - Anime title to search
      * @param provider - Streaming provider
      */
-    async searchAnime(query: string, provider: 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
+    async searchAnime(query: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
         try {
             this.logger.debug(`Searching for "${query}" on ${provider}`);
 
@@ -22,6 +23,7 @@ export class StreamingService {
             switch (provider) {
                 case 'hianime': providerInstance = this.hianime; break;
                 case 'animekai': providerInstance = this.animekai; break;
+                case 'kickassanime': providerInstance = this.kickassanime; break;
                 default: providerInstance = this.animepahe;
             }
 
@@ -42,7 +44,7 @@ export class StreamingService {
      * @param animeId - Provider-specific anime ID
      * @param provider - Streaming provider
      */
-    async getAnimeInfo(animeId: string, provider: 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
+    async getAnimeInfo(animeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
         try {
             this.logger.debug(`Fetching info for ${animeId} from ${provider}`);
 
@@ -50,6 +52,7 @@ export class StreamingService {
             switch (provider) {
                 case 'hianime': providerInstance = this.hianime; break;
                 case 'animekai': providerInstance = this.animekai; break;
+                case 'kickassanime': providerInstance = this.kickassanime; break;
                 default: providerInstance = this.animepahe;
             }
 
@@ -74,7 +77,7 @@ export class StreamingService {
      * @param episodeId - Provider-specific episode ID
      * @param provider - Streaming provider
      */
-    async getEpisodeLinks(episodeId: string, provider: 'hianime' | 'animepahe' | 'animekai' = 'animepahe', proxyBaseUrl?: string) {
+    async getEpisodeLinks(episodeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe', proxyBaseUrl?: string) {
         try {
             this.logger.debug(`Fetching links for episode ${episodeId} from ${provider}`);
 
@@ -82,6 +85,7 @@ export class StreamingService {
             switch (provider) {
                 case 'hianime': providerInstance = this.hianime; break;
                 case 'animekai': providerInstance = this.animekai; break;
+                case 'kickassanime': providerInstance = this.kickassanime; break;
                 default: providerInstance = this.animepahe;
             }
 
@@ -129,7 +133,7 @@ export class StreamingService {
     async getAggregatedInfo(title: string, titleEnglish?: string) {
         this.logger.log(`INFO AGGREGATION: "${title}" / "${titleEnglish}"`);
 
-        const providers: ('animepahe' | 'hianime' | 'animekai')[] = ['animepahe', 'hianime', 'animekai'];
+        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['animepahe', 'kickassanime', 'hianime', 'animekai'];
 
         for (const provider of providers) {
             try {
@@ -168,7 +172,7 @@ export class StreamingService {
     async getAggregatedLinks(title: string, episodeNumber: number, titleEnglish?: string, preferredProvider?: string) {
         this.logger.log(`AGGREGATED REQUEST: "${title}" (Ep ${episodeNumber}) [Preferred: ${preferredProvider}]`);
 
-        const providers: ('animepahe' | 'hianime' | 'animekai')[] = ['animepahe', 'hianime', 'animekai'];
+        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['animepahe', 'kickassanime', 'hianime', 'animekai'];
 
         // Reorder providers if one is preferred
         if (preferredProvider && providers.includes(preferredProvider as any)) {
@@ -197,7 +201,7 @@ export class StreamingService {
             if (!searchResult || searchResult.results.length === 0) continue;
 
             const bestMatch = searchResult.results[0];
-            const provider = searchResult.provider as 'hianime' | 'animepahe' | 'animekai';
+            const provider = searchResult.provider as 'kickassanime' | 'hianime' | 'animepahe' | 'animekai';
 
             try {
                 this.logger.debug(`Aggregation: Trying ${provider} for ID ${bestMatch.id}`);
@@ -244,7 +248,7 @@ export class StreamingService {
     /**
      * Try searching with variations of the title
      */
-    private async searchWithFallbacks(title: string, provider: 'hianime' | 'animepahe' | 'animekai') {
+    private async searchWithFallbacks(title: string, provider: 'animepahe' | 'kickassanime' | 'hianime' | 'animekai') {
         const cleaned = this.cleanTitle(title);
 
         // Try original first
@@ -273,7 +277,7 @@ export class StreamingService {
     async findAnimeByTitle(title: string, titleEnglish?: string) {
         this.logger.log(`Searching for streaming matches: "${title}" / "${titleEnglish}"`);
 
-        const providers: ('animepahe' | 'hianime' | 'animekai')[] = ['animepahe', 'hianime', 'animekai'];
+        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['animepahe', 'kickassanime', 'hianime', 'animekai'];
 
         for (const provider of providers) {
             try {

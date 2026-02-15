@@ -1,176 +1,105 @@
-import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { HttpService } from "@nestjs/axios";
-import { firstValueFrom } from "rxjs";
-import { AxiosResponse } from "axios";
-
-// Helper to add delay between API calls
-const delay = (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
+import { Injectable, Logger } from "@nestjs/common";
+import { AnilistService } from "../common/services/anilist.service";
 
 @Injectable()
 export class SeasonsService {
   private readonly logger = new Logger(SeasonsService.name);
-  private readonly jikanApiUrl: string;
-  private lastRequestTime: number = 0;
-  private readonly MIN_REQUEST_INTERVAL = 350; // 350ms between requests
 
   constructor(
-    private readonly configService: ConfigService,
-    private readonly httpService: HttpService,
-  ) {
-    this.jikanApiUrl = this.configService.get<string>("jikan.apiUrl");
-  }
-
-  // Rate limit protection wrapper
-  private async waitForRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-
-    if (timeSinceLastRequest < this.MIN_REQUEST_INTERVAL) {
-      const waitTime = this.MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-      this.logger.log(`Rate limit protection: waiting ${waitTime}ms`);
-      await delay(waitTime);
-    }
-
-    this.lastRequestTime = Date.now();
-  }
+    private readonly anilistService: AnilistService,
+  ) { }
 
   async getCurrentSeason() {
-    try {
-      await this.waitForRateLimit();
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
 
-      // Get current date to determine correct season
-      const now = new Date();
-      const month = now.getMonth() + 1; // 1-12
-      const year = now.getFullYear();
+    let season: 'WINTER' | 'SPRING' | 'SUMMER' | 'FALL';
+    if (month >= 0 && month <= 2) season = 'WINTER';
+    else if (month >= 3 && month <= 5) season = 'SPRING';
+    else if (month >= 6 && month <= 8) season = 'SUMMER';
+    else season = 'FALL';
 
-      let season = "winter";
-      if (month >= 1 && month <= 3) season = "winter";
-      else if (month >= 4 && month <= 6) season = "spring";
-      else if (month >= 7 && month <= 9) season = "summer";
-      else if (month >= 10 && month <= 12) season = "fall";
+    this.logger.log(`Fetching current season: ${season} ${year}`);
+    const data = await this.anilistService.getThisSeason(season, year);
 
-      this.logger.log(`Fetching current season: ${season} ${year}`);
-
-      // Use specific season endpoint instead of /seasons/now
-      const response: AxiosResponse = await firstValueFrom(
-        this.httpService.get(`${this.jikanApiUrl}/seasons/${year}/${season}`, {
-          params: {
-            sfw: "true",
-            genres_exclude: "9",
-          },
-        }),
-      );
-
-      return response.data;
-    } catch (error) {
-      this.logger.error("Error fetching current season:", error.message);
-      if (error.response?.status === 429) {
-        throw new HttpException(
-          "Rate limit exceeded. Please try again in a moment.",
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-      throw new HttpException(
-        "Failed to fetch current season",
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return {
+      data: data.map(this.mapAnilistToResponse),
+      season,
+      year
+    };
   }
 
   async getUpcomingSeason() {
-    try {
-      await this.waitForRateLimit(); // Add rate limit protection
-
-      const response: AxiosResponse = await firstValueFrom(
-        this.httpService.get(`${this.jikanApiUrl}/seasons/upcoming`, {
-          params: {
-            sfw: "true",
-            genres_exclude: "9",
-          },
-        }),
-      );
-
-      return response.data;
-    } catch (error) {
-      this.logger.error("Error fetching upcoming season:", error.message);
-      if (error.response?.status === 429) {
-        throw new HttpException(
-          "Rate limit exceeded. Please try again in a moment.",
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-      throw new HttpException(
-        "Failed to fetch upcoming season",
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    const data = await this.anilistService.getNextSeason();
+    return {
+      data: data.map(this.mapAnilistToResponse)
+    };
   }
 
   async getSeasonAnime(year: number, season: string, page: number = 1) {
-    try {
-      await this.waitForRateLimit(); // Add rate limit protection
+    const seasonUpper = season.toUpperCase() as 'WINTER' | 'SPRING' | 'SUMMER' | 'FALL';
+    const validSeasons = ["WINTER", "SPRING", "SUMMER", "FALL"];
 
-      const validSeasons = ["winter", "spring", "summer", "fall"];
-      if (!validSeasons.includes(season.toLowerCase())) {
-        throw new HttpException("Invalid season", HttpStatus.BAD_REQUEST);
-      }
-
-      const response: AxiosResponse = await firstValueFrom(
-        this.httpService.get(
-          `${this.jikanApiUrl}/seasons/${year}/${season.toLowerCase()}`,
-          {
-            params: {
-              page,
-              sfw: "true",
-              genres_exclude: "9",
-            },
-          },
-        ),
-      );
-
-      return response.data;
-    } catch (error) {
-      this.logger.error(
-        `Error fetching ${season} ${year} anime:`,
-        error.message,
-      );
-      if (error.response?.status === 429) {
-        throw new HttpException(
-          "Rate limit exceeded. Please try again in a moment.",
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-      throw new HttpException(
-        `Failed to fetch ${season} ${year} anime`,
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    if (!validSeasons.includes(seasonUpper)) {
+      throw new Error("Invalid season");
     }
+
+    const data = await this.anilistService.getThisSeason(seasonUpper, year, page);
+    return {
+      console: {
+        last_visible_page: 100, // Partial pagination support mock
+        has_next_page: true
+      },
+      data: data.map(this.mapAnilistToResponse)
+    };
   }
 
   async getSeasonsList() {
-    try {
-      await this.waitForRateLimit(); // Add rate limit protection
+    // Generate a list of seasons from 1960 to current year + 2
+    const currentYear = new Date().getFullYear();
+    const seasonsList = [];
 
-      const response: AxiosResponse = await firstValueFrom(
-        this.httpService.get(`${this.jikanApiUrl}/seasons`),
-      );
-
-      return response.data.data;
-    } catch (error) {
-      this.logger.error("Error fetching seasons list:", error.message);
-      if (error.response?.status === 429) {
-        throw new HttpException(
-          "Rate limit exceeded. Please try again in a moment.",
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-      throw new HttpException(
-        "Failed to fetch seasons list",
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+    for (let year = currentYear + 1; year >= 1960; year--) {
+      seasonsList.push({
+        year: year,
+        seasons: ["winter", "spring", "summer", "fall"]
+      });
     }
+    return seasonsList;
+  }
+
+  private mapAnilistToResponse(data: any) {
+    if (!data) return null;
+    return {
+      mal_id: data.id, // Use AniList ID
+      title: data.title.romaji || data.title.english || data.title.native,
+      title_english: data.title.english,
+      title_japanese: data.title.native,
+      synopsis: data.description ? data.description.replace(/<[^>]*>?/gm, '') : '',
+      type: data.format,
+      episodes: data.episodes,
+      status: data.status,
+      score: data.averageScore ? data.averageScore / 10 : null,
+      popularity: data.popularity,
+      duration: data.duration ? `${data.duration} min` : null,
+      source: data.source || 'Original',
+      images: {
+        jpg: {
+          image_url: data.coverImage.large,
+          large_image_url: data.coverImage.extraLarge,
+          small_image_url: data.coverImage.medium,
+        },
+        webp: {
+          image_url: data.coverImage.large,
+          large_image_url: data.coverImage.extraLarge,
+          small_image_url: data.coverImage.medium,
+        }
+      },
+      year: data.startDate?.year,
+      season: data.season,
+      genres: data.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
+      studios: data.studios?.nodes?.map((s: any) => ({ name: s.name, mal_id: 0 })) || [],
+    };
   }
 }

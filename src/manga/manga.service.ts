@@ -1,6 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
-import { JikanService } from "../common/services/jikan.service";
+import { AnilistService } from "../common/services/anilist.service";
 import { SearchMangaDto } from "./dto/search-manga.dto";
 
 @Injectable()
@@ -9,69 +9,39 @@ export class MangaService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jikanService: JikanService,
-  ) {}
+    private readonly anilistService: AnilistService,
+  ) { }
 
   async searchManga(searchDto: SearchMangaDto) {
     const {
       query,
       page = 1,
       limit = 25,
-      type,
-      status,
-      score,
-      order_by,
-      sort,
     } = searchDto;
 
-    // Construct query string for cache key uniqueness
-    const queryString = new URLSearchParams({
-      q: query || "",
-      page: page.toString(),
-      limit: limit.toString(),
-      ...(type && { type }),
-      ...(status && { status }),
-      ...(score && { score }),
-      ...(order_by && { order_by }),
-      ...(sort && { sort }),
-      genres_exclude: "9,49", // Exclude Ecchi (9) and Hentai/Erotica (49)
-    }).toString();
+    const data = await this.anilistService.searchManga(query || "", Number(page), Number(limit));
 
-    // Cache search results for 1 hour
-    // Add SFW filter to search params if not already there
-    if (!queryString.includes("sfw")) {
-      searchDto.sfw = true; // Assuming DTO handles it, or we append to query string
-    }
-    // Actually, just append &sfw=true to the URL if strict
-    const res = await this.jikanService.get<any>(
-      `/manga?${queryString}&sfw=true`,
-      3600,
-    );
-
-    // Manual filtering for search results
-    if (res.data && Array.isArray(res.data)) {
-      res.data = res.data.filter(
-        (item: any) =>
-          !item.genres?.some(
-            (g: any) =>
-              g.name === "Hentai" ||
-              g.name === "Erotica" ||
-              g.mal_id === 9 ||
-              g.mal_id === 49,
-          ),
-      );
-    }
-    return res;
+    return {
+      pagination: {
+        last_visible_page: data.pageInfo.lastPage,
+        has_next_page: data.pageInfo.hasNextPage,
+        current_page: data.pageInfo.currentPage,
+        items: {
+          count: data.media.length,
+          total: data.pageInfo.total,
+          per_page: data.pageInfo.perPage,
+        },
+      },
+      data: data.media.map(this.mapAnilistToResponse)
+    };
   }
 
   async getMangaById(id: number) {
     try {
-      // 1. Check Database (Stale-While-Revalidate logic)
+      // 1. Check Database
       const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      // If exists and fresh, return DB data (Wrapped)
-      // Ensure we have critical data like images and synopsis.
       if (
         cachedManga &&
         cachedManga.lastUpdated > sevenDaysAgo &&
@@ -82,39 +52,20 @@ export class MangaService {
         return this.mapDbToResponse(cachedManga);
       }
 
-      this.logger.debug(
-        `DB STALE/MISS/INCOMPLETE: Manga ${id} -> Fetching Jikan`,
-      );
+      this.logger.debug(`DB STALE/MISS: Manga ${id} -> Fetching AniList`);
 
-      // 2. Fetch from Jikan (Rate Limited & Redis Cached)
-      const res = await this.jikanService.get<any>(`/manga/${id}/full`);
-      const data = res.data;
+      // 2. Fetch from AniList
+      const data = await this.anilistService.getMangaById(id);
 
       if (data) {
-        // SAFETY CHECK: Exclude Hentai and Ecchi
-        if (
-          data.genres?.some(
-            (g: any) =>
-              g.name === "Hentai" ||
-              g.name === "Erotica" ||
-              g.mal_id === 9 ||
-              g.mal_id === 49,
-          )
-        ) {
-          throw new HttpException(
-            "Content not available",
-            HttpStatus.NOT_FOUND,
-          );
-        }
-
         // 3. Upsert to Database
         await this.saveMangaToDb(data);
       }
 
-      return data; // Returning actual manga object
+      return this.mapAnilistToResponse(data);
     } catch (error) {
       this.logger.error(`Error fetching manga ${id}`, error);
-      // Fallback to DB if Jikan fails or rate limit
+      // Fallback to DB
       const cached = await this.prisma.manga.findUnique({ where: { id } });
       if (cached) return this.mapDbToResponse(cached);
       throw error;
@@ -122,38 +73,40 @@ export class MangaService {
   }
 
   async getTopManga(type?: string, filter?: string, page: number = 1) {
-    const params = new URLSearchParams();
-    if (type) params.append("type", type);
-    if (filter) params.append("filter", filter);
-    params.append("page", page.toString());
-
-    const res = await this.jikanService.get<any>(
-      `/top/manga?${params.toString()}`,
-      86400,
-    ); // 24h cache
-
-    // Filter out Hentai
-    if (res.data && Array.isArray(res.data)) {
-      res.data = res.data.filter(
-        (item: any) =>
-          !item.genres?.some(
-            (g: any) =>
-              g.name === "Hentai" ||
-              g.name === "Erotica" ||
-              g.mal_id === 9 ||
-              g.mal_id === 49,
-          ),
-      );
+    let data;
+    // Simple logic: if popularity sort or no sort, get popular. Else trending.
+    // AniList handles "Top" usually as Popular or Score.
+    if (filter === 'bypopularity') {
+      data = await this.anilistService.getPopularManga(page);
+    } else {
+      data = await this.anilistService.getTrendingManga(page);
     }
-    return res;
+
+    return {
+      data: data.map(this.mapAnilistToResponse)
+    };
   }
 
   async getMangaCharacters(id: number) {
-    const res = await this.jikanService.get<any>(
-      `/manga/${id}/characters`,
-      86400,
-    );
-    return res.data || [];
+    try {
+      const data = await this.anilistService.getMangaById(id);
+      const characters = data.characters?.nodes || [];
+
+      return {
+        data: characters.map((char: any) => ({
+          character: {
+            mal_id: char.id,
+            name: char.name.full,
+            images: {
+              jpg: { image_url: char.image.large }
+            }
+          },
+          role: "Main"
+        }))
+      };
+    } catch (e) {
+      return { data: [] };
+    }
   }
 
   // --- Helper Methods ---
@@ -161,40 +114,77 @@ export class MangaService {
   private async saveMangaToDb(data: any) {
     try {
       await this.prisma.manga.upsert({
-        where: { id: data.mal_id },
-        update: this.mapJikanToPrisma(data),
+        where: { id: data.id },
+        update: this.mapAnilistToPrisma(data),
         create: {
-          id: data.mal_id,
-          ...this.mapJikanToPrisma(data),
+          id: data.id,
+          ...this.mapAnilistToPrisma(data),
         },
       });
     } catch (e) {
-      this.logger.error(`Failed to save manga ${data.mal_id} to DB`, e);
+      this.logger.error(`Failed to save manga ${data.id} to DB`, e);
     }
   }
 
-  private mapJikanToPrisma(data: any) {
+  private mapAnilistToPrisma(data: any) {
     return {
-      title: data.title,
-      titleEnglish: data.title_english,
-      titleJapanese: data.title_japanese,
-      synopsis: data.synopsis,
-      type: data.type,
+      title: data.title.romaji || data.title.english || data.title.native,
+      titleEnglish: data.title.english,
+      titleJapanese: data.title.native,
+      synopsis: data.description ? data.description.replace(/<[^>]*>?/gm, '') : '',
+      type: data.format,
       chapters: data.chapters,
       volumes: data.volumes,
       status: data.status,
-      score: data.score,
-      rank: data.rank,
+      score: data.averageScore ? data.averageScore / 10 : null,
+      rank: null,
       popularity: data.popularity,
-      imageUrl:
-        data.images?.jpg?.large_image_url || data.images?.jpg?.image_url,
-      authors: data.authors || [],
-      genres: data.genres || [],
-      background: data.background,
-      published: data.published || {},
-      scoredBy: data.scored_by,
-      members: data.members,
-      favorites: data.favorites,
+      imageUrl: data.coverImage.extraLarge || data.coverImage.large,
+      authors: data.staff?.nodes?.map((s: any) => ({ name: s.name.full })) || [],
+      genres: data.genres?.map((g: string) => ({ name: g })) || [],
+      background: null,
+      published: {
+        from: data.startDate?.year ? `${data.startDate.year}` : null
+      },
+      scoredBy: null,
+      members: data.popularity,
+      favorites: null,
+    };
+  }
+
+  private mapAnilistToResponse(data: any) {
+    if (!data) return null;
+    return {
+      mal_id: data.id,
+      title: data.title.romaji || data.title.english || data.title.native,
+      title_english: data.title.english,
+      title_japanese: data.title.native,
+      synopsis: data.description ? data.description.replace(/<[^>]*>?/gm, '') : '',
+      type: data.format,
+      chapters: data.chapters,
+      volumes: data.volumes,
+      status: data.status,
+      score: data.averageScore ? data.averageScore / 10 : null,
+      rank: null,
+      popularity: data.popularity,
+      background: null,
+      published: {
+        from: data.startDate?.year
+      },
+      images: {
+        jpg: {
+          image_url: data.coverImage?.large,
+          large_image_url: data.coverImage?.extraLarge,
+          small_image_url: data.coverImage?.medium,
+        },
+        webp: {
+          image_url: data.coverImage?.large,
+          large_image_url: data.coverImage?.extraLarge,
+          small_image_url: data.coverImage?.medium,
+        },
+      },
+      authors: data.staff?.nodes?.map((s: any) => ({ name: s.name.full })) || [],
+      genres: data.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
     };
   }
 

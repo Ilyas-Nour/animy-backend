@@ -37,12 +37,20 @@ import * as redisStore from "cache-manager-redis-store";
     CacheModule.registerAsync({
       isGlobal: true,
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        store: redisStore,
-        host: configService.get("REDIS_HOST") || "localhost",
-        port: configService.get("REDIS_PORT") || 6379,
-        ttl: 3600, // Default TTL 1 hour
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const redisHost = configService.get("REDIS_HOST");
+        if (redisHost) {
+          return {
+            store: redisStore,
+            host: redisHost,
+            port: configService.get("REDIS_PORT") || 6379,
+            ttl: 3600,
+          };
+        }
+        return {
+          ttl: 3600, // Default memory cache
+        };
+      },
       inject: [ConfigService],
     }),
 

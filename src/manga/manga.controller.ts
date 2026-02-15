@@ -6,7 +6,13 @@ import { Public } from "../common/decorators/public.decorator";
 @Public()
 @Controller("manga")
 export class MangaController {
-  constructor(private readonly mangaService: MangaService) {}
+  constructor(private readonly mangaService: MangaService) { }
+
+  @Get()
+  async searchRoot(@Query() query: any) {
+    if (query.q) query.query = query.q;
+    return this.mangaService.searchManga(query);
+  }
 
   @Get("search")
   async search(@Query() searchDto: SearchMangaDto) {
@@ -20,6 +26,11 @@ export class MangaController {
     @Query("page") page: number = 1,
   ) {
     return this.mangaService.getTopManga(type, filter, page);
+  }
+
+  @Get(":id/full")
+  async getByIdFull(@Param("id", ParseIntPipe) id: number) {
+    return this.mangaService.getMangaById(id);
   }
 
   @Get(":id")
