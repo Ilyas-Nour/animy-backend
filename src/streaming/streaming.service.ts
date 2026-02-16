@@ -1,16 +1,21 @@
 import { Injectable, Logger, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
 import { ANIME } from '@consumet/extensions';
 import axios from 'axios';
+import { HiAnimeService } from './hianime.service';
 
 @Injectable()
 export class StreamingService {
     private readonly logger = new Logger(StreamingService.name);
     private readonly kickassanime = new ANIME.KickAssAnime();
-    private readonly hianime = new ANIME.Hianime();
+    // private readonly hianime = new ANIME.Hianime(); // Replaced by custom service
     private readonly animepahe = new ANIME.AnimePahe();
     private readonly animekai = new ANIME.AnimeKai();
 
-    private readonly consumetUrl = process.env.CONSUMET_API_URL || 'https://api.consumet.org';
+    constructor(private readonly hiAnimeService: HiAnimeService) { }
+
+    // External Consumet API disabled - both public and user's deployment are non-functional
+    // Streaming will use local scraping (may be blocked on cloud hosts like Render)
+    private readonly consumetUrl = null;
 
     /**
      * Search for anime on streaming providers
@@ -44,9 +49,9 @@ export class StreamingService {
             }
 
             // Fallback to local
-            let providerInstance;
+            let providerInstance: any;
             switch (provider) {
-                case 'hianime': providerInstance = this.hianime; break;
+                case 'hianime': providerInstance = this.hiAnimeService; break;
                 case 'animekai': providerInstance = this.animekai; break;
                 case 'kickassanime': providerInstance = this.kickassanime; break;
                 default: providerInstance = this.animepahe;
@@ -92,9 +97,9 @@ export class StreamingService {
                 }
             }
 
-            let providerInstance;
+            let providerInstance: any;
             switch (provider) {
-                case 'hianime': providerInstance = this.hianime; break;
+                case 'hianime': providerInstance = this.hiAnimeService; break;
                 case 'animekai': providerInstance = this.animekai; break;
                 case 'kickassanime': providerInstance = this.kickassanime; break;
                 default: providerInstance = this.animepahe;
@@ -147,9 +152,9 @@ export class StreamingService {
             }
 
             if (!sources) {
-                let providerInstance;
+                let providerInstance: any;
                 switch (provider) {
-                    case 'hianime': providerInstance = this.hianime; break;
+                    case 'hianime': providerInstance = this.hiAnimeService; break;
                     case 'animekai': providerInstance = this.animekai; break;
                     case 'kickassanime': providerInstance = this.kickassanime; break;
                     default: providerInstance = this.animepahe;
