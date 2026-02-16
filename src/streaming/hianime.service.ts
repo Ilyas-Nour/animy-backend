@@ -89,14 +89,31 @@ export class HiAnimeService {
             const { data } = await axios.get(url);
 
             if (data.success && data.data) {
+                const sources = [];
+                // API returns 'link' object with file property
+                if (data.data.link && data.data.link.file) {
+                    sources.push({
+                        url: data.data.link.file,
+                        isM3U8: data.data.link.type === 'hls',
+                        quality: 'auto',
+                    });
+                }
+
+                // Also check for 'sources' array just in case API structure varies
+                if (data.data.sources && Array.isArray(data.data.sources)) {
+                    data.data.sources.forEach((s: any) => {
+                        sources.push({
+                            url: s.url,
+                            isM3U8: s.type === 'hls',
+                            quality: 'auto',
+                        });
+                    });
+                }
+
                 // Map to Consumet format
                 return {
-                    headers: { Referer: data.data.referer || '' }, // if provided
-                    sources: data.data.sources.map((source: any) => ({
-                        url: source.url,
-                        isM3U8: source.type === 'hls',
-                        quality: 'auto', // or extract from source
-                    })),
+                    headers: { Referer: 'https://megacloud.tv' }, // Default for HiAnime/MegaCloud
+                    sources: sources,
                     subtitles: data.data.tracks?.map((track: any) => ({
                         url: track.file,
                         lang: track.label,
