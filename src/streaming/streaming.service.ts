@@ -10,7 +10,7 @@ export class StreamingService {
     private readonly animepahe = new ANIME.AnimePahe();
     private readonly animekai = new ANIME.AnimeKai();
 
-    private readonly consumetUrl = process.env.CONSUMET_API_URL;
+    private readonly consumetUrl = process.env.CONSUMET_API_URL || 'https://api.consumet.org';
 
     /**
      * Search for anime on streaming providers

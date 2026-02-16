@@ -4,7 +4,7 @@ async function testHianime() {
     console.log('Testing Hianime...');
     const hianime = new ANIME.Hianime();
     try {
-        const search = await hianime.search('Naruto');
+        const search = await hianime.search('Naruto Shippuden');
         if (search.results.length === 0) {
             console.log('No results found.');
             return;
