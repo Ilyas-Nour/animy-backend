@@ -22,7 +22,7 @@ export class StreamingService {
      * @param query - Anime title to search
      * @param provider - Streaming provider
      */
-    async searchAnime(query: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
+    async searchAnime(query: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'hianime') {
         try {
             this.logger.debug(`Searching for "${query}" on ${provider} (External API: ${!!this.consumetUrl})`);
 
@@ -74,7 +74,7 @@ export class StreamingService {
      * @param animeId - Provider-specific anime ID
      * @param provider - Streaming provider
      */
-    async getAnimeInfo(animeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
+    async getAnimeInfo(animeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'hianime') {
         try {
             this.logger.debug(`Fetching info for ${animeId} from ${provider}`);
 
@@ -126,7 +126,7 @@ export class StreamingService {
      * @param episodeId - Provider-specific episode ID
      * @param provider - Streaming provider
      */
-    async getEpisodeLinks(episodeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe', proxyBaseUrl?: string) {
+    async getEpisodeLinks(episodeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'hianime', proxyBaseUrl?: string) {
         try {
             this.logger.debug(`Fetching links for episode ${episodeId} from ${provider}`);
 
@@ -203,7 +203,7 @@ export class StreamingService {
     async getAggregatedInfo(title: string, titleEnglish?: string) {
         this.logger.log(`INFO AGGREGATION: "${title}" / "${titleEnglish}"`);
 
-        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['animepahe', 'kickassanime', 'hianime', 'animekai'];
+        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['hianime', 'animepahe', 'kickassanime', 'animekai'];
 
         for (const provider of providers) {
             try {
@@ -242,7 +242,7 @@ export class StreamingService {
     async getAggregatedLinks(title: string, episodeNumber: number, titleEnglish?: string, preferredProvider?: string) {
         this.logger.log(`AGGREGATED REQUEST: "${title}" (Ep ${episodeNumber}) [Preferred: ${preferredProvider}]`);
 
-        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['animepahe', 'kickassanime', 'hianime', 'animekai'];
+        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['hianime', 'animepahe', 'kickassanime', 'animekai'];
 
         // Reorder providers if one is preferred
         if (preferredProvider && providers.includes(preferredProvider as any)) {
@@ -347,7 +347,7 @@ export class StreamingService {
     async findAnimeByTitle(title: string, titleEnglish?: string) {
         this.logger.log(`Searching for streaming matches: "${title}" / "${titleEnglish}"`);
 
-        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['animepahe', 'kickassanime', 'hianime', 'animekai'];
+        const providers: ('animepahe' | 'kickassanime' | 'hianime' | 'animekai')[] = ['hianime', 'animepahe', 'kickassanime', 'animekai'];
 
         for (const provider of providers) {
             try {
