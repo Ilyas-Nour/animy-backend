@@ -138,10 +138,11 @@ export class HiAnimeService {
             if (data.success && data.data) {
                 const sources = [];
                 // API returns 'link' object with file property
-                if (data.data.link && data.data.link.file) {
+                const link = data.data.link;
+                if (link && (link.file || link.directUrl)) {
                     sources.push({
-                        url: data.data.link.file,
-                        isM3U8: data.data.link.type === 'hls',
+                        url: link.directUrl || link.file,
+                        isM3U8: link.type === 'hls',
                         quality: 'auto',
                     });
                 }
