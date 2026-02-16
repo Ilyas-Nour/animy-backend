@@ -294,7 +294,16 @@ export class AnilistService {
     /**
      * Search for manga by query
      */
-    async searchManga(query: string, page = 1, perPage = 20) {
+    /**
+     * Search for manga by query
+     */
+    async searchManga(query: string, page = 1, perPage = 20, sort: string = 'POPULARITY_DESC') {
+        const variables: any = { page, perPage };
+        if (query) variables.search = query;
+
+        // Dynamic sort enum based on input
+        const sortValue = sort;
+
         const queryGql = gql`
             query ($search: String, $page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
@@ -305,7 +314,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: POPULARITY_DESC, isAdult: false) {
+                    media(search: $search, type: MANGA, sort: [${sortValue}], isAdult: false) {
                         id
                         idMal
                         title {
@@ -344,7 +353,7 @@ export class AnilistService {
         `;
 
         try {
-            const data: any = await this.client.request(queryGql, { search: query, page, perPage });
+            const data: any = await this.client.request(queryGql, variables);
             return data.Page;
         } catch (error) {
             this.logger.error(`Error searching manga "${query}":`, error);

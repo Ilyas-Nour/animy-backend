@@ -10,6 +10,8 @@ export class StreamingService {
     private readonly animepahe = new ANIME.AnimePahe();
     private readonly animekai = new ANIME.AnimeKai();
 
+    private readonly consumetUrl = process.env.CONSUMET_API_URL;
+
     /**
      * Search for anime on streaming providers
      * @param query - Anime title to search
@@ -17,8 +19,31 @@ export class StreamingService {
      */
     async searchAnime(query: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
         try {
-            this.logger.debug(`Searching for "${query}" on ${provider}`);
+            this.logger.debug(`Searching for "${query}" on ${provider} (External API: ${!!this.consumetUrl})`);
 
+            if (this.consumetUrl) {
+                // Use external Consumet API
+                // Map provider names to Consumet endpoints if necessary
+                const providerMap: Record<string, string> = {
+                    'animepahe': 'animepahe',
+                    'kickassanime': 'kickassanime', // Might differ in Consumet API
+                    'hianime': 'zoro', // Consumet often uses 'zoro' for HiAnime
+                    'animekai': 'gogoanime', // Fallback or verify mapping
+                };
+
+                const apiProvider = providerMap[provider] || provider;
+                const url = `${this.consumetUrl}/anime/${apiProvider}/${encodeURIComponent(query)}`;
+
+                this.logger.debug(`External Search URL: ${url}`);
+                const response = await axios.get(url, { validateStatus: () => true });
+
+                if (response.status === 200 && response.data?.results) {
+                    return { provider, results: response.data.results };
+                }
+                this.logger.warn(`External search failed: ${response.status}`);
+            }
+
+            // Fallback to local
             let providerInstance;
             switch (provider) {
                 case 'hianime': providerInstance = this.hianime; break;
@@ -47,6 +72,25 @@ export class StreamingService {
     async getAnimeInfo(animeId: string, provider: 'kickassanime' | 'hianime' | 'animepahe' | 'animekai' = 'animepahe') {
         try {
             this.logger.debug(`Fetching info for ${animeId} from ${provider}`);
+
+            if (this.consumetUrl) {
+                const providerMap: Record<string, string> = {
+                    'animepahe': 'animepahe',
+                    'kickassanime': 'kickassanime',
+                    'hianime': 'zoro',
+                    'animekai': 'gogoanime',
+                };
+                const apiProvider = providerMap[provider] || provider;
+                // Note: Consumet API routes vary. Assuming Standard Consumet: /anime/{provider}/info/{id}
+                const url = `${this.consumetUrl}/anime/${apiProvider}/info/${encodeURIComponent(animeId)}`;
+
+                this.logger.debug(`External Info URL: ${url}`);
+                const response = await axios.get(url, { validateStatus: () => true });
+
+                if (response.status === 200 && response.data) {
+                    return { provider, ...response.data };
+                }
+            }
 
             let providerInstance;
             switch (provider) {
@@ -81,21 +125,42 @@ export class StreamingService {
         try {
             this.logger.debug(`Fetching links for episode ${episodeId} from ${provider}`);
 
-            let providerInstance;
-            switch (provider) {
-                case 'hianime': providerInstance = this.hianime; break;
-                case 'animekai': providerInstance = this.animekai; break;
-                case 'kickassanime': providerInstance = this.kickassanime; break;
-                default: providerInstance = this.animepahe;
-            }
-
             let sources;
 
-            try {
-                sources = await providerInstance.fetchEpisodeSources(episodeId);
-            } catch (error) {
-                this.logger.warn(`Failed to fetch sources from ${provider}: ${error.message}`);
-                throw new NotFoundException(`Source error on ${provider}: ${error.message}`);
+            if (this.consumetUrl) {
+                const providerMap: Record<string, string> = {
+                    'animepahe': 'animepahe',
+                    'kickassanime': 'kickassanime',
+                    'hianime': 'zoro',
+                    'animekai': 'gogoanime',
+                };
+                const apiProvider = providerMap[provider] || provider;
+                // Standard Consumet: /anime/{provider}/watch/{episodeId}
+                const url = `${this.consumetUrl}/anime/${apiProvider}/watch/${encodeURIComponent(episodeId)}`;
+
+                this.logger.debug(`External Watch URL: ${url}`);
+                const response = await axios.get(url, { validateStatus: () => true });
+
+                if (response.status === 200 && response.data) {
+                    sources = response.data;
+                }
+            }
+
+            if (!sources) {
+                let providerInstance;
+                switch (provider) {
+                    case 'hianime': providerInstance = this.hianime; break;
+                    case 'animekai': providerInstance = this.animekai; break;
+                    case 'kickassanime': providerInstance = this.kickassanime; break;
+                    default: providerInstance = this.animepahe;
+                }
+
+                try {
+                    sources = await providerInstance.fetchEpisodeSources(episodeId);
+                } catch (error) {
+                    this.logger.warn(`Failed to fetch sources from ${provider}: ${error.message}`);
+                    throw new NotFoundException(`Source error on ${provider}: ${error.message}`);
+                }
             }
 
             if (!sources || !sources.sources || sources.sources.length === 0) {

@@ -19,7 +19,17 @@ export class MangaService {
       limit = 25,
     } = searchDto;
 
-    const data = await this.anilistService.searchManga(query || "", Number(page), Number(limit));
+    // Map Jikan order_by/sort to AniList sort
+    let sortStr = 'POPULARITY_DESC';
+    const sort = searchDto.sort || 'desc';
+    const orderBy = searchDto.order_by || 'popularity';
+
+    if (orderBy === 'popularity') sortStr = sort === 'desc' ? 'POPULARITY_DESC' : 'POPULARITY';
+    else if (orderBy === 'score') sortStr = sort === 'desc' ? 'SCORE_DESC' : 'SCORE';
+    else if (orderBy === 'title') sortStr = sort === 'desc' ? 'TITLE_ROMAJI_DESC' : 'TITLE_ROMAJI';
+    else if (orderBy === 'start_date') sortStr = sort === 'desc' ? 'START_DATE_DESC' : 'START_DATE';
+
+    const data = await this.anilistService.searchManga(query || "", Number(page), Number(limit), sortStr);
 
     return {
       pagination: {
