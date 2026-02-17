@@ -1,12 +1,16 @@
 import { Injectable, Logger, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
 import axios from 'axios';
 import { HiAnimeService } from './hianime.service';
+import { StreamingProxyService } from './streaming.proxy.service';
 
 @Injectable()
 export class StreamingService {
     private readonly logger = new Logger(StreamingService.name);
 
-    constructor(private readonly hiAnimeService: HiAnimeService) { }
+    constructor(
+        private readonly hiAnimeService: HiAnimeService,
+        private readonly streamingProxyService: StreamingProxyService
+    ) { }
 
     /**
      * Search for an anime on the streaming provider
@@ -65,19 +69,20 @@ export class StreamingService {
                 throw new NotFoundException(`No sources found on HiAnime`);
             }
 
-            // Rewrite sources to point to our proxy if requested
-            if (proxyBaseUrl) {
-                sources.sources = sources.sources.map((source: any) => {
-                    // Only proxy m3u8 files
-                    if (source.url && (source.url.includes('.m3u8') || source.isM3U8)) {
-                        const originalUrl = source.url;
-                        const referer = sources.headers?.Referer || '';
-                        // Double encode to ensure safe transport through query params
-                        source.url = `${proxyBaseUrl}?url=${encodeURIComponent(originalUrl)}&referer=${encodeURIComponent(referer)}`;
-                    }
-                    return source;
-                });
-            }
+            // Always proxy these sources as they usually have CORS/403 issues
+            const referer = sources.headers?.Referer || '';
+
+            sources.sources = sources.sources.map((source: any) => {
+                // Proxy everything that isn't already proxied
+                if (source.url && !source.url.includes('/streaming/proxy')) {
+                    const originalUrl = source.url;
+                    // We rewrite to use the proxy endpoint. 
+                    // Use the provided proxyBaseUrl or default to a relative one that the controller will handle
+                    const baseUrl = proxyBaseUrl || '/api/v1/streaming/proxy';
+                    source.url = `${baseUrl}?url=${encodeURIComponent(originalUrl)}&referer=${encodeURIComponent(referer)}`;
+                }
+                return source;
+            });
 
             return {
                 provider: 'hianime',
@@ -87,6 +92,13 @@ export class StreamingService {
             this.logger.error(`Error fetching episode sources from HiAnime: ${error.message}`);
             throw new HttpException(`Failed to fetch links from HiAnime: ${error.message}`, HttpStatus.NOT_FOUND);
         }
+    }
+
+    /**
+     * Proxies a stream request
+     */
+    async proxyStream(url: string, referer: string, res: any) {
+        return this.streamingProxyService.proxy(url, referer, res);
     }
 
     /**

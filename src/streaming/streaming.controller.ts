@@ -67,4 +67,22 @@ export class StreamingController {
 
         return this.streamingService.findAnimeByTitle(title, titleEnglish);
     }
+
+    /**
+     * Proxy video streams to bypass CORS and 403s
+     * GET /api/v1/streaming/proxy?url=...&referer=...
+     */
+    @Get('proxy')
+    async proxyStream(
+        @Query('url') url: string,
+        @Query('referer') referer: string,
+        @Req() req: any,
+    ) {
+        if (!url) {
+            throw new HttpException('URL parameter is required', HttpStatus.BAD_REQUEST);
+        }
+
+        const res = req.res;
+        return this.streamingService.proxyStream(url, referer, res);
+    }
 }
