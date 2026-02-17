@@ -123,14 +123,14 @@ export class AnimeService {
   }
 
   async getAnimeByType(type: string, page: number = 1) {
-    // This was used for specific queries like "TV" or "Movie" sorted by popularity
-    // AniList default search does this sort.
-    // For now, let's just return popular/trending as a fallback or implement specific type search if needed.
-    // But re-using getPopular for "landing page" sections is usually fine.
-
-    // Actually, let's use getPopular but we can't filter by type easily in current service method without separate arg.
-    // Let's assume this maps to "Trending" or "Popular" for now.
     const data = await this.anilistService.getPopular(page);
+    return {
+      data: data.map(this.mapAnilistToResponse)
+    };
+  }
+
+  async getUpcomingNextSeason(page: number = 1) {
+    const data = await this.anilistService.getNextSeason(page);
     return {
       data: data.map(this.mapAnilistToResponse)
     };

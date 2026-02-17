@@ -21,6 +21,12 @@ export class AnimeController {
   }
 
   @Public()
+  @Get("upcoming")
+  async getUpcoming(@Query("page") page: number = 1) {
+    return this.animeService.getUpcomingNextSeason(page);
+  }
+
+  @Public()
   @Get("top")
   async getTopAnime(
     @Query("type") type?: string,
