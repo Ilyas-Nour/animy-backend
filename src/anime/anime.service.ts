@@ -264,16 +264,16 @@ export class AnimeService {
         name: link.site,
         url: link.url
       })) || [],
-      relations: data.relations?.edges?.map((edge: any) => ({
+      relations: data.relations?.edges?.filter((edge: any) => edge && edge.node).map((edge: any) => ({
         relationType: edge.relationType,
         node: edge.node
       })) || [],
-      staff: data.staff?.edges?.map((edge: any) => ({
+      staff: data.staff?.edges?.filter((edge: any) => edge && edge.node).map((edge: any) => ({
         role: edge.role,
         node: edge.node
       })) || [],
-      recommendations: data.recommendations?.nodes || [],
-      characters: data.characters?.edges || []
+      recommendations: data.recommendations?.nodes?.filter((node: any) => node && node.mediaRecommendation) || [],
+      characters: data.characters?.edges?.filter((edge: any) => edge && edge.node) || []
     };
   }
 
