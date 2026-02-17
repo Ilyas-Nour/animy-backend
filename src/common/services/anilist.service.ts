@@ -133,6 +133,7 @@ export class AnilistService {
                                 isAdult
                                 title {
                                     romaji
+                                    english
                                 }
                                 coverImage {
                                     large
@@ -140,18 +141,60 @@ export class AnilistService {
                             }
                         }
                     }
-                    characters(sort: ROLE, page: 1, perPage: 10) {
-                        nodes {
-                            id
-                            name {
-                                full
-                            }
-                            image {
-                                large
+                    relations {
+                        edges {
+                            relationType
+                            node {
+                                id
+                                idMal
+                                status
+                                type
+                                format
+                                title {
+                                    romaji
+                                    english
+                                }
+                                coverImage {
+                                    large
+                                }
                             }
                         }
+                    }
+                    staff(sort: RELEVANCE, perPage: 8) {
                         edges {
                             role
+                            node {
+                                id
+                                name {
+                                    full
+                                }
+                                image {
+                                    large
+                                }
+                            }
+                        }
+                    }
+                    characters(sort: [ROLE, RELEVANCE, ID], page: 1, perPage: 12) {
+                        edges {
+                            role
+                            node {
+                                id
+                                name {
+                                    full
+                                }
+                                image {
+                                    large
+                                }
+                            }
+                            voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
+                                id
+                                name {
+                                    full
+                                }
+                                image {
+                                    large
+                                }
+                            }
                         }
                     }
                     externalLinks {

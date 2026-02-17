@@ -139,20 +139,7 @@ export class AnimeService {
   async getAnimeCharacters(id: number) {
     try {
       const data = await this.anilistService.getAnimeById(id);
-      const characters = data.characters?.nodes || [];
-      // Map to Jikan structure
-      return characters.map((char: any) => ({
-        character: {
-          mal_id: char.id,
-          name: char.name.full,
-          images: {
-            jpg: {
-              image_url: char.image?.large
-            }
-          }
-        },
-        role: "Main" // Simplified
-      }));
+      return data.characters?.edges || [];
     } catch (e) {
       return [];
     }
@@ -161,19 +148,8 @@ export class AnimeService {
   async getAnimeRecommendations(id: number) {
     try {
       const data = await this.anilistService.getAnimeById(id);
-      const recs = data.recommendations?.nodes || [];
       return {
-        data: recs.map((rec: any) => ({
-          entry: {
-            mal_id: rec.mediaRecommendation.id,
-            title: rec.mediaRecommendation.title.romaji,
-            images: {
-              jpg: {
-                image_url: rec.mediaRecommendation.coverImage.large
-              }
-            }
-          }
-        }))
+        data: data.recommendations?.nodes || []
       };
     } catch (e) {
       return { data: [] };
@@ -256,7 +232,7 @@ export class AnimeService {
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
       title_japanese: data.title.native,
-      synopsis: data.description ? data.description.replace(/<[^>]*>?/gm, '') : '',
+      synopsis: data.description ? data.description : 'No synopsis available.',
       type: data.format,
       episodes: data.episodes,
       status: data.status,
@@ -287,7 +263,17 @@ export class AnimeService {
       streaming: data.externalLinks?.map((link: any) => ({
         name: link.site,
         url: link.url
-      })) || []
+      })) || [],
+      relations: data.relations?.edges?.map((edge: any) => ({
+        relationType: edge.relationType,
+        node: edge.node
+      })) || [],
+      staff: data.staff?.edges?.map((edge: any) => ({
+        role: edge.role,
+        node: edge.node
+      })) || [],
+      recommendations: data.recommendations?.nodes || [],
+      characters: data.characters?.edges || []
     };
   }
 
@@ -336,6 +322,10 @@ export class AnimeService {
       streaming: Array.isArray(dbAnime.streamingLinks)
         ? dbAnime.streamingLinks
         : [],
+      relations: [], // DB doesn't store these yet, will be fetched in separate call or refresh
+      staff: [],
+      recommendations: [],
+      characters: []
     };
   }
 }
