@@ -12,9 +12,6 @@ export class AnilistService {
     }
 
     /**
-     * Search for anime by query
-     */
-    /**
      * Search for anime by query with filters
      */
     async searchAnime(query: string, page = 1, perPage = 20, format?: string, sort: string = 'POPULARITY_DESC') {
@@ -35,7 +32,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false) {
+                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
                         title {
@@ -165,8 +162,17 @@ export class AnilistService {
 
         try {
             const data: any = await this.client.request(queryGql, { id });
-            return data.Media;
+            const media = data.Media;
+
+            // Safety Check: Backend Enforcement
+            if (media?.isAdult || media?.genres?.some(g => ["Hentai", "Ecchi"].includes(g))) {
+                this.logger.warn(`Blocked NSFW/Ecchi content access for ID ${id}`);
+                throw new HttpException('Content not available', HttpStatus.FORBIDDEN);
+            }
+
+            return media;
         } catch (error) {
+            if (error instanceof HttpException) throw error;
             this.logger.error(`Error fetching anime details for ID ${id}:`, error);
             throw new HttpException('Anime not found on AniList', HttpStatus.NOT_FOUND);
         }
@@ -179,7 +185,7 @@ export class AnilistService {
         const queryGql = gql`
             query ($page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
-                    media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
+                    media(sort: TRENDING_DESC, type: ANIME, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
                         title {
@@ -219,7 +225,7 @@ export class AnilistService {
         const queryGql = gql`
             query ($page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
-                    media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) {
+                    media(sort: POPULARITY_DESC, type: ANIME, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
                         title {
@@ -259,7 +265,7 @@ export class AnilistService {
         const queryGql = gql`
             query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
-                    media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+                    media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
                         title {
@@ -294,9 +300,6 @@ export class AnilistService {
     /**
      * Search for manga by query
      */
-    /**
-     * Search for manga by query
-     */
     async searchManga(query: string, page = 1, perPage = 20, sort: string = 'POPULARITY_DESC') {
         const variables: any = { page, perPage };
         if (query) variables.search = query;
@@ -314,7 +317,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: [${sortValue}], isAdult: false) {
+                    media(search: $search, type: MANGA, sort: [${sortValue}], isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
                         title {
@@ -437,8 +440,17 @@ export class AnilistService {
 
         try {
             const data: any = await this.client.request(queryGql, { id });
-            return data.Media;
+            const media = data.Media;
+
+            // Safety Check: Backend Enforcement
+            if (media?.isAdult || media?.genres?.some(g => ["Hentai", "Ecchi"].includes(g))) {
+                this.logger.warn(`Blocked NSFW/Ecchi manga access for ID ${id}`);
+                throw new HttpException('Content not available', HttpStatus.FORBIDDEN);
+            }
+
+            return media;
         } catch (error) {
+            if (error instanceof HttpException) throw error;
             this.logger.error(`Error fetching manga details for ID ${id}:`, error);
             throw new HttpException('Manga not found on AniList', HttpStatus.NOT_FOUND);
         }
@@ -451,7 +463,7 @@ export class AnilistService {
         const queryGql = gql`
             query ($page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
-                    media(sort: TRENDING_DESC, type: MANGA, isAdult: false) {
+                    media(sort: TRENDING_DESC, type: MANGA, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
                         title {
@@ -489,7 +501,7 @@ export class AnilistService {
         const queryGql = gql`
             query ($page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
-                    media(sort: POPULARITY_DESC, type: MANGA, isAdult: false) {
+                    media(sort: POPULARITY_DESC, type: MANGA, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         title {
                             romaji
@@ -628,7 +640,7 @@ export class AnilistService {
         const queryGql = gql`
             query ($season: MediaSeason, $year: Int, $page: Int, $perPage: Int) {
                 Page(page: $page, perPage: $perPage) {
-                    media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+                    media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         title {
                             romaji
@@ -662,4 +674,3 @@ export class AnilistService {
         }
     }
 }
-
