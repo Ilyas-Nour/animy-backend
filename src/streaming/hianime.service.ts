@@ -11,14 +11,15 @@ export class HiAnimeService {
             const url = `${this.baseUrl}/search?keyword=${encodeURIComponent(query)}`;
             const { data } = await axios.get(url);
 
-            if (data.success && data.data && data.data.response) {
+            const rawResults = data.data?.response || data.data?.results || [];
+
+            if (data.success && Array.isArray(rawResults)) {
                 return {
-                    results: data.data.response.map((item: any) => ({
+                    results: rawResults.map((item: any) => ({
                         id: item.id,
-                        title: item.title,
-                        image: item.poster,
-                        url: `/anime/${item.id}`, // specific to provider structure if needed
-                        // Map other fields as necessary
+                        title: item.title || item.name,
+                        image: item.poster || item.image,
+                        url: `/anime/${item.id}`,
                     }))
                 };
             }
@@ -35,25 +36,20 @@ export class HiAnimeService {
             const { data } = await axios.get(url);
 
             if (data.success && data.data) {
-                const info = data.data.animeInfo;
-                // Fetch episodes too since Consumet returns them with info
+                const info = data.data; // API returns flat object or data.data itself is the info
+
+                // Fetch episodes too since we need the list of episode IDs
                 const episodesUrl = `${this.baseUrl}/episodes/${id}`;
                 const episodesData = await axios.get(episodesUrl);
 
                 let episodes = [];
-                if (episodesData.data.success && episodesData.data.data && episodesData.data.data.episodes) {
-                    episodes = episodesData.data.data.episodes.map((ep: any) => ({
+                // The API might return episodes in'data.episodes' or 'data' directly
+                const rawEpisodes = episodesData.data.data?.episodes || episodesData.data.data || [];
+
+                if (Array.isArray(rawEpisodes)) {
+                    episodes = rawEpisodes.map((ep: any) => ({
                         id: ep.id,
-                        number: ep.episodeNumber,
-                        title: ep.title,
-                        isFiller: ep.isFiller,
-                        url: `/watch/${ep.id}`
-                    }));
-                } else if (episodesData.data.success && episodesData.data.data) {
-                    // Check if data is array directly 
-                    episodes = (Array.isArray(episodesData.data.data) ? episodesData.data.data : []).map((ep: any) => ({
-                        id: ep.id,
-                        number: ep.episodeNumber,
+                        number: ep.episodeNumber || ep.number,
                         title: ep.title,
                         isFiller: ep.isFiller,
                         url: `/watch/${ep.id}`
@@ -61,16 +57,16 @@ export class HiAnimeService {
                 }
 
                 return {
-                    id: data.data.id || id,
-                    title: info.title || data.data.title,
-                    image: info.poster || data.data.poster,
-                    description: info.description || data.data.description,
+                    id: info.id || id,
+                    title: info.title || info.name,
+                    image: info.poster || info.image,
+                    description: info.description || info.synopsis,
                     episodes: episodes
                 };
             }
             return null;
         } catch (error) {
-            this.logger.error(`Error getting HiAnime info: ${error.message}`);
+            this.logger.error(`Error getting HiAnime info for ${id}: ${error.message}`);
             return null;
         }
     }

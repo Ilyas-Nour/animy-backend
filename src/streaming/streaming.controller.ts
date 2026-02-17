@@ -27,35 +27,29 @@ export class StreamingController {
      * Get anime info and episodes from HiAnime
      * GET /api/v1/streaming/anime/*
      */
-    @Get('anime/*')
+    @Get('anime/:id(*)')
     async getAnimeInfo(
-        @Req() req: Request,
+        @Param('id') id: string,
     ) {
-        const fullId = req.params[0];
-        if (!fullId) {
+        if (!id) {
             throw new HttpException('Anime ID is required', HttpStatus.BAD_REQUEST);
         }
-        return this.streamingService.getAnimeInfo(fullId);
+        return this.streamingService.getAnimeInfo(id);
     }
 
     /**
      * Get streaming links for an episode from HiAnime
      * GET /api/v1/streaming/episode/*
      */
-    @Get('episode/*')
+    @Get('episode/:id(*)')
     async getEpisodeLinks(
-        @Req() req: Request,
+        @Param('id') id: string,
     ) {
-        // Extract the full path after 'episode/' to handle encoded slashes in IDs
-        const fullId = req.params[0];
-
-        if (!fullId) {
+        if (!id) {
             throw new HttpException('Episode ID is required', HttpStatus.BAD_REQUEST);
         }
 
-        // We're bypassing the local proxy for now as direct links are more reliable
-        // but keeping the hook if we need it later.
-        return this.streamingService.getEpisodeLinks(fullId);
+        return this.streamingService.getEpisodeLinks(id);
     }
 
     /**
