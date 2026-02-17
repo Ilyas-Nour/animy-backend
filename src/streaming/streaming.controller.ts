@@ -44,12 +44,19 @@ export class StreamingController {
     @Get('episode/:id(*)')
     async getEpisodeLinks(
         @Param('id') id: string,
+        @Req() req: any,
     ) {
         if (!id) {
             throw new HttpException('Episode ID is required', HttpStatus.BAD_REQUEST);
         }
 
-        return this.streamingService.getEpisodeLinks(id);
+        // Build absolute proxy base URL dynamically from the request host
+        // This ensures the frontend gets a URL that points back to this backend instance
+        const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+        const host = req.headers.host;
+        const proxyBaseUrl = `${protocol}://${host}/api/v1/streaming/proxy`;
+
+        return this.streamingService.getEpisodeLinks(id, 'hianime', proxyBaseUrl);
     }
 
     /**
