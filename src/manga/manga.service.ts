@@ -102,20 +102,18 @@ export class MangaService {
       const data = await this.anilistService.getMangaById(id);
       const characters = data.characters?.nodes || [];
 
-      return {
-        data: characters.map((char: any) => ({
-          character: {
-            mal_id: char.id,
-            name: char.name.full,
-            images: {
-              jpg: { image_url: char.image.large }
-            }
-          },
-          role: "Main"
-        }))
-      };
+      return characters.map((char: any) => ({
+        character: {
+          mal_id: char.id,
+          name: char.name.full,
+          images: {
+            jpg: { image_url: char.image.large }
+          }
+        },
+        role: "Main"
+      }));
     } catch (e) {
-      return { data: [] };
+      return [];
     }
   }
 

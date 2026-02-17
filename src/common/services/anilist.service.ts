@@ -35,6 +35,7 @@ export class AnilistService {
                     media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
+                        isAdult
                         title {
                             romaji
                             english
@@ -85,6 +86,7 @@ export class AnilistService {
                 Media(id: $id, type: ANIME) {
                     id
                     idMal
+                    isAdult
                     title {
                         romaji
                         english
@@ -128,6 +130,7 @@ export class AnilistService {
                         nodes {
                             mediaRecommendation {
                                 id
+                                isAdult
                                 title {
                                     romaji
                                 }
@@ -188,6 +191,7 @@ export class AnilistService {
                     media(sort: TRENDING_DESC, type: ANIME, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
+                        isAdult
                         title {
                             romaji
                             english
@@ -228,6 +232,7 @@ export class AnilistService {
                     media(sort: POPULARITY_DESC, type: ANIME, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
+                        isAdult
                         title {
                             romaji
                             english
@@ -268,6 +273,7 @@ export class AnilistService {
                     media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
+                        isAdult
                         title {
                             romaji
                             english
@@ -320,6 +326,7 @@ export class AnilistService {
                     media(search: $search, type: MANGA, sort: [${sortValue}], isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
+                        isAdult
                         title {
                             romaji
                             english
@@ -373,6 +380,7 @@ export class AnilistService {
                 Media(id: $id, type: MANGA) {
                     id
                     idMal
+                    isAdult
                     title {
                         romaji
                         english
@@ -425,6 +433,7 @@ export class AnilistService {
                         nodes {
                             mediaRecommendation {
                                 id
+                                isAdult
                                 title {
                                     romaji
                                 }
@@ -466,6 +475,7 @@ export class AnilistService {
                     media(sort: TRENDING_DESC, type: MANGA, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
                         idMal
+                        isAdult
                         title {
                             romaji
                             english
@@ -503,6 +513,7 @@ export class AnilistService {
                 Page(page: $page, perPage: $perPage) {
                     media(sort: POPULARITY_DESC, type: MANGA, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
+                        isAdult
                         title {
                             romaji
                             english
@@ -559,6 +570,7 @@ export class AnilistService {
                     media(sort: POPULARITY_DESC, page: 1, perPage: 10) {
                         nodes {
                             id
+                            isAdult
                             title {
                                 romaji
                             }
@@ -642,6 +654,7 @@ export class AnilistService {
                 Page(page: $page, perPage: $perPage) {
                     media(season: $season, seasonYear: $year, type: ANIME, sort: POPULARITY_DESC, isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
                         id
+                        isAdult
                         title {
                             romaji
                             english
