@@ -45,6 +45,8 @@ export class StreamingController {
     async getEpisodeLinks(
         @Param('id') id: string,
         @Req() req: any,
+        @Query('malId') malId?: string,
+        @Query('ep') ep?: string,
     ) {
         if (!id) {
             throw new HttpException('Episode ID is required', HttpStatus.BAD_REQUEST);
@@ -56,7 +58,7 @@ export class StreamingController {
         const host = req.headers.host;
         const proxyBaseUrl = `${protocol}://${host}/api/v1/streaming/proxy`;
 
-        return this.streamingService.getEpisodeLinks(id, 'hianime', proxyBaseUrl);
+        return this.streamingService.getEpisodeLinks(id, 'hianime', proxyBaseUrl, malId, ep);
     }
 
     /**

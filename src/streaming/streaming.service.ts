@@ -59,34 +59,48 @@ export class StreamingService {
      * @param provider - Ignored, always HiAnime
      * @param proxyBaseUrl - Optional backend proxy URL for M3U8 rewriting
      */
-    async getEpisodeLinks(episodeId: string, provider: string = 'hianime', proxyBaseUrl?: string) {
+    async getEpisodeLinks(
+        episodeId: string,
+        provider: string = 'hianime',
+        proxyBaseUrl?: string,
+        malId?: string,
+        episodeNumber?: string
+    ) {
         try {
-            this.logger.debug(`Fetching links for episode ${episodeId} from HiAnime`);
+            this.logger.debug(`Fetching links for ${episodeId} (MAL: ${malId}, EP: ${episodeNumber})`);
             const sources = await this.hiAnimeService.fetchEpisodeSources(episodeId);
 
             if (!sources || !sources.sources || sources.sources.length === 0) {
                 this.logger.warn(`No sources found on HiAnime for episode ${episodeId}`);
-                throw new NotFoundException(`No sources found on HiAnime`);
+                // Don't throw yet, we might still have an iframe fallback
             }
 
             // Always proxy these sources as they usually have CORS/403 issues
-            const referer = sources.headers?.Referer || '';
+            const referer = sources?.headers?.Referer || 'https://megacloud.tv';
 
-            sources.sources = sources.sources.map((source: any) => {
+            let updatedSources = (sources?.sources || []).map((source: any) => {
                 // Proxy everything that isn't already proxied
                 if (source.url && !source.url.includes('/streaming/proxy')) {
                     const originalUrl = source.url;
-                    // We rewrite to use the proxy endpoint. 
-                    // Use the provided proxyBaseUrl or default to a relative one that the controller will handle
                     const baseUrl = proxyBaseUrl || '/api/v1/streaming/proxy';
                     source.url = `${baseUrl}?url=${encodeURIComponent(originalUrl)}&referer=${encodeURIComponent(referer)}`;
                 }
                 return source;
             });
 
+            // ADD STABLE IFRAME FALLBACK (VidLink)
+            // Pattern: https://vidlink.pro/anime/{malId}/{episodeNumber}
+            let iframeUrl = null;
+            if (malId && episodeNumber) {
+                // We use VidLink as a stable iframe provider
+                iframeUrl = `https://vidlink.pro/anime/${malId}/${episodeNumber}`;
+            }
+
             return {
                 provider: 'hianime',
                 ...sources,
+                sources: updatedSources,
+                iframeUrl: iframeUrl,
             };
         } catch (error) {
             this.logger.error(`Error fetching episode sources from HiAnime: ${error.message}`);
