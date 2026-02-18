@@ -139,9 +139,9 @@ export class AnimeService {
   async getAnimeCharacters(id: number) {
     try {
       const data = await this.anilistService.getAnimeById(id);
-      return data.characters?.edges || [];
+      return { data: data.characters?.edges || [] };
     } catch (e) {
-      return [];
+      return { data: [] };
     }
   }
 
