@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
-import { MessageType, MessageStatus, ReactionType } from "@prisma/client";
+import { MessageType, MessageStatus } from "@prisma/client";
 
 @Injectable()
 export class ChatService {

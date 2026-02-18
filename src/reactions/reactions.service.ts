@@ -1,6 +1,5 @@
 import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { ReactionType } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '@prisma/client';
 
@@ -12,7 +11,7 @@ export class ReactionsService {
     ) { }
 
     async toggleReaction(userId: string, data: {
-        type: ReactionType,
+        type: string,
         providerId?: string,
         commentId?: string
     }) {

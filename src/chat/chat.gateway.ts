@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { ChatService } from "./chat.service";
 import { JwtService } from "@nestjs/jwt";
-import { MessageType, MessageStatus, ReactionType } from "@prisma/client";
+import { MessageType, MessageStatus } from "@prisma/client";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -108,7 +108,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("message:react")
   async handleReactMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { messageId: string, type: ReactionType },
+    @MessageBody() data: { messageId: string, type: string },
   ) {
     const result = await this.chatService.toggleReaction(data.messageId, client.userId, data.type);
 
