@@ -1,0 +1,13 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "postgres", schema "public" at "aws-1-eu-west-1.pooler.supabase.com:5432"
+
+
+Error: 
+⚠️ We found changes that cannot be executed:
+
+  • Step 1 Changed the type of `type` on the `reactions` table. No cast exists, the column would be dropped and recreated, which cannot be done since the column is required and there is data in the table.
+
+You can use prisma migrate dev --create-only to create the migration file, and manually modify it to address the underlying issue(s).
+Then run prisma migrate dev to apply it and verify it works.
+
