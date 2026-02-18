@@ -165,6 +165,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  @SubscribeMessage("conversation:read")
+  async handleConversationRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: { conversationId: string },
+  ) {
+    const userId = client.userId;
+    await this.chatService.markConversationAsRead(data.conversationId, userId);
+
+    // Notify the user that THEIR unread count should be updated
+    client.emit("conversation:read_receipt", {
+      conversationId: data.conversationId,
+      readBy: userId,
+    });
+
+    // Notify the friend that their sent messages were read
+    this.server.to(data.conversationId).emit("conversation:read_receipt", {
+      conversationId: data.conversationId,
+      readBy: userId,
+    });
+  }
+
   @SubscribeMessage("typing:start")
   handleTypingStart(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: any) {
     client.to(data.conversationId).emit("typing:active", { userId: client.userId });
