@@ -375,10 +375,14 @@ model Message {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt
 
-  // Advanced Messaging Fields
   isEdited         Boolean  @default(false)
   isDeletedForAll  Boolean  @default(false)
   deletedBy        String[] @default([]) // List of user IDs who "Deleted for Me"
+
+  // Reply functionality
+  parentId         String?
+  parent           Message? @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies          Message[] @relation("MessageReplies")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
@@ -445,7 +449,7 @@ model Comment {
 model Reaction {
   id           String       @id @default(uuid())
   userId       String
-  type         ReactionType
+  type         String // Emoji string (e.g., "❤️", "😂")
   
   // Reacting to News OR Comment OR Message
   providerId   String?      // If reacting directly to News (Reddit ID)

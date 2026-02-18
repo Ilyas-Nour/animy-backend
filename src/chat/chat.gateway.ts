@@ -72,6 +72,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.type || MessageType.TEXT,
       data.animeId,
       data,
+      data.parentId,
     );
 
     this.server.to(conversation.id).emit("message:receive", message);

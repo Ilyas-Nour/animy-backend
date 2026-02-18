@@ -63,6 +63,7 @@ export class ChatService {
       mediaTitle?: string;
       mediaImage?: string;
     },
+    parentId?: string,
   ) {
     return this.prisma.message.create({
       data: {
@@ -76,10 +77,16 @@ export class ChatService {
         mediaTitle: mediaOptions?.mediaTitle,
         mediaImage: mediaOptions?.mediaImage,
         status: MessageStatus.SENT,
+        parentId,
       },
       include: {
         sender: { select: { id: true, username: true, avatar: true } },
         reactions: { include: { user: { select: { id: true, username: true } } } },
+        parent: {
+          include: {
+            sender: { select: { id: true, username: true } }
+          }
+        },
       },
     });
   }
@@ -116,6 +123,11 @@ export class ChatService {
       include: {
         sender: { select: { id: true, username: true, avatar: true } },
         reactions: { include: { user: { select: { id: true, username: true } } } },
+        parent: {
+          include: {
+            sender: { select: { id: true, username: true } }
+          }
+        },
       },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -160,7 +172,7 @@ export class ChatService {
     }
   }
 
-  async toggleReaction(messageId: string, userId: string, type: ReactionType) {
+  async toggleReaction(messageId: string, userId: string, type: string) {
     const existing = await this.prisma.reaction.findFirst({
       where: { userId, messageId }
     });
