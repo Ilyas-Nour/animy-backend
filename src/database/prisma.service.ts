@@ -4,25 +4,18 @@ import {
   OnModuleDestroy,
   Logger,
 } from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
+import prisma from "./prisma-client";
 
 @Injectable()
 export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+  implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
-
-  constructor() {
-    super({
-      log: ["error", "warn"],
-    });
-  }
+  public readonly client = prisma;
 
   async onModuleInit() {
     try {
-      await this.$connect();
-      this.logger.log("✅ Database connected successfully");
+      await prisma.$connect();
+      this.logger.log("✅ Database connected successfully (Singleton)");
     } catch (error) {
       this.logger.error("❌ Database connection failed", error);
       throw error;
@@ -30,7 +23,7 @@ export class PrismaService
   }
 
   async onModuleDestroy() {
-    await this.$disconnect();
+    await prisma.$disconnect();
     this.logger.log("Database disconnected");
   }
 
@@ -39,11 +32,14 @@ export class PrismaService
       throw new Error("Cannot clean database in production");
     }
 
-    const models = Reflect.ownKeys(this).filter((key) => key[0] !== "_");
+    const models = Reflect.ownKeys(prisma).filter((key) => key[0] !== "_");
 
     return Promise.all(
       models.map((modelKey) => {
-        return this[modelKey].deleteMany();
+        if (typeof prisma[modelKey]?.deleteMany === 'function') {
+          return prisma[modelKey].deleteMany();
+        }
+        return Promise.resolve();
       }),
     );
   }
