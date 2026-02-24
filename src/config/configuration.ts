@@ -25,4 +25,10 @@ export default () => ({
   jikan: {
     apiUrl: process.env.JIKAN_API_URL || "https://api.jikan.moe/v4",
   },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY,
+  },
+  email: {
+    from: process.env.MAIL_FROM || "Animy <onboarding@resend.dev>",
+  },
 });

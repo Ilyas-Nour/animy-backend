@@ -7,37 +7,34 @@ export class EmailService {
   private resend: Resend;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>("RESEND_API_KEY");
+    const apiKey = this.configService.get<string>("resend.apiKey");
     if (!apiKey) {
-      console.warn("RESEND_API_KEY is not defined. Email sending will fail.");
-      // Initialize with strict throw or dummy to prevent crash if not critical yet
-      // For now, we allow it to start but logs will show the issue.
+      console.warn(
+        "[EmailService] RESEND_API_KEY is not defined in configuration.",
+      );
+      // Initialize with placeholder to prevent immediate crash if not critical
       this.resend = new Resend("re_123_placeholder");
     } else {
       this.resend = new Resend(apiKey);
+      console.log("[EmailService] Initialized with Resend API Key.");
     }
   }
 
   async sendVerificationEmail(email: string, token: string) {
     const frontendUrl =
-      this.configService.get<string>("FRONTEND_URL") || "http://localhost:3000";
+      this.configService.get<string>("frontendUrl") || "http://localhost:3000";
     const confirmLink = `${frontendUrl}/verify?token=${token}`;
 
-    // Debug: Write to file
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    require("fs").writeFileSync(
-      "verification_debug.txt",
-      `Email: ${email}\nLink: ${confirmLink}\nDate: ${new Date().toISOString()}\n\n`,
-      { flag: "a" },
+    const fromEmail =
+      this.configService.get<string>("email.from") ||
+      "Animy <onboarding@resend.dev>";
+
+    console.log(
+      `[EmailService] Attempting to send verification email to: ${email}`,
     );
-    console.log(`[Email Debug] Verification Link for ${email}: ${confirmLink}`);
 
     try {
-      const fromEmail =
-        this.configService.get<string>("MAIL_FROM") ||
-        "Animy <onboarding@resend.dev>";
-
-      const data = await this.resend.emails.send({
+      const { data, error } = await this.resend.emails.send({
         from: fromEmail,
         to: email,
         subject: "Verify your Animy Account 🛡️",
@@ -147,16 +144,21 @@ export class EmailService {
         `,
       });
 
-      if (data.error) {
-        console.error("Resend API Error:", data.error);
+      if (error) {
+        console.error(
+          `[EmailService] Resend API Error for ${email}:`,
+          JSON.stringify(error, null, 2),
+        );
       } else {
         console.log(
-          `Verification email sent to ${email}. ID: ${data.data?.id}`,
+          `[EmailService] Verification email successfully sent to ${email}. ID: ${data?.id}`,
         );
       }
     } catch (error) {
-      console.error("Email sending failed (Exception):", error);
-      // Don't throw to allow registration to proceed, but log it clearly
+      console.error(
+        `[EmailService] Email sending failed (Exception) for ${email}:`,
+        error,
+      );
     }
   }
 }
