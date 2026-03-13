@@ -120,37 +120,96 @@ export class MangaService {
 
   async getMangaChapters(id: number) {
     try {
-      this.logger.debug(`Fetching readable chapters for AniList Manga ${id} from Consumet`);
-      const { data } = await axios.get(`https://consumet-api-clone.vercel.app/meta/anilist-manga/${id}?provider=mangadex`);
-      return { chapters: data.chapters || [] };
+      this.logger.debug(`Fetching chapters for manga ${id}`);
+      let title = "";
+      
+      const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
+      if (cachedManga && cachedManga.title) {
+        title = cachedManga.title;
+      } else {
+        const anilistInfo = await this.anilistService.getMangaById(id);
+        if (anilistInfo) title = anilistInfo.title.english || anilistInfo.title.romaji;
+      }
+
+      if (!title) {
+        this.logger.warn(`Could not find title for manga ${id}`);
+        return { chapters: [] };
+      }
+
+      // 1. Try meta/anilist-manga with mangadex first
+      try {
+        const { data } = await axios.get(`https://consumet-api-clone.vercel.app/meta/anilist-manga/${id}?provider=mangadex`);
+        if (data.chapters && data.chapters.length > 0) {
+          // Format chapter IDs for the read endpoint
+          const chapters = data.chapters.map(c => ({ ...c, id: `anilist___${c.id}` }));
+          return { chapters };
+        }
+      } catch (e) {
+        this.logger.debug(`meta/anilist-manga failed for ${id}, falling back...`);
+      }
+
+      // 2. Try direct provider search fallback
+      const providers = ['mangapill', 'mangadex'];
+      
+      for (const provider of providers) {
+        try {
+          this.logger.debug(`Searching ${provider} for: ${title}`);
+          const searchRes = await axios.get(`https://consumet-api-clone.vercel.app/manga/${provider}/${encodeURIComponent(title)}`);
+          
+          if (searchRes.data?.results?.length > 0) {
+            const providerId = searchRes.data.results[0].id;
+            
+            // Note: consumet-api endpoints vary slighty (info?id= vs info/id)
+            const infoUrl = `https://consumet-api-clone.vercel.app/manga/${provider}/info?id=${encodeURIComponent(providerId)}`;
+            const infoRes = await axios.get(infoUrl);
+            
+            if (infoRes.data?.chapters && infoRes.data.chapters.length > 0) {
+              const chapters = infoRes.data.chapters.map(c => ({
+                ...c,
+                id: `${provider}___${c.id}`
+              }));
+              this.logger.debug(`Found ${chapters.length} chapters on ${provider}`);
+              return { chapters };
+            }
+          }
+        } catch (e) {
+          this.logger.debug(`${provider} fallback failed: ${e.message}`);
+        }
+      }
+
+      return { chapters: [] };
     } catch (e) {
       this.logger.error(`Failed to fetch chapters for manga ${id}: ${e.message}`);
-      // Fallback
-      try {
-        const { data } = await axios.get(`https://api.consumet.org/meta/anilist-manga/${id}?provider=mangadex`);
-        return { chapters: data.chapters || [] };
-      } catch (innerE) {
-        throw new HttpException('Failed to fetch chapters from provider', HttpStatus.BAD_GATEWAY);
-      }
+      return { chapters: [] };
     }
   }
 
   async getChapterPages(chapterId: string) {
     try {
       this.logger.debug(`Fetching high-quality pages for chapter ${chapterId}`);
-      const url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${encodeURIComponent(chapterId)}&provider=mangadex`;
+      
+      let url = "";
+      const parts = chapterId.split('___');
+      
+      if (parts.length === 2) {
+        const provider = parts[0];
+        const actualId = parts[1];
+        
+        if (provider === 'anilist') {
+          url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${encodeURIComponent(actualId)}&provider=mangadex`;
+        } else {
+          url = `https://consumet-api-clone.vercel.app/manga/${provider}/read?chapterId=${encodeURIComponent(actualId)}`;
+        }
+      } else {
+        // Fallback for old cached/saved formats
+        url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${encodeURIComponent(chapterId)}&provider=mangadex`;
+      }
+      
       const { data } = await axios.get(url);
       return { pages: data };
     } catch (e) {
       this.logger.error(`Failed to fetch pages for chapter ${chapterId}: ${e.message}`);
-      // Fallback
-      try {
-        const url = `https://api.consumet.org/meta/anilist-manga/read?chapterId=${encodeURIComponent(chapterId)}&provider=mangadex`;
-        const { data } = await axios.get(url);
-        return { pages: data };
-      } catch (innerE) {
-        throw new HttpException('Failed to fetch chapter pages from provider', HttpStatus.BAD_GATEWAY);
-      }
+      throw new HttpException('Failed to fetch chapter pages from provider', HttpStatus.BAD_GATEWAY);
     }
   }
 
