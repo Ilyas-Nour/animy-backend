@@ -126,9 +126,40 @@ export class MangaService {
       const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
       if (cachedManga && cachedManga.title) {
         title = cachedManga.title;
-      } else {
-        const anilistInfo = await this.anilistService.getMangaById(id);
-        if (anilistInfo) title = anilistInfo.title.english || anilistInfo.title.romaji;
+      }
+      
+      if (!title) {
+        try {
+            this.logger.debug(`Fetching title for manga ${id} from AniList`);
+            const anilistInfo = await this.anilistService.getMangaById(id);
+            if (anilistInfo) {
+                title = anilistInfo.title.english || anilistInfo.title.romaji || anilistInfo.title.native;
+            }
+        } catch (e) {
+            this.logger.debug(`Could not fetch details from AniList directly: ${e.message}`);
+            // Backup graphql call directly if service method fails
+            try {
+                const { data } = await axios.post('https://graphql.anilist.co', {
+                    query: `
+                        query ($id: Int) {
+                          Media(id: $id, type: MANGA) {
+                            title {
+                              romaji
+                              english
+                            }
+                          }
+                        }
+                    `,
+                    variables: { id }
+                });
+                const anilistInfo = data.data.Media;
+                if (anilistInfo) {
+                    title = anilistInfo.title.english || anilistInfo.title.romaji;
+                }
+            } catch (graphqlErr) {
+                 this.logger.error(`GraphQL backup title fetch failed: ${graphqlErr.message}`);
+            }
+        }
       }
 
       if (!title) {
@@ -152,7 +183,7 @@ export class MangaService {
       }
 
       // 2. Try direct provider search fallback
-      const providers = ['mangapill', 'mangadex'];
+      const providers = ['mangapill', 'mangadex', 'mangareader'];
       
       for (const provider of providers) {
         try {
@@ -160,20 +191,40 @@ export class MangaService {
           const searchRes = await axios.get(`https://consumet-api-clone.vercel.app/manga/${provider}/${encodeURIComponent(title)}`);
           
           if (searchRes.data?.results?.length > 0) {
-            const providerId = searchRes.data.results[0].id;
-            
-            // Note: consumet-api endpoints vary slighty (info?id= vs info/id)
-            // DO NOT encode the providerId because it contains '/' which Consumet needs unencoded
-            const infoUrl = `https://consumet-api-clone.vercel.app/manga/${provider}/info?id=${providerId}`;
-            const infoRes = await axios.get(infoUrl);
-            
-            if (infoRes.data?.chapters && infoRes.data.chapters.length > 0) {
-              const chapters = infoRes.data.chapters.map(c => ({
-                ...c,
-                id: `${provider}___${Buffer.from(c.id).toString('base64url')}`
-              }));
-              this.logger.debug(`Found ${chapters.length} chapters on ${provider}`);
-              return { chapters };
+            // Helper to normalize strings for comparison
+            const normalize = (str: string) => str.toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ").trim();
+            const normalizedTargetTitle = normalize(title);
+
+            for (const res of searchRes.data.results) {
+              const normalizedResTitle = normalize(res.title);
+              
+              // Check if it's a good fuzzy match
+              if (normalizedResTitle === normalizedTargetTitle || 
+                  normalizedResTitle.includes(normalizedTargetTitle) || 
+                  normalizedTargetTitle.includes(normalizedResTitle)) {
+                  
+                  const providerId = res.id;
+                  this.logger.debug(`Matched title for ${title}: ${res.title} (ID: ${providerId}) on ${provider}, checking info...`);
+                  
+                  try {
+                    // DO NOT encode the providerId because it contains '/' which Consumet needs unencoded
+                    const infoUrl = `https://consumet-api-clone.vercel.app/manga/${provider}/info?id=${providerId}`;
+                    const infoRes = await axios.get(infoUrl);
+                    
+                    if (infoRes.data?.chapters && infoRes.data.chapters.length > 0) {
+                      const chapters = infoRes.data.chapters.map(c => ({
+                        ...c,
+                        id: `${provider}___${Buffer.from(c.id).toString('base64url')}`
+                      }));
+                      this.logger.debug(`Found ${chapters.length} chapters on ${provider}`);
+                      return { chapters };
+                    } else {
+                       this.logger.debug(`Match found, but 0 chapters for ${providerId} on ${provider}. Trying next match...`);
+                    }
+                  } catch (infoErr) {
+                     this.logger.debug(`Failed to fetch info for ${providerId} on ${provider}: ${infoErr.message}`);
+                  }
+              }
             }
           }
         } catch (e) {
