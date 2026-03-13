@@ -168,67 +168,70 @@ export class MangaService {
       }
 
       // 1. Try meta/anilist-manga with mangadex first
-      try {
-        const { data } = await axios.get(`https://consumet-api-clone.vercel.app/meta/anilist-manga/${id}?provider=mangadex`);
-        if (data.chapters && data.chapters.length > 0) {
-          // Format chapter IDs for the read endpoint
-          const chapters = data.chapters.map(c => ({ 
-            ...c, 
-            id: `anilist___${Buffer.from(c.id).toString('base64url')}` 
-          }));
-          return { chapters };
-        }
-      } catch (e) {
-        this.logger.debug(`meta/anilist-manga failed for ${id}, falling back...`);
+      const apiBaseUrls = ['https://consumet-api-clone.vercel.app', 'https://api.consumet.org'];
+      
+      for (const baseUrl of apiBaseUrls) {
+          try {
+            const { data } = await axios.get(`${baseUrl}/meta/anilist-manga/${id}?provider=mangadex`);
+            if (data.chapters && data.chapters.length > 0) {
+              const chapters = data.chapters.map(c => ({ 
+                ...c, 
+                id: `anilist___${Buffer.from(c.id).toString('base64url')}___${Buffer.from(baseUrl).toString('base64url')}` 
+              }));
+              return { chapters };
+            }
+          } catch (e) {
+            this.logger.debug(`meta/anilist-manga failed for ${id} on ${baseUrl}, trying next...`);
+          }
       }
 
       // 2. Try direct provider search fallback
       const providers = ['mangapill', 'mangadex', 'mangareader'];
       
       for (const provider of providers) {
-        try {
-          this.logger.debug(`Searching ${provider} for: ${title}`);
-          const searchRes = await axios.get(`https://consumet-api-clone.vercel.app/manga/${provider}/${encodeURIComponent(title)}`);
-          
-          if (searchRes.data?.results?.length > 0) {
-            // Helper to normalize strings for comparison
-            const normalize = (str: string) => str.toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ").trim();
-            const normalizedTargetTitle = normalize(title);
+        for (const baseUrl of apiBaseUrls) {
+          try {
+            this.logger.debug(`Searching ${provider} for: ${title} on ${baseUrl}`);
+            const searchRes = await axios.get(`${baseUrl}/manga/${provider}/${encodeURIComponent(title)}`);
+            
+            if (searchRes.data?.results?.length > 0) {
+              const normalize = (str: string) => str.toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ").trim();
+              const normalizedTargetTitle = normalize(title);
 
-            for (const res of searchRes.data.results) {
-              const normalizedResTitle = normalize(res.title);
-              
-              // Check if it's a good fuzzy match
-              if (normalizedResTitle === normalizedTargetTitle || 
-                  normalizedResTitle.includes(normalizedTargetTitle) || 
-                  normalizedTargetTitle.includes(normalizedResTitle)) {
-                  
-                  const providerId = res.id;
-                  this.logger.debug(`Matched title for ${title}: ${res.title} (ID: ${providerId}) on ${provider}, checking info...`);
-                  
-                  try {
-                    // DO NOT encode the providerId because it contains '/' which Consumet needs unencoded
-                    const infoUrl = `https://consumet-api-clone.vercel.app/manga/${provider}/info?id=${providerId}`;
-                    const infoRes = await axios.get(infoUrl);
+              for (const res of searchRes.data.results) {
+                const normalizedResTitle = normalize(res.title);
+                
+                if (normalizedResTitle === normalizedTargetTitle || 
+                    normalizedResTitle.includes(normalizedTargetTitle) || 
+                    normalizedTargetTitle.includes(normalizedResTitle)) {
                     
-                    if (infoRes.data?.chapters && infoRes.data.chapters.length > 0) {
-                      const chapters = infoRes.data.chapters.map(c => ({
-                        ...c,
-                        id: `${provider}___${Buffer.from(c.id).toString('base64url')}`
-                      }));
-                      this.logger.debug(`Found ${chapters.length} chapters on ${provider}`);
-                      return { chapters };
-                    } else {
-                       this.logger.debug(`Match found, but 0 chapters for ${providerId} on ${provider}. Trying next match...`);
+                    const providerId = res.id;
+                    this.logger.debug(`Matched title for ${title}: ${res.title} (ID: ${providerId}) on ${provider}, checking info...`);
+                    
+                    try {
+                      // DO NOT encode the providerId because it contains '/' which Consumet needs unencoded
+                      const infoUrl = `${baseUrl}/manga/${provider}/info?id=${providerId}`;
+                      const infoRes = await axios.get(infoUrl);
+                      
+                      if (infoRes.data?.chapters && infoRes.data.chapters.length > 0) {
+                        const chapters = infoRes.data.chapters.map(c => ({
+                          ...c,
+                          id: `${provider}___${Buffer.from(c.id).toString('base64url')}___${Buffer.from(baseUrl).toString('base64url')}`
+                        }));
+                        this.logger.debug(`Found ${chapters.length} chapters on ${provider}`);
+                        return { chapters };
+                      } else {
+                         this.logger.debug(`Match found, but 0 chapters for ${providerId} on ${provider}. Trying next match...`);
+                      }
+                    } catch (infoErr) {
+                       this.logger.debug(`Failed to fetch info for ${providerId} on ${provider}: ${infoErr.message}`);
                     }
-                  } catch (infoErr) {
-                     this.logger.debug(`Failed to fetch info for ${providerId} on ${provider}: ${infoErr.message}`);
-                  }
+                }
               }
             }
+          } catch (e) {
+            this.logger.debug(`${provider} fallback failed on ${baseUrl}: ${e.message}`);
           }
-        } catch (e) {
-          this.logger.debug(`${provider} fallback failed: ${e.message}`);
         }
       }
 
@@ -246,16 +249,25 @@ export class MangaService {
       let url = "";
       const parts = chapterId.split('___');
       
-      if (parts.length === 2) {
+      if (parts.length === 3) {
         const provider = parts[0];
-        // Decode the base64url actual chapter ID
         const actualId = Buffer.from(parts[1], 'base64url').toString('utf-8');
+        const baseUrl = Buffer.from(parts[2], 'base64url').toString('utf-8');
         
         if (provider === 'anilist') {
-          // DO NOT encode the actualId, Consumet requires the raw slashes
-          url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`;
+          url = `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`;
         } else {
-          url = `https://consumet-api-clone.vercel.app/manga/${provider}/read?chapterId=${actualId}`;
+          url = `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
+        }
+      } else if (parts.length === 2) {
+        const provider = parts[0];
+        const actualId = Buffer.from(parts[1], 'base64url').toString('utf-8');
+        const baseUrl = 'https://consumet-api-clone.vercel.app';
+        
+        if (provider === 'anilist') {
+          url = `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`;
+        } else {
+          url = `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
         }
       } else {
         // Fallback for old cached/saved formats
