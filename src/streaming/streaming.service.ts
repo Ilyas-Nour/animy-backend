@@ -88,12 +88,12 @@ export class StreamingService {
                 return source;
             });
 
-            // ADD STABLE IFRAME FALLBACK (VidLink)
-            // Pattern: https://vidlink.pro/anime/{malId}/{episodeNumber}
-            let iframeUrl = null;
+            // HIGH-RELIABILITY IFRAME GENERATION (VidLink)
+            // This is the most stable way to stream today
+            let iframeUrl = sources?.iframeUrl || null;
             if (malId && episodeNumber) {
-                // We use VidLink as a stable iframe provider
-                iframeUrl = `https://vidlink.pro/anime/${malId}/${episodeNumber}`;
+                // VidLink is the primary stable provider
+                iframeUrl = `https://vidlink.pro/anime/${malId}/${episodeNumber}?primaryColor=6366f1`;
             }
 
             return {
