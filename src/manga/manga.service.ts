@@ -235,6 +235,31 @@ export class MangaService {
         }
       }
 
+      // FINAL HIGH-RELIABILITY FALLBACK: Direct MangaDex API (Bypassing scrapers)
+      this.logger.debug(`Scrapers failed. Attempting direct MangaDex API fallback for: ${title}`);
+      try {
+        const searchRes = await axios.get(`https://api.mangadex.org/manga?title=${encodeURIComponent(title)}&limit=1`);
+        const mangaId = searchRes.data.data?.[0]?.id;
+
+        if (mangaId) {
+            this.logger.debug(`Direct MangaDex match found: ${mangaId}. Fetching chapters...`);
+            const chaptersRes = await axios.get(`https://api.mangadex.org/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=desc&limit=500`);
+            
+            if (chaptersRes.data.data && chaptersRes.data.data.length > 0) {
+                return {
+                    chapters: chaptersRes.data.data.map((ch: any) => ({
+                        id: `mangadex_direct___${ch.id}___na`,
+                        title: ch.attributes.title || `Chapter ${ch.attributes.chapter}`,
+                        chapterNumber: ch.attributes.chapter,
+                        volumeNumber: ch.attributes.volume,
+                    }))
+                };
+            }
+        }
+      } catch (mdError) {
+        this.logger.error(`Direct MangaDex fallback failed: ${mdError.message}`);
+      }
+
       return { chapters: [] };
     } catch (e) {
       this.logger.error(`Failed to fetch chapters for manga ${id}: ${e.message}`);
@@ -251,9 +276,23 @@ export class MangaService {
       
       if (parts.length === 3) {
         const provider = parts[0];
-        const actualId = Buffer.from(parts[1], 'base64url').toString('utf-8');
-        const baseUrl = Buffer.from(parts[2], 'base64url').toString('utf-8');
+        const actualId = provider === 'mangadex_direct' ? parts[1] : Buffer.from(parts[1], 'base64url').toString('utf-8');
+        const baseUrl = provider === 'mangadex_direct' ? 'https://api.mangadex.org' : Buffer.from(parts[2], 'base64url').toString('utf-8');
         
+        if (provider === 'mangadex_direct') {
+           // Handle Direct MangaDex pages
+           const atHomeRes = await axios.get(`https://api.mangadex.org/at-home/server/${actualId}`);
+           const host = atHomeRes.data.baseUrl;
+           const hash = atHomeRes.data.chapter.hash;
+           const files = atHomeRes.data.chapter.data;
+           return {
+             pages: files.map((f: string) => ({
+               url: `${host}/data/${hash}/${f}`,
+               number: files.indexOf(f) + 1
+             }))
+           };
+        }
+
         if (provider === 'anilist') {
           url = `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`;
         } else {
