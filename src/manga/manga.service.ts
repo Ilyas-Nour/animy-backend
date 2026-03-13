@@ -2,6 +2,7 @@ import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { AnilistService } from "../common/services/anilist.service";
 import { SearchMangaDto } from "./dto/search-manga.dto";
+import axios from "axios";
 
 @Injectable()
 export class MangaService {
@@ -114,6 +115,42 @@ export class MangaService {
       }));
     } catch (e) {
       return [];
+    }
+  }
+
+  async getMangaChapters(id: number) {
+    try {
+      this.logger.debug(`Fetching readable chapters for AniList Manga ${id} from Consumet`);
+      const { data } = await axios.get(`https://consumet-api-clone.vercel.app/meta/anilist-manga/${id}?provider=mangadex`);
+      return { chapters: data.chapters || [] };
+    } catch (e) {
+      this.logger.error(`Failed to fetch chapters for manga ${id}: ${e.message}`);
+      // Fallback
+      try {
+        const { data } = await axios.get(`https://api.consumet.org/meta/anilist-manga/${id}?provider=mangadex`);
+        return { chapters: data.chapters || [] };
+      } catch (innerE) {
+        throw new HttpException('Failed to fetch chapters from provider', HttpStatus.BAD_GATEWAY);
+      }
+    }
+  }
+
+  async getChapterPages(chapterId: string) {
+    try {
+      this.logger.debug(`Fetching high-quality pages for chapter ${chapterId}`);
+      const url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${encodeURIComponent(chapterId)}&provider=mangadex`;
+      const { data } = await axios.get(url);
+      return { pages: data };
+    } catch (e) {
+      this.logger.error(`Failed to fetch pages for chapter ${chapterId}: ${e.message}`);
+      // Fallback
+      try {
+        const url = `https://api.consumet.org/meta/anilist-manga/read?chapterId=${encodeURIComponent(chapterId)}&provider=mangadex`;
+        const { data } = await axios.get(url);
+        return { pages: data };
+      } catch (innerE) {
+        throw new HttpException('Failed to fetch chapter pages from provider', HttpStatus.BAD_GATEWAY);
+      }
     }
   }
 

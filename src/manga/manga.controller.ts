@@ -42,4 +42,14 @@ export class MangaController {
   async getCharacters(@Param("id", ParseIntPipe) id: number) {
     return this.mangaService.getMangaCharacters(id);
   }
+
+  @Get(":id/read-chapters")
+  async getReadChapters(@Param("id", ParseIntPipe) id: number) {
+    return this.mangaService.getMangaChapters(id);
+  }
+
+  @Get("read/:chapterId")
+  async getChapterPages(@Param("chapterId") chapterId: string) {
+    return this.mangaService.getChapterPages(chapterId);
+  }
 }
