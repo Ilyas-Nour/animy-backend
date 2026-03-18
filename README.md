@@ -11,16 +11,16 @@
 <div align="center">
   <table style="width: 100%; border-collapse: collapse;">
     <tr>
-      <td width="50%"><img src="../anime-aggregator-frontend/public/1.png" alt="Screenshot 1" /></td>
-      <td width="50%"><img src="../anime-aggregator-frontend/public/2.png" alt="Screenshot 2" /></td>
+      <td width="50%"><img src="https://raw.githubusercontent.com/Ilyas-Nour/animy-frontend/master/public/1.png" alt="Screenshot 1" /></td>
+      <td width="50%"><img src="https://raw.githubusercontent.com/Ilyas-Nour/animy-frontend/master/public/2.png" alt="Screenshot 2" /></td>
     </tr>
     <tr>
-      <td width="50%"><img src="../anime-aggregator-frontend/public/3.png" alt="Screenshot 3" /></td>
-      <td width="50%"><img src="../anime-aggregator-frontend/public/4.png" alt="Screenshot 4" /></td>
+      <td width="50%"><img src="https://raw.githubusercontent.com/Ilyas-Nour/animy-frontend/master/public/3.png" alt="Screenshot 3" /></td>
+      <td width="50%"><img src="https://raw.githubusercontent.com/Ilyas-Nour/animy-frontend/master/public/4.png" alt="Screenshot 4" /></td>
     </tr>
     <tr>
-      <td width="50%"><img src="../anime-aggregator-frontend/public/5.png" alt="Screenshot 5" /></td>
-      <td width="50%"><img src="../anime-aggregator-frontend/public/6.png" alt="Screenshot 6" /></td>
+      <td width="50%"><img src="https://raw.githubusercontent.com/Ilyas-Nour/animy-frontend/master/public/5.png" alt="Screenshot 5" /></td>
+      <td width="50%"><img src="https://raw.githubusercontent.com/Ilyas-Nour/animy-frontend/master/public/6.png" alt="Screenshot 6" /></td>
     </tr>
   </table>
 </div>
