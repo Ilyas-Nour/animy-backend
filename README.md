@@ -80,7 +80,7 @@ The system is organized into decoupled modules for maximum scalability:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/animy-backend.git
+   git clone https://github.com/Ilyas-Nour/animy-backend.git
    cd animy-backend
    ```
 
