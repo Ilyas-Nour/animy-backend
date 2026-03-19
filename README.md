@@ -123,7 +123,3 @@ The system is organized into decoupled modules for maximum scalability:
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
-
-<div align="center">
-  Engineered for Speed 🚀
-</div>
