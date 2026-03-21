@@ -16,11 +16,11 @@ import { ChatModule } from "./chat/chat.module";
 import { CommonModule } from "./common/common.module";
 import { CacheModule } from "@nestjs/cache-manager";
 import { AdminModule } from "./admin/admin.module";
-import { NewsEngagementModule } from './news-engagement/news-engagement.module';
-import { CommentsModule } from './comments/comments.module';
-import { ReactionsModule } from './reactions/reactions.module';
-import { NotificationsModule } from './notifications/notifications.module';
-import { StreamingModule } from './streaming/streaming.module';
+import { NewsEngagementModule } from "./news-engagement/news-engagement.module";
+import { CommentsModule } from "./comments/comments.module";
+import { ReactionsModule } from "./reactions/reactions.module";
+import { NotificationsModule } from "./notifications/notifications.module";
+import { StreamingModule } from "./streaming/streaming.module";
 // import { ConsumetModule } from './consumet/consumet.module';
 import * as redisStore from "cache-manager-redis-store";
 
@@ -81,4 +81,4 @@ import * as redisStore from "cache-manager-redis-store";
   controllers: [],
   providers: [],
 })
-export class AppModule { }
+export class AppModule {}

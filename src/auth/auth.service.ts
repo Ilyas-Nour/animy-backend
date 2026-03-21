@@ -20,7 +20,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
-  ) { }
+  ) {}
 
   // Register (Direct)
   async register(registerDto: RegisterDto) {
@@ -141,7 +141,7 @@ export class AuthService {
       throw new BadRequestException({
         message: "Token expired",
         email: verificationToken.user.email,
-        expired: true
+        expired: true,
       });
     }
 

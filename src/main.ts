@@ -58,8 +58,21 @@ async function bootstrap() {
     origin: [frontendUrl, "http://localhost:3000"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Accept", "Range", "Origin", "X-Requested-With", "Referer"],
-    exposedHeaders: ["Content-Range", "X-Content-Range", "Content-Type", "Content-Length"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "Range",
+      "Origin",
+      "X-Requested-With",
+      "Referer",
+    ],
+    exposedHeaders: [
+      "Content-Range",
+      "X-Content-Range",
+      "Content-Type",
+      "Content-Length",
+    ],
   });
 
   // Global pipes for validation

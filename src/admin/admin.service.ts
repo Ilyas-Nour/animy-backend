@@ -3,7 +3,7 @@ import { PrismaService } from "../database/prisma.service";
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getStats() {
     try {

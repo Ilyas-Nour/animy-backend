@@ -8,4 +8,4 @@ import { AnilistService } from "./services/anilist.service";
   providers: [AnilistService],
   exports: [AnilistService, HttpModule],
 })
-export class CommonModule { }
+export class CommonModule {}

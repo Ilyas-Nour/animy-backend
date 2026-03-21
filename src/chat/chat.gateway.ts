@@ -31,7 +31,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     public chatService: ChatService,
     private jwtService: JwtService,
-  ) { }
+  ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
     try {
@@ -63,7 +63,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: any,
   ) {
     const senderId = client.userId;
-    const conversation = await this.chatService.getOrCreateConversation(senderId, data.to);
+    const conversation = await this.chatService.getOrCreateConversation(
+      senderId,
+      data.to,
+    );
 
     const message = await this.chatService.saveMessage(
       conversation.id,
@@ -83,9 +86,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("message:edit")
   async handleEditMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { messageId: string, content: string },
+    @MessageBody() data: { messageId: string; content: string },
   ) {
-    const updated = await this.chatService.editMessage(data.messageId, client.userId, data.content);
+    const updated = await this.chatService.editMessage(
+      data.messageId,
+      client.userId,
+      data.content,
+    );
     this.server.to(updated.conversationId).emit("message:updated", updated);
     return updated;
   }
@@ -93,12 +100,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("message:delete")
   async handleDeleteMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { messageId: string, forEveryone: boolean },
+    @MessageBody() data: { messageId: string; forEveryone: boolean },
   ) {
-    const result = await this.chatService.deleteMessage(data.messageId, client.userId, data.forEveryone);
+    const result = await this.chatService.deleteMessage(
+      data.messageId,
+      client.userId,
+      data.forEveryone,
+    );
 
     if (data.forEveryone) {
-      this.server.to(result.conversationId).emit("message:deleted_all", { messageId: data.messageId });
+      this.server
+        .to(result.conversationId)
+        .emit("message:deleted_all", { messageId: data.messageId });
     } else {
       client.emit("message:deleted_me", { messageId: data.messageId });
     }
@@ -108,20 +121,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("message:react")
   async handleReactMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: { messageId: string, type: string },
+    @MessageBody() data: { messageId: string; type: string },
   ) {
-    const result = await this.chatService.toggleReaction(data.messageId, client.userId, data.type);
+    const result = await this.chatService.toggleReaction(
+      data.messageId,
+      client.userId,
+      data.type,
+    );
 
     // Fetch full message to include reactions for broadcast
     const message = await (this.chatService as any).prisma.message.findUnique({
       where: { id: data.messageId },
-      include: { reactions: { include: { user: { select: { id: true, username: true } } } } }
+      include: {
+        reactions: {
+          include: { user: { select: { id: true, username: true } } },
+        },
+      },
     });
 
     if (message) {
       this.server.to(message.conversationId).emit("message:reactions_updated", {
         messageId: message.id,
-        reactions: message.reactions
+        reactions: message.reactions,
       });
     }
     return result;
@@ -132,8 +153,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { conversationId: string },
   ) {
-    await this.chatService.clearConversation(data.conversationId, client.userId);
-    client.emit("conversation:cleared", { conversationId: data.conversationId });
+    await this.chatService.clearConversation(
+      data.conversationId,
+      client.userId,
+    );
+    client.emit("conversation:cleared", {
+      conversationId: data.conversationId,
+    });
     return { success: true };
   }
 
@@ -143,14 +169,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { friendId: string },
   ) {
     const userId = client.userId;
-    const conversation = await this.chatService.getOrCreateConversation(userId, data.friendId);
+    const conversation = await this.chatService.getOrCreateConversation(
+      userId,
+      data.friendId,
+    );
     client.join(conversation.id);
-    const messages = await this.chatService.getConversationMessages(conversation.id, userId);
+    const messages = await this.chatService.getConversationMessages(
+      conversation.id,
+      userId,
+    );
 
     client.emit("conversation:joined", {
       conversationId: conversation.id,
       messages: messages.reverse(),
-      friend: conversation.user1.id === userId ? conversation.user2 : conversation.user1,
+      friend:
+        conversation.user1.id === userId
+          ? conversation.user2
+          : conversation.user1,
     });
   }
 
@@ -188,12 +223,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage("typing:start")
-  handleTypingStart(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: any) {
-    client.to(data.conversationId).emit("typing:active", { userId: client.userId });
+  handleTypingStart(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    client
+      .to(data.conversationId)
+      .emit("typing:active", { userId: client.userId });
   }
 
   @SubscribeMessage("typing:stop")
-  handleTypingStop(@ConnectedSocket() client: AuthenticatedSocket, @MessageBody() data: any) {
-    client.to(data.conversationId).emit("typing:inactive", { userId: client.userId });
+  handleTypingStop(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: any,
+  ) {
+    client
+      .to(data.conversationId)
+      .emit("typing:inactive", { userId: client.userId });
   }
 }

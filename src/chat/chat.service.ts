@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { MessageType, MessageStatus } from "@prisma/client";
 
 @Injectable()
 export class ChatService {
-  constructor(public prisma: PrismaService) { }
+  constructor(public prisma: PrismaService) {}
 
   /**
    * Validates if two users are friends with ACCEPTED status
@@ -81,11 +86,13 @@ export class ChatService {
       },
       include: {
         sender: { select: { id: true, username: true, avatar: true } },
-        reactions: { include: { user: { select: { id: true, username: true } } } },
+        reactions: {
+          include: { user: { select: { id: true, username: true } } },
+        },
         parent: {
           include: {
-            sender: { select: { id: true, username: true } }
-          }
+            sender: { select: { id: true, username: true } },
+          },
         },
       },
     });
@@ -102,31 +109,34 @@ export class ChatService {
     offset: number = 0,
   ) {
     const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId }
+      where: { id: conversationId },
     });
 
-    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (!conversation) throw new NotFoundException("Conversation not found");
 
     // Determine the clear date for this specific user
-    const clearedAt = conversation.participant1 === userId
-      ? conversation.clearedAt1
-      : conversation.clearedAt2;
+    const clearedAt =
+      conversation.participant1 === userId
+        ? conversation.clearedAt1
+        : conversation.clearedAt2;
 
     return this.prisma.message.findMany({
       where: {
         conversationId,
         createdAt: clearedAt ? { gt: clearedAt } : undefined,
         NOT: {
-          deletedBy: { has: userId }
-        }
+          deletedBy: { has: userId },
+        },
       },
       include: {
         sender: { select: { id: true, username: true, avatar: true } },
-        reactions: { include: { user: { select: { id: true, username: true } } } },
+        reactions: {
+          include: { user: { select: { id: true, username: true } } },
+        },
         parent: {
           include: {
-            sender: { select: { id: true, username: true } }
-          }
+            sender: { select: { id: true, username: true } },
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -136,76 +146,88 @@ export class ChatService {
   }
 
   async editMessage(messageId: string, userId: string, content: string) {
-    const message = await this.prisma.message.findUnique({ where: { id: messageId } });
-    if (!message) throw new NotFoundException('Message not found');
-    if (message.senderId !== userId) throw new ForbiddenException('Cannot edit others messages');
-    if (message.isDeletedForAll) throw new BadRequestException('Cannot edit deleted message');
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+    if (!message) throw new NotFoundException("Message not found");
+    if (message.senderId !== userId)
+      throw new ForbiddenException("Cannot edit others messages");
+    if (message.isDeletedForAll)
+      throw new BadRequestException("Cannot edit deleted message");
 
     return this.prisma.message.update({
       where: { id: messageId },
       data: { content, isEdited: true },
       include: {
         sender: { select: { id: true, username: true, avatar: true } },
-        reactions: { include: { user: { select: { id: true, username: true } } } },
-      }
+        reactions: {
+          include: { user: { select: { id: true, username: true } } },
+        },
+      },
     });
   }
 
   async deleteMessage(messageId: string, userId: string, forEveryone: boolean) {
-    const message = await this.prisma.message.findUnique({ where: { id: messageId } });
-    if (!message) throw new NotFoundException('Message not found');
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+    if (!message) throw new NotFoundException("Message not found");
 
     if (forEveryone) {
-      if (message.senderId !== userId) throw new ForbiddenException('Cannot delete for everyone');
+      if (message.senderId !== userId)
+        throw new ForbiddenException("Cannot delete for everyone");
       return this.prisma.message.update({
         where: { id: messageId },
-        data: { isDeletedForAll: true, content: "This message was deleted" }
+        data: { isDeletedForAll: true, content: "This message was deleted" },
       });
     } else {
       // Delete for Me
       return this.prisma.message.update({
         where: { id: messageId },
         data: {
-          deletedBy: { push: userId }
-        }
+          deletedBy: { push: userId },
+        },
       });
     }
   }
 
   async toggleReaction(messageId: string, userId: string, type: string) {
     const existing = await this.prisma.reaction.findFirst({
-      where: { userId, messageId }
+      where: { userId, messageId },
     });
 
     if (existing) {
       if (existing.type === type) {
         await this.prisma.reaction.delete({ where: { id: existing.id } });
-        return { status: 'removed' };
+        return { status: "removed" };
       }
       await this.prisma.reaction.update({
         where: { id: existing.id },
-        data: { type }
+        data: { type },
       });
-      return { status: 'updated', type };
+      return { status: "updated", type };
     }
 
     await this.prisma.reaction.create({
-      data: { userId, messageId, type }
+      data: { userId, messageId, type },
     });
-    return { status: 'created', type };
+    return { status: "created", type };
   }
 
   async clearConversation(conversationId: string, userId: string) {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
-    if (!conversation) throw new NotFoundException('Conversation not found');
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conversation) throw new NotFoundException("Conversation not found");
 
-    const updateData = conversation.participant1 === userId
-      ? { clearedAt1: new Date() }
-      : { clearedAt2: new Date() };
+    const updateData =
+      conversation.participant1 === userId
+        ? { clearedAt1: new Date() }
+        : { clearedAt2: new Date() };
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
-      data: updateData
+      data: updateData,
     });
 
     return { success: true };
@@ -230,7 +252,9 @@ export class ChatService {
   }
 
   async markAsDelivered(messageId: string) {
-    const message = await this.prisma.message.findUnique({ where: { id: messageId } });
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
     if (message && message.status === MessageStatus.SENT) {
       return this.prisma.message.update({
         where: { id: messageId },
@@ -250,7 +274,7 @@ export class ChatService {
         user2: { select: { id: true, username: true, avatar: true } },
         messages: {
           where: {
-            NOT: { deletedBy: { has: userId } }
+            NOT: { deletedBy: { has: userId } },
           },
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -261,11 +285,15 @@ export class ChatService {
 
     return Promise.all(
       conversations.map(async (conv) => {
-        const clearedAt = conv.participant1 === userId ? conv.clearedAt1 : conv.clearedAt2;
+        const clearedAt =
+          conv.participant1 === userId ? conv.clearedAt1 : conv.clearedAt2;
 
         // Filter last message by clear date
         const lastMsg = conv.messages[0];
-        const displayMessage = (lastMsg && (!clearedAt || lastMsg.createdAt > clearedAt)) ? lastMsg : null;
+        const displayMessage =
+          lastMsg && (!clearedAt || lastMsg.createdAt > clearedAt)
+            ? lastMsg
+            : null;
 
         const unreadCount = await this.prisma.message.count({
           where: {
@@ -273,7 +301,7 @@ export class ChatService {
             senderId: { not: userId },
             status: { not: MessageStatus.READ },
             createdAt: clearedAt ? { gt: clearedAt } : undefined,
-            NOT: { deletedBy: { has: userId } }
+            NOT: { deletedBy: { has: userId } },
           },
         });
 
@@ -292,20 +320,21 @@ export class ChatService {
   async getGlobalUnreadCount(userId: string) {
     // This needs to respect clearedAt too for accuracy
     const conversations = await this.prisma.conversation.findMany({
-      where: { OR: [{ participant1: userId }, { participant2: userId }] }
+      where: { OR: [{ participant1: userId }, { participant2: userId }] },
     });
 
     let total = 0;
     for (const conv of conversations) {
-      const clearedAt = conv.participant1 === userId ? conv.clearedAt1 : conv.clearedAt2;
+      const clearedAt =
+        conv.participant1 === userId ? conv.clearedAt1 : conv.clearedAt2;
       const count = await this.prisma.message.count({
         where: {
           conversationId: conv.id,
           senderId: { not: userId },
           status: { not: MessageStatus.READ },
           createdAt: clearedAt ? { gt: clearedAt } : undefined,
-          NOT: { deletedBy: { has: userId } }
-        }
+          NOT: { deletedBy: { has: userId } },
+        },
       });
       total += count;
     }

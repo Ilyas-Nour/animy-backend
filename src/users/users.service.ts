@@ -15,7 +15,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly xpService: XpService,
     private readonly supabaseService: SupabaseService,
-  ) { }
+  ) {}
   // ... (start of methods)
 
   // ... skipping to getStats ...
@@ -23,33 +23,37 @@ export class UsersService {
   async getStats(userId: string) {
     try {
       // 1. Individual counts for simple tables
-      const [favorites, mangaFavorites, totalFavoriteCharacters] = await Promise.all([
-        this.prisma.favorite.count({ where: { userId } }),
-        this.prisma.favoriteManga.count({ where: { userId } }),
-        this.prisma.favoriteCharacter.count({ where: { userId } }),
-      ]);
+      const [favorites, mangaFavorites, totalFavoriteCharacters] =
+        await Promise.all([
+          this.prisma.favorite.count({ where: { userId } }),
+          this.prisma.favoriteManga.count({ where: { userId } }),
+          this.prisma.favoriteCharacter.count({ where: { userId } }),
+        ]);
 
       // 2. Grouped counts for Watchlist (Anime)
       const watchlistGroups = await this.prisma.watchlist.groupBy({
-        by: ['status'],
+        by: ["status"],
         where: { userId },
         _count: { _all: true },
       });
 
       // 3. Grouped counts for UserManga
       const userMangaGroups = await this.prisma.userManga.groupBy({
-        by: ['status'],
+        by: ["status"],
         where: { userId },
         _count: { _all: true },
       });
 
       // Helper to extract count from groups
       const getCount = (groups: any[], status: string) =>
-        groups.find(g => g.status === status)?._count._all || 0;
+        groups.find((g) => g.status === status)?._count._all || 0;
 
       const stats = {
         totalFavorites: favorites,
-        totalWatchlist: watchlistGroups.reduce((acc, g) => acc + g._count._all, 0),
+        totalWatchlist: watchlistGroups.reduce(
+          (acc, g) => acc + g._count._all,
+          0,
+        ),
         watching: getCount(watchlistGroups, WatchStatus.WATCHING),
         completed: getCount(watchlistGroups, WatchStatus.COMPLETED),
         onHold: getCount(watchlistGroups, WatchStatus.ON_HOLD),
@@ -58,7 +62,10 @@ export class UsersService {
 
         // Manga Stats
         totalFavoriteManga: mangaFavorites,
-        totalMangaList: userMangaGroups.reduce((acc, g) => acc + g._count._all, 0),
+        totalMangaList: userMangaGroups.reduce(
+          (acc, g) => acc + g._count._all,
+          0,
+        ),
         reading: getCount(userMangaGroups, MangaStatus.READING),
         completedManga: getCount(userMangaGroups, MangaStatus.COMPLETED),
         onHoldManga: getCount(userMangaGroups, MangaStatus.ON_HOLD),
@@ -319,19 +326,24 @@ export class UsersService {
     });
 
     // Upload to Supabase
-    const avatarUrl = await this.supabaseService.uploadFile('avatars', buffer, filename, contentType);
+    const avatarUrl = await this.supabaseService.uploadFile(
+      "avatars",
+      buffer,
+      filename,
+      contentType,
+    );
 
     if (!avatarUrl) {
-      throw new BadRequestException('Failed to upload avatar');
+      throw new BadRequestException("Failed to upload avatar");
     }
 
     const updatedUser = await this.update(userId, { avatar: avatarUrl });
 
     // Clean up old file from Supabase if it exists
-    if (currentUser?.avatar && currentUser.avatar.includes('supabase')) {
-      const oldFilename = currentUser.avatar.split('/').pop();
+    if (currentUser?.avatar && currentUser.avatar.includes("supabase")) {
+      const oldFilename = currentUser.avatar.split("/").pop();
       if (oldFilename) {
-        await this.supabaseService.deleteFile('avatars', oldFilename);
+        await this.supabaseService.deleteFile("avatars", oldFilename);
       }
     }
 
@@ -352,19 +364,24 @@ export class UsersService {
     });
 
     // Upload to Supabase
-    const bannerUrl = await this.supabaseService.uploadFile('banners', buffer, filename, contentType);
+    const bannerUrl = await this.supabaseService.uploadFile(
+      "banners",
+      buffer,
+      filename,
+      contentType,
+    );
 
     if (!bannerUrl) {
-      throw new BadRequestException('Failed to upload banner');
+      throw new BadRequestException("Failed to upload banner");
     }
 
     const updatedUser = await this.update(userId, { bannerUrl });
 
     // Clean up old file from Supabase if it exists
-    if (currentUser?.bannerUrl && currentUser.bannerUrl.includes('supabase')) {
-      const oldFilename = currentUser.bannerUrl.split('/').pop();
+    if (currentUser?.bannerUrl && currentUser.bannerUrl.includes("supabase")) {
+      const oldFilename = currentUser.bannerUrl.split("/").pop();
       if (oldFilename) {
-        await this.supabaseService.deleteFile('banners', oldFilename);
+        await this.supabaseService.deleteFile("banners", oldFilename);
       }
     }
 
@@ -850,11 +867,16 @@ export class UsersService {
     });
 
     const myInterests = user.interests || [];
-    console.log(`[Discovery] SUGGESTION REQUEST for user ${userId}. My interests:`, myInterests);
+    console.log(
+      `[Discovery] SUGGESTION REQUEST for user ${userId}. My interests:`,
+      myInterests,
+    );
     console.log(`[Discovery] Filtered IDs:`, Array.from(connectedUserIds));
 
     if (myInterests.length === 0) {
-      console.log(`[Discovery] User has no interests. Returning random baseline.`);
+      console.log(
+        `[Discovery] User has no interests. Returning random baseline.`,
+      );
       const randomUsers = await this.prisma.user.findMany({
         where: { id: { notIn: Array.from(connectedUserIds) } },
         take: 10,
@@ -876,8 +898,12 @@ export class UsersService {
     }
 
     // DEBUG: Check how many users total exist
-    const totalOthers = await this.prisma.user.count({ where: { id: { notIn: Array.from(connectedUserIds) } } });
-    console.log(`[Discovery] Total other users in DB available for matching: ${totalOthers}`);
+    const totalOthers = await this.prisma.user.count({
+      where: { id: { notIn: Array.from(connectedUserIds) } },
+    });
+    console.log(
+      `[Discovery] Total other users in DB available for matching: ${totalOthers}`,
+    );
 
     // Try finding exact overlaps
     const suggestedUsers = await this.prisma.user.findMany({
@@ -899,39 +925,60 @@ export class UsersService {
       },
     });
 
-    console.log(`[Discovery] Prisma detected ${suggestedUsers.length} users with Shared Interests.`);
+    console.log(
+      `[Discovery] Prisma detected ${suggestedUsers.length} users with Shared Interests.`,
+    );
 
     if (suggestedUsers.length === 0) {
-      console.log(`[Discovery] NO overlapping interests found. Falling back to active users.`);
+      console.log(
+        `[Discovery] NO overlapping interests found. Falling back to active users.`,
+      );
       const activeUsers = await this.prisma.user.findMany({
         where: { id: { notIn: Array.from(connectedUserIds) } },
         take: 10,
         select: {
-          id: true, username: true, firstName: true, avatar: true, bio: true, interests: true, level: true,
+          id: true,
+          username: true,
+          firstName: true,
+          avatar: true,
+          bio: true,
+          interests: true,
+          level: true,
         },
       });
       // Return these with a low score but at least show cards
-      return activeUsers.map(u => ({ ...u, matchScore: 5, sharedInterests: [] }));
+      return activeUsers.map((u) => ({
+        ...u,
+        matchScore: 5,
+        sharedInterests: [],
+      }));
     }
 
     // Process matches
-    const processed = suggestedUsers.map(u => {
+    const processed = suggestedUsers.map((u) => {
       const uInterests = u.interests || [];
-      const shared = uInterests.filter(i => myInterests.includes(i));
+      const shared = uInterests.filter((i) => myInterests.includes(i));
       const score = Math.floor((shared.length / myInterests.length) * 100);
 
-      console.log(`[Discovery] Match Found: ${u.username} (${shared.length} shared): ${uInterests.join(',')}`);
+      console.log(
+        `[Discovery] Match Found: ${u.username} (${shared.length} shared): ${uInterests.join(",")}`,
+      );
 
       return {
         ...u,
         matchScore: Math.min(score || 1, 99),
-        sharedInterests: shared
+        sharedInterests: shared,
       };
     });
 
-    const sorted = processed.sort((a, b) => b.matchScore - a.matchScore || b.level - a.level);
+    const sorted = processed.sort(
+      (a, b) => b.matchScore - a.matchScore || b.level - a.level,
+    );
 
-    console.log(`[Discovery] Top suggestions finalized:`, sorted.slice(0, 3).map(s => s.username));
+    console.log(
+      `[Discovery] Top suggestions finalized:`,
+      sorted.slice(0, 3).map((s) => s.username),
+    );
 
     return sorted.slice(0, 20);
   }
@@ -943,7 +990,7 @@ export class UsersService {
         username: true,
         interests: true,
         level: true,
-      }
+      },
     });
   }
 }

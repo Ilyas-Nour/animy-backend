@@ -5,7 +5,7 @@ import { Public } from "../common/decorators/public.decorator";
 
 @Controller("anime")
 export class AnimeController {
-  constructor(private readonly animeService: AnimeService) { }
+  constructor(private readonly animeService: AnimeService) {}
 
   @Public()
   @Get()

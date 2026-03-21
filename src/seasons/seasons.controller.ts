@@ -4,7 +4,7 @@ import { Public } from "../common/decorators/public.decorator";
 
 @Controller("seasons")
 export class SeasonsController {
-  constructor(private readonly seasonsService: SeasonsService) { }
+  constructor(private readonly seasonsService: SeasonsService) {}
 
   @Public()
   @Get("current")

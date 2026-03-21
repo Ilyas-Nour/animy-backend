@@ -13,7 +13,7 @@ export class FriendsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly xpService: XpService,
-  ) { }
+  ) {}
 
   // Send friend request
   async sendRequest(senderId: string, username: string) {
@@ -57,7 +57,7 @@ export class FriendsService {
             senderId: senderId,
             receiverId: receiver.id, // Ensure direction is correct for new request
             createdAt: new Date(), // Refresh timestamp to show at top
-          }
+          },
         });
         return { message: "Friend request sent" };
       }

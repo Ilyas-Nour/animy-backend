@@ -11,4 +11,4 @@ import { SupabaseService } from "../common/supabase.service";
   providers: [UsersService, XpService, SupabaseService],
   exports: [UsersService, XpService],
 })
-export class UsersModule { }
+export class UsersModule {}

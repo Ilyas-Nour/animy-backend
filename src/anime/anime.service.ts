@@ -10,39 +10,38 @@ export class AnimeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly anilistService: AnilistService,
-  ) { }
+  ) {}
 
   async searchAnime(searchDto: SearchAnimeDto) {
-    const {
-      query,
-      page = 1,
-      limit = 25,
-      type,
-      order_by,
-      sort,
-    } = searchDto;
+    const { query, page = 1, limit = 25, type, order_by, sort } = searchDto;
 
     // Map Jikan 'type' to AniList 'format'
     let format = null;
     if (type) {
       format = type.toUpperCase();
-      if (format === 'SPECIAL') format = 'SPECIAL'; // Verify AniList enum if needed, usually same
+      if (format === "SPECIAL") format = "SPECIAL"; // Verify AniList enum if needed, usually same
     }
 
     // Map Jikan 'order_by' to AniList 'sort'
-    let anilistSort = 'POPULARITY_DESC';
-    if (order_by === 'score') anilistSort = 'SCORE_DESC';
-    else if (order_by === 'title') anilistSort = 'TITLE_ENGLISH';
-    else if (order_by === 'start_date') anilistSort = 'START_DATE_DESC';
-    else if (order_by === 'favorites') anilistSort = 'FAVOURITES_DESC';
-    else if (order_by === 'rank') anilistSort = 'SCORE_DESC';
+    let anilistSort = "POPULARITY_DESC";
+    if (order_by === "score") anilistSort = "SCORE_DESC";
+    else if (order_by === "title") anilistSort = "TITLE_ENGLISH";
+    else if (order_by === "start_date") anilistSort = "START_DATE_DESC";
+    else if (order_by === "favorites") anilistSort = "FAVOURITES_DESC";
+    else if (order_by === "rank") anilistSort = "SCORE_DESC";
 
     // Handle specific sort direction if needed (simplified for now)
-    if (sort === 'asc' && order_by === 'popularity') anilistSort = 'POPULARITY';
+    if (sort === "asc" && order_by === "popularity") anilistSort = "POPULARITY";
 
     // AniList equivalent search
     // Pass undefined for query if empty to allow pure filtering
-    const data = await this.anilistService.searchAnime(query || undefined, Number(page), Number(limit), format, anilistSort);
+    const data = await this.anilistService.searchAnime(
+      query || undefined,
+      Number(page),
+      Number(limit),
+      format,
+      anilistSort,
+    );
 
     // Map to Jikan-like response structure for frontend compatibility
     return {
@@ -73,11 +72,17 @@ export class AnimeService {
         cachedAnime.synopsis
       ) {
         // DB Filter Check (Simple check for Hentai if genres stored)
-        const isRestricted = Array.isArray(cachedAnime.genres) &&
-          cachedAnime.genres.some((g: any) => g.name === "Hentai" || g === "Hentai");
+        const isRestricted =
+          Array.isArray(cachedAnime.genres) &&
+          cachedAnime.genres.some(
+            (g: any) => g.name === "Hentai" || g === "Hentai",
+          );
 
         if (isRestricted) {
-          throw new HttpException("Content not available", HttpStatus.NOT_FOUND);
+          throw new HttpException(
+            "Content not available",
+            HttpStatus.NOT_FOUND,
+          );
         }
 
         this.logger.debug(`DB HIT: Anime ${id}`);
@@ -90,7 +95,7 @@ export class AnimeService {
       const data = await this.anilistService.getAnimeById(id);
 
       if (data) {
-        // Opsional: Check for adult content (AniList usually filters if isAdult: false in query, 
+        // Opsional: Check for adult content (AniList usually filters if isAdult: false in query,
         // but by ID we might get it if we don't request isAdult in getAnimeById - wait, getAnimeById GQL usually returns it)
         // For safety, we can check genres or isAdult field if added to query.
 
@@ -118,21 +123,21 @@ export class AnimeService {
     }
 
     return {
-      data: data.map(this.mapAnilistToResponse)
+      data: data.map(this.mapAnilistToResponse),
     };
   }
 
   async getAnimeByType(type: string, page: number = 1) {
     const data = await this.anilistService.getPopular(page);
     return {
-      data: data.map(this.mapAnilistToResponse)
+      data: data.map(this.mapAnilistToResponse),
     };
   }
 
   async getUpcomingNextSeason(page: number = 1) {
     const data = await this.anilistService.getNextSeason(page);
     return {
-      data: data.map(this.mapAnilistToResponse)
+      data: data.map(this.mapAnilistToResponse),
     };
   }
 
@@ -149,7 +154,7 @@ export class AnimeService {
     try {
       const data = await this.anilistService.getAnimeById(id);
       return {
-        data: data.recommendations?.nodes || []
+        data: data.recommendations?.nodes || [],
       };
     } catch (e) {
       return { data: [] };
@@ -161,16 +166,16 @@ export class AnimeService {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    let season: 'WINTER' | 'SPRING' | 'SUMMER' | 'FALL' = 'WINTER';
+    let season: "WINTER" | "SPRING" | "SUMMER" | "FALL" = "WINTER";
 
-    if (month >= 0 && month <= 2) season = 'WINTER';
-    else if (month >= 3 && month <= 5) season = 'SPRING';
-    else if (month >= 6 && month <= 8) season = 'SUMMER';
-    else season = 'FALL';
+    if (month >= 0 && month <= 2) season = "WINTER";
+    else if (month >= 3 && month <= 5) season = "SPRING";
+    else if (month >= 6 && month <= 8) season = "SUMMER";
+    else season = "FALL";
 
     const data = await this.anilistService.getThisSeason(season, year);
     return {
-      data: data.map(this.mapAnilistToResponse)
+      data: data.map(this.mapAnilistToResponse),
     };
   }
 
@@ -196,7 +201,9 @@ export class AnimeService {
       title: data.title.romaji || data.title.english || data.title.native,
       titleEnglish: data.title.english,
       titleJapanese: data.title.native,
-      synopsis: data.description ? data.description.replace(/<[^>]*>?/gm, '') : '', // Strip HTML
+      synopsis: data.description
+        ? data.description.replace(/<[^>]*>?/gm, "")
+        : "", // Strip HTML
       type: data.format,
       episodes: data.episodes,
       status: data.status,
@@ -205,13 +212,17 @@ export class AnimeService {
       rank: null,
       popularity: data.popularity,
       imageUrl: data.coverImage.extraLarge || data.coverImage.large,
-      trailerUrl: data.trailer ? `https://www.youtube.com/watch?v=${data.trailer.id}` : null,
+      trailerUrl: data.trailer
+        ? `https://www.youtube.com/watch?v=${data.trailer.id}`
+        : null,
       duration: data.duration ? `${data.duration} min` : null,
       source: data.source,
-      airing: data.status === 'RELEASING',
+      airing: data.status === "RELEASING",
       aired: {
         // Simplified aired object
-        from: data.startDate ? `${data.startDate.year}-${data.startDate.month}-${data.startDate.day}` : null
+        from: data.startDate
+          ? `${data.startDate.year}-${data.startDate.month}-${data.startDate.day}`
+          : null,
       },
       scoredBy: null,
       members: data.popularity, // Use popularity as members count proxy
@@ -232,7 +243,7 @@ export class AnimeService {
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
       title_japanese: data.title.native,
-      synopsis: data.description ? data.description : 'No synopsis available.',
+      synopsis: data.description ? data.description : "No synopsis available.",
       type: data.format,
       episodes: data.episodes,
       status: data.status,
@@ -250,30 +261,45 @@ export class AnimeService {
           image_url: data.coverImage.large,
           large_image_url: data.coverImage.extraLarge,
           small_image_url: data.coverImage.medium,
-        }
+        },
       },
       trailer: {
-        url: data.trailer ? `https://www.youtube.com/watch?v=${data.trailer.id}` : null,
-        youtube_id: data.trailer?.id
+        url: data.trailer
+          ? `https://www.youtube.com/watch?v=${data.trailer.id}`
+          : null,
+        youtube_id: data.trailer?.id,
       },
       year: data.seasonYear,
       season: data.season,
       genres: data.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
-      studios: data.studios?.nodes?.map((s: any) => ({ name: s.name, mal_id: 0 })) || [],
-      streaming: data.externalLinks?.map((link: any) => ({
-        name: link.site,
-        url: link.url
-      })) || [],
-      relations: data.relations?.edges?.filter((edge: any) => edge && edge.node).map((edge: any) => ({
-        relationType: edge.relationType,
-        node: edge.node
-      })) || [],
-      staff: data.staff?.edges?.filter((edge: any) => edge && edge.node).map((edge: any) => ({
-        role: edge.role,
-        node: edge.node
-      })) || [],
-      recommendations: data.recommendations?.nodes?.filter((node: any) => node && node.mediaRecommendation) || [],
-      characters: data.characters?.edges?.filter((edge: any) => edge && edge.node) || []
+      studios:
+        data.studios?.nodes?.map((s: any) => ({ name: s.name, mal_id: 0 })) ||
+        [],
+      streaming:
+        data.externalLinks?.map((link: any) => ({
+          name: link.site,
+          url: link.url,
+        })) || [],
+      relations:
+        data.relations?.edges
+          ?.filter((edge: any) => edge && edge.node)
+          .map((edge: any) => ({
+            relationType: edge.relationType,
+            node: edge.node,
+          })) || [],
+      staff:
+        data.staff?.edges
+          ?.filter((edge: any) => edge && edge.node)
+          .map((edge: any) => ({
+            role: edge.role,
+            node: edge.node,
+          })) || [],
+      recommendations:
+        data.recommendations?.nodes?.filter(
+          (node: any) => node && node.mediaRecommendation,
+        ) || [],
+      characters:
+        data.characters?.edges?.filter((edge: any) => edge && edge.node) || [],
     };
   }
 
@@ -325,7 +351,7 @@ export class AnimeService {
       relations: [], // DB doesn't store these yet, will be fetched in separate call or refresh
       staff: [],
       recommendations: [],
-      characters: []
+      characters: [],
     };
   }
 }

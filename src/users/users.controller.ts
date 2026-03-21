@@ -30,7 +30,7 @@ import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 @Controller("users")
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get("profile")
   async getProfile(@Req() req: Request) {
@@ -279,7 +279,12 @@ export class UsersController {
     const user: any = req.user;
     const ext = extname(file.originalname);
     const filename = `user-${user.id}-${Date.now()}${ext}`;
-    return this.usersService.uploadAvatar(user.id, file.buffer, filename, file.mimetype);
+    return this.usersService.uploadAvatar(
+      user.id,
+      file.buffer,
+      filename,
+      file.mimetype,
+    );
   }
 
   // Upload Banner
@@ -301,7 +306,12 @@ export class UsersController {
     const user: any = req.user;
     const ext = extname(file.originalname);
     const filename = `user-${user.id}-${Date.now()}${ext}`;
-    return this.usersService.uploadBanner(user.id, file.buffer, filename, file.mimetype);
+    return this.usersService.uploadBanner(
+      user.id,
+      file.buffer,
+      filename,
+      file.mimetype,
+    );
   }
   // Leaderboard
   @Public()

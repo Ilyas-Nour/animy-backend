@@ -6,7 +6,7 @@ import { Public } from "../common/decorators/public.decorator";
 @Public()
 @Controller("manga")
 export class MangaController {
-  constructor(private readonly mangaService: MangaService) { }
+  constructor(private readonly mangaService: MangaService) {}
 
   @Get()
   async searchRoot(@Query() query: any) {

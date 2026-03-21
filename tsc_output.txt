@@ -1,0 +1,2 @@
+src/streaming/streaming.service.ts(109,32): error TS2339: Property 'iframeUrl' does not exist on type '{ headers: { Referer: string; }; sources: any[]; subtitles: any; } | { sources: any[]; headers?: undefined; subtitles?: undefined; }'.
+  Property 'iframeUrl' does not exist on type '{ headers: { Referer: string; }; sources: any[]; subtitles: any; }'.

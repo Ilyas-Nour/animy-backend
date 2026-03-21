@@ -5,12 +5,12 @@ import { AnilistService } from "../common/services/anilist.service";
 export class CharactersService {
   private readonly logger = new Logger(CharactersService.name);
 
-  constructor(private readonly anilistService: AnilistService) { }
+  constructor(private readonly anilistService: AnilistService) {}
 
   async getTopCharacters(limit: number = 10) {
     const data = await this.anilistService.searchCharacters("", 1, limit);
     return {
-      data: data.characters.map(this.mapAnilistToResponse)
+      data: data.characters.map(this.mapAnilistToResponse),
     };
   }
 
@@ -26,7 +26,7 @@ export class CharactersService {
 
     const shuffled = characters.sort(() => 0.5 - Math.random()).slice(0, 10);
     return {
-      data: shuffled.map(this.mapAnilistToResponse)
+      data: shuffled.map(this.mapAnilistToResponse),
     };
   }
 
@@ -36,16 +36,16 @@ export class CharactersService {
       mal_id: data.id,
       name: data.name.full,
       name_kanji: data.name.native,
-      about: data.description ? data.description.replace(/<[^>]*>?/gm, '') : '',
+      about: data.description ? data.description.replace(/<[^>]*>?/gm, "") : "",
       images: {
         jpg: {
           image_url: data.image?.large,
         },
         webp: {
           image_url: data.image?.large,
-        }
+        },
       },
-      favorites: data.favourites
+      favorites: data.favourites,
     };
   }
 }
