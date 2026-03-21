@@ -509,3 +509,16 @@ enum NotificationType {
   FRIEND_REQUEST
   FRIEND_ACCEPT
 }
+
+// Stores resolved AniList ID -> streaming/manga provider ID mappings
+// Avoids redundant title searches on every page load
+model AnimeMapping {
+  id          Int      @id  // AniList ID (acts as primary key)
+  hiAnimeId   String?       // HiAnime/Aniwatch ID, e.g. "one-piece-100"
+  mangaDexId  String?       // MangaDex UUID
+  mangaPillId String?       // MangaPill slug
+  lastChecked DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("anime_mappings")
+}

@@ -8,6 +8,7 @@ import {
 import axios from "axios";
 import { HiAnimeService } from "./hianime.service";
 import { StreamingProxyService } from "./streaming.proxy.service";
+import { IdMappingService } from "./id-mapping.service";
 
 @Injectable()
 export class StreamingService {
@@ -16,6 +17,7 @@ export class StreamingService {
   constructor(
     private readonly hiAnimeService: HiAnimeService,
     private readonly streamingProxyService: StreamingProxyService,
+    private readonly idMappingService: IdMappingService,
   ) {}
 
   /**
@@ -106,7 +108,7 @@ export class StreamingService {
 
       // HIGH-RELIABILITY IFRAME GENERATION (VidLink)
       // This is the most stable way to stream today
-      let iframeUrl = sources?.iframeUrl || null;
+      let iframeUrl = (sources as any)?.iframeUrl || null;
       if (malId && episodeNumber) {
         // VidLink is the primary stable provider
         iframeUrl = `https://vidlink.pro/anime/${malId}/${episodeNumber}?primaryColor=6366f1`;
