@@ -19,10 +19,22 @@ jobs:
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
-          # Create a fresh branch with no history to purge any binary files
-          git checkout --orphan hf-deploy
+          
+          # 1. Create a fresh temporary deployment directory
+          mkdir ../deploy_temp
+          cp -rp . ../deploy_temp/
+          cd ../deploy_temp
+          
+          # 2. Wipe everything that could cause rejection
+          rm -rf .git
           rm -rf uploads
+          rm -rf .next
+          rm -rf node_modules
+          
+          # 3. Build a brand new history with only 1 commit
+          git init -b main
           git add .
-          git commit -m "Deploy to Hugging Face (Clean History)"
-          # Push the clean branch to Hugging Face's main branch
-          git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy hf-deploy:main
+          git commit -m "Deploy to Hugging Face (Full Purge)"
+          
+          # 4. Force push this fresh slate
+          git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy main
