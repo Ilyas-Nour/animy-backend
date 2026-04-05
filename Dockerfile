@@ -42,5 +42,5 @@ ENV PORT=7860
 ENV NODE_ENV=production
 
 # Start the application
-# We use '|| true' to ensure the app starts even if migrations take too long
-CMD ["sh", "-c", "npx prisma migrate deploy || echo 'Migration skip or fail' && npm run start:prod"]
+# We background the migration (&) so the app starts IMMEDIATELY to satisfy Hugging Face probes.
+CMD ["sh", "-c", "npx prisma migrate deploy & npm run start:prod"]
