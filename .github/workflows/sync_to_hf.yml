@@ -17,4 +17,11 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy main
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "github-actions"
+          # Create a fresh branch with no history to purge any binary files
+          git checkout --orphan hf-deploy
+          git add .
+          git commit -m "Deploy to Hugging Face (Clean History)"
+          # Push the clean branch to Hugging Face's main branch
+          git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy hf-deploy:main
