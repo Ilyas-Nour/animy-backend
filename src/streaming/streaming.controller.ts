@@ -37,7 +37,7 @@ export class StreamingController {
    * Get anime info and episodes from HiAnime
    * GET /api/v1/streaming/anime/*
    */
-  @Get("anime/:id*")
+  @Get("anime/*id")
   async getAnimeInfo(@Param("id") id: string) {
     if (!id) {
       throw new HttpException("Anime ID is required", HttpStatus.BAD_REQUEST);
@@ -49,7 +49,7 @@ export class StreamingController {
    * Get streaming links for an episode from HiAnime
    * GET /api/v1/streaming/episode/*
    */
-  @Get("episode/:id*")
+  @Get("episode/*id")
   async getEpisodeLinks(
     @Param("id") id: string,
     @Req() req: any,
