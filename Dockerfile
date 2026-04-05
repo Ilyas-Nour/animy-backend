@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies (necessary for some npm packages)
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ openssl
 
 # Copy package files and prisma schema
 COPY package*.json ./
@@ -24,6 +24,9 @@ RUN npm run build
 FROM node:20-alpine
 
 WORKDIR /app
+
+# Install runtime dependencies (Prisma needs openssl)
+RUN apk add --no-cache openssl
 
 # Copy only the necessary files from the builder stage
 COPY --from=builder /app/package*.json ./
