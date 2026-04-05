@@ -22,19 +22,17 @@ jobs:
           
           # 1. Create a fresh temporary deployment directory
           mkdir ../deploy_temp
-          cp -rp . ../deploy_temp/
+          
+          # 2. Use rsync to copy ONLY source code, explicitly EXCLUDING binary/heavy directories
+          # This ensures problematic files are NEVER even seen by the new git repository
+          rsync -av --exclude='.git' --exclude='node_modules' --exclude='uploads' --exclude='dist' --exclude='.next' ./ ../deploy_temp/
+          
           cd ../deploy_temp
           
-          # 2. Wipe everything that could cause rejection
-          rm -rf .git
-          rm -rf uploads
-          rm -rf .next
-          rm -rf node_modules
-          
-          # 3. Build a brand new history with only 1 commit
+          # 3. Build a brand new, single-commit history with NO binary baggage
           git init -b main
           git add .
-          git commit -m "Deploy to Hugging Face (Full Purge)"
+          git commit -m "Deploy to Hugging Face (Absolute Purge)"
           
-          # 4. Force push this fresh slate
+          # 4. Force-push this clean slate to Hugging Face
           git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy main
