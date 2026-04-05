@@ -94,7 +94,10 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
 
   await app.listen(port);
-  // console.log(`🚀 Application is running on: http://localhost:${port}/${apiPrefix}`);
+  console.log(`\n🚀 APPLICATION STARTED SUCCESSFULLY!`);
+  console.log(`📍 PORT: ${port}`);
+  console.log(`🔗 API PREFIX: /${apiPrefix}`);
+  console.log(`🌍 FRONTEND URL: ${frontendUrl}\n`);
 }
 
 bootstrap();
