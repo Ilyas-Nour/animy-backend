@@ -39,5 +39,5 @@ jobs:
           git add .
           git commit -m "Deploy to Hugging Face (V4 Clean Whitelist)"
           
-          # 4. Force-push this clean slate
-          git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy main
+          # 4. Force-push this clean slate to Hugging Face
+          git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy-backend main
