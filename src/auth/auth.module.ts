@@ -19,7 +19,7 @@ import { EmailModule } from "../email/email.module";
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>("jwt.secret"),
         signOptions: {
-          expiresIn: configService.get<string>("jwt.expiresIn"),
+          expiresIn: configService.get("jwt.expiresIn") as any,
         },
       }),
     }),
