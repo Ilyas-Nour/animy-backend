@@ -24,9 +24,9 @@ jobs:
           git clean -fdx
           rm -rf uploads || true
           
-          # 2. Create the temp directory and copy ONLY the whitelist
-          mkdir ../deploy_temp
-          cp -rv src package.json package-lock.json prisma Dockerfile .dockerignore README.md ../deploy_temp/
+          # 2. DO NOT COPY EVERYTHING. Only copy the WHITELIST of files needed for the API.
+          # This is the ONLY 100% way to avoid binary files while still allowing the build to work.
+          cp -r src package.json package-lock.json prisma tsconfig.json nest-cli.json Dockerfile .dockerignore README.md ../deploy_temp/
           
           cd ../deploy_temp
           
