@@ -21,6 +21,7 @@ jobs:
           git config --global user.name "github-actions"
           # Create a fresh branch with no history to purge any binary files
           git checkout --orphan hf-deploy
+          rm -rf uploads
           git add .
           git commit -m "Deploy to Hugging Face (Clean History)"
           # Push the clean branch to Hugging Face's main branch
