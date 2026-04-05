@@ -38,5 +38,5 @@ EXPOSE 7860
 ENV PORT=7860
 ENV NODE_ENV=production
 
-# Start the application using the production script
-CMD ["npm", "run", "start:prod"]
+# Start the application (run migrations first, then start)
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
