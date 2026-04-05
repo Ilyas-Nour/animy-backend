@@ -20,19 +20,24 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
           
-          # 1. Create a fresh temporary deployment directory
-          mkdir ../deploy_temp
+          # 1. Start by aggressively cleaning the current runner directory
+          git clean -fdx
+          rm -rf uploads || true
           
-          # 2. DO NOT COPY EVERYTHING. Only copy the WHITELIST of files needed for the API.
-          # This is the ONLY 100% way to avoid binary files.
-          cp -r src package.json package-lock.json prisma Dockerfile .dockerignore README.md ../deploy_temp/
+          # 2. Create the temp directory and copy ONLY the whitelist
+          mkdir ../deploy_temp
+          cp -rv src package.json package-lock.json prisma Dockerfile .dockerignore README.md ../deploy_temp/
           
           cd ../deploy_temp
           
-          # 3. Build a brand new, single-commit history
+          # 🔍 DEBUG: List EVERYTHING to prove these images are GONE
+          echo "Listing all files in deployment directory:"
+          find . -maxdepth 3
+          
+          # 3. Build a brand-new repository
           git init -b main
           git add .
-          git commit -m "Deploy to Hugging Face (Whitelist Sync)"
+          git commit -m "Deploy to Hugging Face (V4 Clean Whitelist)"
           
           # 4. Force-push this clean slate
           git push --force https://ilyvs:$HF_TOKEN@huggingface.co/spaces/ilyvs/animy main
