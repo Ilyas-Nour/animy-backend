@@ -186,18 +186,30 @@ export class MangaService {
       const nativeTitle = cachedManga?.titleJapanese || "";
 
       // 1. Try DB Mapping first (Direct MangaDex)
-      this.logger.debug(`Checking DB mapping for manga ${id}`);
-      const mangaDexId = await this.idMappingService.resolveMangaDexId(id, title);
+      const titlesToSearch = [title, englishTitle, nativeTitle].filter(t => t && t.length > 1);
+      this.logger.debug(`Checking DB mapping/Direct search for manga ${id} with titles: ${titlesToSearch.join(', ')}`);
+      
+      let mangaDexId = null;
+      for (const t of titlesToSearch) {
+        mangaDexId = await this.idMappingService.resolveMangaDexId(id, t);
+        if (mangaDexId) break;
+      }
       
       if (mangaDexId) {
         this.logger.debug(`Found MangaDex mapping for ${id}: ${mangaDexId}. Fetching chapters...`);
         try {
           const chaptersRes = await axios.get(
             `https://api.mangadex.org/manga/${mangaDexId}/feed?translatedLanguage[]=en&order[chapter]=desc&limit=500&includeExternalVol=0`,
-            { timeout: 8000 }
+            { 
+              timeout: 10000,
+              headers: {
+                'User-Agent': 'Animy/1.0.0 (https://animy.xyz)'
+              }
+            }
           );
 
           if (chaptersRes.data.data && chaptersRes.data.data.length > 0) {
+            this.logger.debug(`Successfully fetched ${chaptersRes.data.data.length} chapters directly from MangaDex`);
             return {
               chapters: chaptersRes.data.data.map((ch: any) => ({
                 id: `mangadex_direct___${ch.id}___na`,
