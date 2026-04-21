@@ -48,14 +48,14 @@ export class AnimeController {
   }
 
   @Public()
-  @Get(":id/full")
-  async getAnimeFullById(@Param("id") id: string) {
-    return this.animeService.getAnimeById(parseInt(id, 10));
+  @Get("schedule")
+  async getUpcomingSchedule() {
+    return this.animeService.getUpcomingSchedule();
   }
 
   @Public()
-  @Get(":id")
-  async getAnimeById(@Param("id") id: string) {
+  @Get(":id/full")
+  async getAnimeFullById(@Param("id") id: string) {
     return this.animeService.getAnimeById(parseInt(id, 10));
   }
 
@@ -70,9 +70,10 @@ export class AnimeController {
   async getAnimeRecommendations(@Param("id") id: string) {
     return this.animeService.getAnimeRecommendations(parseInt(id, 10));
   }
+
   @Public()
-  @Get("schedule")
-  async getUpcomingSchedule() {
-    return this.animeService.getUpcomingSchedule();
+  @Get(":id")
+  async getAnimeById(@Param("id") id: string) {
+    return this.animeService.getAnimeById(parseInt(id, 10));
   }
 }
