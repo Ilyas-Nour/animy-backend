@@ -265,7 +265,7 @@ export class MangaService {
                 `Searching ${provider} for: ${optimizedSearchTitle} on ${baseUrl}`,
               );
               const searchRes = await axios.get(
-                `${baseUrl}/manga/${provider}/${optimizedSearchTitle}`,
+                `${baseUrl}/manga/${provider}/${encodeURIComponent(optimizedSearchTitle)}`,
                 { 
                   timeout: 10000,
                   headers: {
