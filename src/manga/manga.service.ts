@@ -251,19 +251,27 @@ export class MangaService {
       }
 
       // 3. Try direct provider search fallback with multiple titles
-      const providers = ["mangapill", "mangadex", "mangareader"];
+      const providers = ["mangasee123", "mangapill", "mangakakalot", "mangadex", "mangareader"];
       const titlesToTry = [title, englishTitle, nativeTitle].filter(t => t && t.length > 1);
 
       for (const provider of providers) {
         for (const baseUrl of apiBaseUrls) {
           for (const searchTitle of titlesToTry) {
             try {
+              // Strip suffixes like (TV), (Manga), etc. for better matching
+              const optimizedSearchTitle = searchTitle.replace(/\s*\(.*?\)\s*/g, ' ').trim();
+              
               this.logger.debug(
-                `Searching ${provider} for: ${searchTitle} on ${baseUrl}`,
+                `Searching ${provider} for: ${optimizedSearchTitle} on ${baseUrl}`,
               );
               const searchRes = await axios.get(
-                `${baseUrl}/manga/${provider}/${encodeURIComponent(searchTitle)}`,
-                { timeout: 8000 }
+                `${baseUrl}/manga/${provider}/${optimizedSearchTitle}`,
+                { 
+                  timeout: 10000,
+                  headers: {
+                    'User-Agent': 'Animy/1.0.0 (https://animy.xyz)'
+                  }
+                }
               );
 
               if (searchRes.data?.results?.length > 0) {
@@ -273,7 +281,7 @@ export class MangaService {
                     .replace(/[^\w\s]|_/g, "")
                     .replace(/\s+/g, " ")
                     .trim();
-                const normalizedTargetTitle = normalize(searchTitle);
+                const normalizedTargetTitle = normalize(optimizedSearchTitle);
 
                 for (const res of searchRes.data.results) {
                   const normalizedResTitle = normalize(res.title);
@@ -290,7 +298,12 @@ export class MangaService {
 
                     try {
                       const infoUrl = `${baseUrl}/manga/${provider}/info?id=${providerId}`;
-                      const infoRes = await axios.get(infoUrl, { timeout: 8000 });
+                      const infoRes = await axios.get(infoUrl, { 
+                        timeout: 10000,
+                        headers: {
+                          'User-Agent': 'Animy/1.0.0 (https://animy.xyz)'
+                        }
+                      });
 
                       if (
                         infoRes.data?.chapters &&
