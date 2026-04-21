@@ -2,7 +2,9 @@ import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { AnilistService } from "../common/services/anilist.service";
 import { IdMappingService } from "../streaming/id-mapping.service";
+import { StreamingProxyService } from "../streaming/streaming.proxy.service";
 import { SearchMangaDto } from "./dto/search-manga.dto";
+import { Response } from "express";
 import axios from "axios";
 
 @Injectable()
@@ -13,6 +15,7 @@ export class MangaService {
     private readonly prisma: PrismaService,
     private readonly anilistService: AnilistService,
     private readonly idMappingService: IdMappingService,
+    private readonly streamingProxyService: StreamingProxyService,
   ) {}
 
   async searchManga(searchDto: SearchMangaDto) {
@@ -429,10 +432,37 @@ export class MangaService {
     }
   }
 
-  async getChapterPages(chapterId: string) {
+
+  async proxyImage(url: string, referer: string, res: Response) {
+    return this.streamingProxyService.proxy(url, referer, res);
+  }
+
+  async getChapterPages(chapterId: string, proxyBaseUrl?: string) {
     try {
       this.logger.debug(`Fetching high-quality pages for chapter ${chapterId}`);
 
+      // Centralized proxy wrapper logic
+      const wrapInProxy = (originalUrl: string) => {
+        if (!proxyBaseUrl || !originalUrl) return originalUrl;
+        
+        let referer = "";
+        const lowerUrl = originalUrl.toLowerCase();
+        
+        if (lowerUrl.includes("mangapill.com") || lowerUrl.includes("readdetectiveconan.com") || chapterId.includes("mangapill")) {
+          referer = "https://mangapill.com/";
+        } else if (lowerUrl.includes("mangasee")) {
+          referer = "https://mangasee123.com/";
+        } else if (lowerUrl.includes("mangafire")) {
+          referer = "https://mangafire.to/";
+        }
+        
+        if (referer) {
+          return `${proxyBaseUrl}?url=${encodeURIComponent(originalUrl)}&referer=${encodeURIComponent(referer)}`;
+        }
+        return originalUrl;
+      };
+
+      let resMeta: any = null;
       let url = "";
       const parts = chapterId.split("___");
 
@@ -448,38 +478,31 @@ export class MangaService {
             : Buffer.from(parts[2], "base64url").toString("utf-8");
 
         if (provider === "anify") {
-          // Handle Anify pages
-          const chapterId = actualId;
-          const providerId = baseUrl; // In our mapping, baseUrl is the providerId (mangadex, etc)
           const pagesRes = await axios.get(
-            `https://api.anify.tv/pages?id=${chapterId}&providerId=${providerId}&readId=${chapterId}&episodeNumber=0&type=manga`,
+            `https://api.anify.tv/pages?id=${actualId}&providerId=${baseUrl}&readId=${actualId}&episodeNumber=0&type=manga`,
             { timeout: 10000 }
           );
           
           if (pagesRes.data) {
-             // Anify returns an array of page objects or just URLs
-             const pages = Array.isArray(pagesRes.data) ? pagesRes.data : pagesRes.data.pages || [];
-             return {
-               pages: pages.map((p: any, index: number) => ({
-                 url: p.url || p,
-                 number: index + 1
-               }))
-             };
+            const pages = Array.isArray(pagesRes.data) ? pagesRes.data : pagesRes.data.pages || [];
+            return {
+              pages: pages.map((p: any, index: number) => ({
+                img: wrapInProxy(p.url || p.img || p),
+                page: index + 1
+              }))
+            };
           }
         }
 
         if (provider === "mangadex_direct") {
-          // Handle Direct MangaDex pages
-          const atHomeRes = await axios.get(
-            `https://api.mangadex.org/at-home/server/${actualId}`,
-          );
+          const atHomeRes = await axios.get(`https://api.mangadex.org/at-home/server/${actualId}`);
           const host = atHomeRes.data.baseUrl;
           const hash = atHomeRes.data.chapter.hash;
           const files = atHomeRes.data.chapter.data;
           return {
-            pages: files.map((f: string) => ({
-              url: `${host}/data/${hash}/${f}`,
-              number: files.indexOf(f) + 1,
+            pages: files.map((f: string, i: number) => ({
+              img: wrapInProxy(`${host}/data/${hash}/${f}`),
+              page: i + 1,
             })),
           };
         }
@@ -493,27 +516,25 @@ export class MangaService {
         const provider = parts[0];
         const actualId = Buffer.from(parts[1], "base64url").toString("utf-8");
         const baseUrl = "https://consumet-api-clone.vercel.app";
-
-        if (provider === "anilist") {
-          url = `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`;
-        } else {
-          url = `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
-        }
+        url = provider === "anilist" 
+          ? `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`
+          : `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
       } else {
-        // Fallback for old cached/saved formats
         url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${chapterId}&provider=mangadex`;
       }
 
       const { data } = await axios.get(url);
-      return { pages: data };
+      const rawPages = Array.isArray(data) ? data : (data.pages || []);
+      
+      return {
+        pages: rawPages.map((p: any, i: number) => ({
+          img: wrapInProxy(p.img || p.url || p),
+          page: p.page || i + 1
+        }))
+      };
     } catch (e) {
-      this.logger.error(
-        `Failed to fetch pages for chapter ${chapterId}: ${e.message}`,
-      );
-      throw new HttpException(
-        "Failed to fetch chapter pages from provider",
-        HttpStatus.BAD_GATEWAY,
-      );
+      this.logger.error(`Failed to fetch pages for chapter ${chapterId}: ${e.message}`);
+      throw new HttpException("Failed to fetch chapter pages from provider", HttpStatus.BAD_GATEWAY);
     }
   }
 

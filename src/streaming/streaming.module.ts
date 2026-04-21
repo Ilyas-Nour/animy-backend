@@ -10,6 +10,6 @@ import { DatabaseModule } from "../database/database.module";
   imports: [DatabaseModule],
   controllers: [StreamingController],
   providers: [StreamingService, HiAnimeService, StreamingProxyService, IdMappingService],
-  exports: [StreamingService, IdMappingService],
+  exports: [StreamingService, IdMappingService, StreamingProxyService],
 })
 export class StreamingModule {}
