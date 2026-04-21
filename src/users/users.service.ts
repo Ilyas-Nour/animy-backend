@@ -76,7 +76,6 @@ export class UsersService {
 
       console.log(`[Stats Final] Optimized result for user ${userId}:`, stats);
       return stats;
-      return stats;
     } catch (error) {
       console.error("[Stats Error] Failed to get stats:", error);
       throw error;
@@ -187,7 +186,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException("User not found");
+      return null;
     }
 
     return {

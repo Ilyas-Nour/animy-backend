@@ -55,7 +55,19 @@ async function bootstrap() {
 
   // CORS configuration
   app.enableCors({
-    origin: [frontendUrl, "http://localhost:3000"],
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        frontendUrl,
+        "http://localhost:3000",
+        "https://animy-frontend.vercel.app",
+      ].filter(Boolean);
+      // Allow requests with no origin (mobile apps, curl, Render health checks)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked: ${origin}`));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
