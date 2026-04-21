@@ -145,7 +145,12 @@ export class IdMappingService {
     try {
       const { data } = await axios.get(
         `https://api.mangadex.org/manga?title=${encodeURIComponent(title)}&limit=5`,
-        { timeout: 10000 },
+        { 
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'Animy/1.0.0 (https://animy.xyz)'
+          }
+        },
       );
 
       const results = data.data || [];
