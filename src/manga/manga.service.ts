@@ -181,6 +181,7 @@ export class MangaService {
         return { chapters: [] };
       }
 
+      const englishTitle = cachedManga?.titleEnglish || title;
       const nativeTitle = cachedManga?.titleJapanese || "";
 
       // 0. Aggressive Anify Fallback (Highly reliable for cloud IPs)
