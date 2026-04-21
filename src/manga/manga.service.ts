@@ -181,9 +181,30 @@ export class MangaService {
         return { chapters: [] };
       }
 
-      // Reuse existing cachedManga from above
-      const englishTitle = cachedManga?.titleEnglish || title;
       const nativeTitle = cachedManga?.titleJapanese || "";
+
+      // 0. Aggressive Anify Fallback (Highly reliable for cloud IPs)
+      try {
+        this.logger.debug(`Trying Anify fallback for: ${title}`);
+        const anifyRes = await axios.get(`https://api.anify.tv/info/${id}`, { timeout: 10000 });
+        if (anifyRes.data?.chapters?.data) {
+          const chapters = anifyRes.data.chapters.data
+            .filter((c: any) => c.providerId === 'mangadex' || c.providerId === 'readdetective' || c.providerId === 'mangapill')
+            .map((c: any) => ({
+              id: `anify___${Buffer.from(c.id).toString("base64url")}___${Buffer.from(c.providerId).toString("base64url")}`,
+              title: c.title || `Chapter ${c.number}`,
+              chapterNumber: c.number.toString(),
+              volumeNumber: c.volume?.toString() || "0",
+            }));
+          
+          if (chapters.length > 0) {
+            this.logger.debug(`Found ${chapters.length} chapters on Anify`);
+            return { chapters: chapters.sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber)) };
+          }
+        }
+      } catch (e) {
+        this.logger.debug(`Anify fallback skipped: ${e.message}`);
+      }
 
       // 1. Try DB Mapping first (Direct MangaDex)
       const titlesToSearch = [title, englishTitle, nativeTitle].filter(t => t && t.length > 1);
@@ -371,8 +392,13 @@ export class MangaService {
             await this.idMappingService.saveMangaDexMapping(id, mangaId);
             
             const chaptersRes = await axios.get(
-              `https://api.mangadex.org/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=desc&limit=500&includeExternalVol=0`,
-              { timeout: 8000 }
+              `https://api.mangadex.org/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=desc&limit=500`,
+              { 
+                timeout: 10000,
+                headers: {
+                  'User-Agent': 'Animy/1.0.0 (https://animy.xyz)'
+                }
+              }
             );
 
             if (chaptersRes.data.data && chaptersRes.data.data.length > 0) {
@@ -419,6 +445,27 @@ export class MangaService {
           provider === "mangadex_direct"
             ? "https://api.mangadex.org"
             : Buffer.from(parts[2], "base64url").toString("utf-8");
+
+        if (provider === "anify") {
+          // Handle Anify pages
+          const chapterId = actualId;
+          const providerId = baseUrl; // In our mapping, baseUrl is the providerId (mangadex, etc)
+          const pagesRes = await axios.get(
+            `https://api.anify.tv/pages?id=${chapterId}&providerId=${providerId}&readId=${chapterId}&episodeNumber=0&type=manga`,
+            { timeout: 10000 }
+          );
+          
+          if (pagesRes.data) {
+             // Anify returns an array of page objects or just URLs
+             const pages = Array.isArray(pagesRes.data) ? pagesRes.data : pagesRes.data.pages || [];
+             return {
+               pages: pages.map((p: any, index: number) => ({
+                 url: p.url || p,
+                 number: index + 1
+               }))
+             };
+          }
+        }
 
         if (provider === "mangadex_direct") {
           // Handle Direct MangaDex pages
