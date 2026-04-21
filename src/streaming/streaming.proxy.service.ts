@@ -36,8 +36,13 @@ export class StreamingProxyService {
       });
 
       // Forward relevant headers
-      const contentType =
-        response.headers["content-type"] || "application/octet-stream";
+      const rawContentType = response.headers["content-type"];
+      const contentType = Array.isArray(rawContentType)
+        ? rawContentType[0]
+        : typeof rawContentType === "string"
+          ? rawContentType
+          : "application/octet-stream";
+
       res.setHeader("Content-Type", contentType);
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cache-Control", "public, max-age=3600");
