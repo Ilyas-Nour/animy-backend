@@ -181,7 +181,7 @@ export class MangaService {
         return { chapters: [] };
       }
 
-      const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
+      // Reuse existing cachedManga from above
       const englishTitle = cachedManga?.titleEnglish || title;
       const nativeTitle = cachedManga?.titleJapanese || "";
 
