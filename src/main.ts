@@ -60,6 +60,8 @@ async function bootstrap() {
         frontendUrl,
         "http://localhost:3000",
         "https://animy-frontend.vercel.app",
+        "https://animy.xyz",
+        "https://www.animy.xyz",
       ].filter(Boolean);
       // Allow requests with no origin (mobile apps, curl, Render health checks)
       if (!origin || allowedOrigins.includes(origin)) {
