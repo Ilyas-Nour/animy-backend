@@ -276,7 +276,7 @@ export class MangaService {
       }
 
       // 3. Try direct provider search fallback with multiple titles
-      const providers = ["mangasee123", "mangapill", "mangakakalot", "mangadex", "mangareader"];
+      const providers = ["mangasee123", "mangadex", "mangapill", "mangakakalot", "mangareader"];
       const titlesToTry = [title, englishTitle, nativeTitle].filter(t => t && t.length > 1);
 
       for (const provider of providers) {
@@ -310,6 +310,12 @@ export class MangaService {
 
                 for (const res of searchRes.data.results) {
                   const normalizedResTitle = normalize(res.title);
+                  
+                  // STRICT EXCLUSION: If we are looking for Manga, don't match Novel titles
+                  if (normalizedResTitle.includes("novel") && !normalizedTargetTitle.includes("novel")) {
+                    this.logger.debug(`Skipping ${res.title} because it's a novel and target is not.`);
+                    continue;
+                  }
 
                   if (
                     normalizedResTitle === normalizedTargetTitle ||
