@@ -270,6 +270,7 @@ model Manga {
   scoredBy      Int?
   members       Int?
   favorites     Int?
+  chaptersList  Json? // Cached chapters list
 
   lastUpdated DateTime @updatedAt
   createdAt   DateTime @default(now())

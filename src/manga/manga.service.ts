@@ -131,13 +131,20 @@ export class MangaService {
   async getMangaChapters(id: number) {
     try {
       this.logger.debug(`Fetching chapters for manga ${id}`);
-      let title = "";
-
+      
+      // 1. Check DB Cache first
       const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
-      if (cachedManga && cachedManga.title) {
-        title = cachedManga.title;
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      if (cachedManga?.chaptersList && Array.isArray(cachedManga.chaptersList) && cachedManga.chaptersList.length > 0) {
+        if (cachedManga.lastUpdated > oneDayAgo) {
+          this.logger.debug(`CHAPTER CACHE HIT: Manga ${id}`);
+          return { chapters: cachedManga.chaptersList };
+        }
+        this.logger.debug(`CHAPTER CACHE STALE: Manga ${id} -> Fetching fresh`);
       }
 
+      let title = cachedManga?.title || "";
       if (!title) {
         try {
           this.logger.debug(`Fetching title for manga ${id} from AniList`);
@@ -186,13 +193,14 @@ export class MangaService {
 
       const englishTitle = cachedManga?.titleEnglish || title;
       const nativeTitle = cachedManga?.titleJapanese || "";
+      let chapters = [];
 
       // 0. Aggressive Anify Fallback (Highly reliable for cloud IPs)
       try {
         this.logger.debug(`Trying Anify fallback for: ${title}`);
         const anifyRes = await axios.get(`https://api.anify.tv/info/${id}`, { timeout: 10000 });
         if (anifyRes.data?.chapters?.data) {
-          const chapters = anifyRes.data.chapters.data
+          chapters = anifyRes.data.chapters.data
             .filter((c: any) => c.providerId === 'mangadex' || c.providerId === 'readdetective' || c.providerId === 'mangapill')
             .map((c: any) => ({
               id: `anify___${Buffer.from(c.id).toString("base64url")}___${Buffer.from(c.providerId).toString("base64url")}`,
@@ -203,7 +211,10 @@ export class MangaService {
           
           if (chapters.length > 0) {
             this.logger.debug(`Found ${chapters.length} chapters on Anify`);
-            return { chapters: chapters.sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber)) };
+            chapters.sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber));
+            // SAVE TO DB
+            await this.prisma.manga.update({ where: { id }, data: { chaptersList: chapters } });
+            return { chapters };
           }
         }
       } catch (e) {
@@ -235,14 +246,15 @@ export class MangaService {
 
           if (chaptersRes.data.data && chaptersRes.data.data.length > 0) {
             this.logger.debug(`Successfully fetched ${chaptersRes.data.data.length} chapters directly from MangaDex`);
-            return {
-              chapters: chaptersRes.data.data.map((ch: any) => ({
-                id: `mangadex_direct___${ch.id}___na`,
-                title: ch.attributes.title || `Chapter ${ch.attributes.chapter}`,
-                chapterNumber: ch.attributes.chapter,
-                volumeNumber: ch.attributes.volume,
-              })).sort((a: any, b: any) => Number(b.chapterNumber) - Number(a.chapterNumber)),
-            };
+            const chapters = chaptersRes.data.data.map((ch: any) => ({
+              id: `mangadex_direct___${ch.id}___na`,
+              title: ch.attributes.title || `Chapter ${ch.attributes.chapter}`,
+              chapterNumber: ch.attributes.chapter,
+              volumeNumber: ch.attributes.volume,
+            })).sort((a: any, b: any) => Number(b.chapterNumber) - Number(a.chapterNumber));
+            
+            await this.prisma.manga.update({ where: { id }, data: { chaptersList: chapters } });
+            return { chapters };
           }
         } catch (e) {
           this.logger.warn(`Direct MangaDex fetch failed for ${mangaDexId}: ${e.message}`);
@@ -266,6 +278,7 @@ export class MangaService {
               ...c,
               id: `anilist___${Buffer.from(c.id).toString("base64url")}___${Buffer.from(baseUrl).toString("base64url")}`,
             }));
+            await this.prisma.manga.update({ where: { id }, data: { chaptersList: chapters } });
             return { chapters };
           }
         } catch (e) {
@@ -353,6 +366,7 @@ export class MangaService {
                         this.logger.debug(
                           `Found ${chapters.length} chapters on ${provider}`,
                         );
+                        await this.prisma.manga.update({ where: { id }, data: { chaptersList: chapters } });
                         return { chapters };
                       }
                     } catch (infoErr) {
@@ -412,14 +426,15 @@ export class MangaService {
             );
 
             if (chaptersRes.data.data && chaptersRes.data.data.length > 0) {
-              return {
-                chapters: chaptersRes.data.data.map((ch: any) => ({
-                  id: `mangadex_direct___${ch.id}___na`,
-                  title: ch.attributes.title || `Chapter ${ch.attributes.chapter}`,
-                  chapterNumber: ch.attributes.chapter,
-                  volumeNumber: ch.attributes.volume,
-                })).sort((a: any, b: any) => Number(b.chapterNumber) - Number(a.chapterNumber)),
-              };
+              const chapters = chaptersRes.data.data.map((ch: any) => ({
+                id: `mangadex_direct___${ch.id}___na`,
+                title: ch.attributes.title || `Chapter ${ch.attributes.chapter}`,
+                chapterNumber: ch.attributes.chapter,
+                volumeNumber: ch.attributes.volume,
+              })).sort((a: any, b: any) => Number(b.chapterNumber) - Number(a.chapterNumber));
+
+              await this.prisma.manga.update({ where: { id }, data: { chaptersList: chapters } });
+              return { chapters };
             }
           }
         }
