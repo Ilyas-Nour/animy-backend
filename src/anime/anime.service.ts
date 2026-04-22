@@ -254,6 +254,7 @@ export class AnimeService {
       favorites: data.favourites,
       duration: data.duration ? `${data.duration} min` : null,
       source: data.source,
+      bannerImage: data.bannerImage,
       images: {
         jpg: {
           image_url: data.coverImage.large,
