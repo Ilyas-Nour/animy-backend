@@ -255,6 +255,7 @@ export class AnimeService {
       duration: data.duration ? `${data.duration} min` : null,
       source: data.source,
       bannerImage: data.bannerImage,
+      color: data.coverImage?.color,
       images: {
         jpg: {
           image_url: data.coverImage.large,
