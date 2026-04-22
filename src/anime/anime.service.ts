@@ -212,9 +212,6 @@ export class AnimeService {
       rank: null,
       popularity: data.popularity,
       imageUrl: data.coverImage.extraLarge || data.coverImage.large,
-      trailerUrl: data.trailer
-        ? `https://www.youtube.com/watch?v=${data.trailer.id}`
-        : null,
       duration: data.duration ? `${data.duration} min` : null,
       source: data.source,
       airing: data.status === "RELEASING",
