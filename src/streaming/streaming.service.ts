@@ -25,17 +25,11 @@ export class StreamingService {
    * @param query - Anime title to search
    */
   async searchAnime(query: string) {
-    try {
-      this.logger.debug(`Searching for "${query}" on HiAnime`);
-      const results = await this.hiAnimeService.search(query);
+      const results = await this.findAnimeByTitle(query);
       return {
         provider: "hianime",
-        results: results.results || [],
+        results: results || [],
       };
-    } catch (error) {
-      this.logger.error(`Error searching anime on HiAnime:`, error);
-      return { provider: "hianime", results: [] };
-    }
   }
 
   /**
@@ -60,6 +54,10 @@ export class StreamingService {
         `Error fetching anime info from HiAnime:`,
         error.message,
       );
+
+      // If we're here, it means HiAnime is likely down or the ID is invalid
+      // We can't do much without more context here, but we can return a hint
+      // that we're failing so the frontend can try its own fallback.
       throw new HttpException(
         `Failed to fetch info from HiAnime: ${error.message}`,
         HttpStatus.NOT_FOUND,
@@ -124,6 +122,17 @@ export class StreamingService {
       this.logger.error(
         `Error fetching episode sources from HiAnime: ${error.message}`,
       );
+
+      // HIGH-RELIABILITY FALLBACK: If HiAnime fails, but we have MAL ID and EP, use VidLink
+      if (malId && episodeNumber) {
+        this.logger.log(`Using VidLink fallback for MAL ID: ${malId}, EP: ${episodeNumber}`);
+        return {
+          provider: "fallback",
+          sources: [],
+          iframeUrl: `https://vidlink.pro/anime/${malId}/${episodeNumber}?primaryColor=6366f1`,
+        };
+      }
+
       throw new HttpException(
         `Failed to fetch links from HiAnime: ${error.message}`,
         HttpStatus.NOT_FOUND,
@@ -141,11 +150,26 @@ export class StreamingService {
   /**
    * Search and get best match for anime by MAL title (from AniList)
    */
-  async findAnimeByTitle(title: string, titleEnglish?: string) {
+  async findAnimeByTitle(title: string, titleEnglish?: string, anilistId?: number) {
     try {
       this.logger.debug(
-        `Finding HiAnime match for: ${title} / ${titleEnglish}`,
+        `Finding HiAnime match for: ${title} / ${titleEnglish} (AniList: ${anilistId})`,
       );
+
+      // 1. If we have an AniList ID, try the robust mapping service first
+      if (anilistId) {
+        const resolvedId = await this.idMappingService.resolveHiAnimeId(
+          anilistId,
+          title,
+          titleEnglish,
+        );
+        if (resolvedId) {
+          // Wrap in a format similar to search results
+          return [{ id: resolvedId, title: title, image: "" }];
+        }
+      }
+
+      // 2. Fallback to basic search
       let results = await this.hiAnimeService.search(title);
 
       if (results.results.length === 0 && titleEnglish) {

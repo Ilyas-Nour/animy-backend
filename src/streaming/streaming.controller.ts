@@ -86,6 +86,7 @@ export class StreamingController {
   async findAnimeByTitle(
     @Query("title") title: string,
     @Query("titleEnglish") titleEnglish?: string,
+    @Query("anilistId") anilistId?: string,
   ) {
     if (!title) {
       throw new HttpException(
@@ -94,7 +95,11 @@ export class StreamingController {
       );
     }
 
-    return this.streamingService.findAnimeByTitle(title, titleEnglish);
+    return this.streamingService.findAnimeByTitle(
+      title,
+      titleEnglish,
+      anilistId ? parseInt(anilistId, 10) : undefined,
+    );
   }
 
   /**
