@@ -117,7 +117,14 @@ export class AnilistService {
           seasonYear
           averageScore
           popularity
+          favourites
           genres
+          rankings {
+            rank
+            type
+            format
+            allTime
+          }
           synonyms
           source
           studios(isMain: true) {

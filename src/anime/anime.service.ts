@@ -248,7 +248,10 @@ export class AnimeService {
       episodes: data.episodes,
       status: data.status,
       score: data.averageScore ? data.averageScore / 10 : null,
+      rank: data.rankings?.find((r: any) => r.allTime)?.rank || data.rankings?.[0]?.rank,
       popularity: data.popularity,
+      members: data.popularity,
+      favorites: data.favourites,
       duration: data.duration ? `${data.duration} min` : null,
       source: data.source,
       images: {
