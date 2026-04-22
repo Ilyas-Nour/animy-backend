@@ -239,7 +239,10 @@ export class AnimeService {
   private mapAnilistToResponse(data: any) {
     if (!data) return null;
     return {
-      mal_id: data.id, // Use AniList ID as mal_id for frontend compatibility
+      id: data.id,
+      anilistId: data.id,
+      mal_id: data.id, // KEEP as AniList ID for frontend routing compatibility
+      idMal: data.idMal, // Real MAL ID for streaming providers like VidLink
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
       title_japanese: data.title.native,
