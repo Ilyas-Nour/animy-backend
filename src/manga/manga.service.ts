@@ -462,8 +462,9 @@ export class MangaService {
           referer = "https://mangasee123.com/";
         } else if (lowerUrl.includes("mangafire") || lowerId.startsWith("mangafire")) {
           referer = "https://mangafire.to/";
+        } else if (lowerId.includes("mangadex") || lowerUrl.includes("mangadex")) {
+          referer = "https://mangadex.org/";
         } else if (lowerId.startsWith("anify")) {
-          // Some Anify sources might need specific referers, but often mangadex is fine
           if (lowerUrl.includes("mangadex")) referer = "https://mangadex.org/";
         }
         
