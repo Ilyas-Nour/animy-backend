@@ -38,7 +38,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
+                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}] ${query ? '' : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
@@ -218,15 +218,6 @@ export class AnilistService {
     try {
       const data: any = await this.client.request(queryGql, { id });
       const media = data.Media;
-
-      // Safety Check: Backend Enforcement
-      if (
-        media?.isAdult ||
-        media?.genres?.some((g) => ["Hentai", "Ecchi"].includes(g))
-      ) {
-        this.logger.warn(`Blocked NSFW/Ecchi content access for ID ${id}`);
-        throw new HttpException("Content not available", HttpStatus.FORBIDDEN);
-      }
 
       return media;
     } catch (error) {
@@ -413,7 +404,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: [${sortValue}], isAdult: false, genre_not_in: ["Hentai", "Ecchi"]) {
+                    media(search: $search, type: MANGA, sort: [${sortValue}] ${query ? '' : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
@@ -543,15 +534,6 @@ export class AnilistService {
     try {
       const data: any = await this.client.request(queryGql, { id });
       const media = data.Media;
-
-      // Safety Check: Backend Enforcement
-      if (
-        media?.isAdult ||
-        media?.genres?.some((g) => ["Hentai", "Ecchi"].includes(g))
-      ) {
-        this.logger.warn(`Blocked NSFW/Ecchi manga access for ID ${id}`);
-        throw new HttpException("Content not available", HttpStatus.FORBIDDEN);
-      }
 
       return media;
     } catch (error) {
