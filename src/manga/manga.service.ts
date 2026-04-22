@@ -447,13 +447,18 @@ export class MangaService {
         
         let referer = "";
         const lowerUrl = originalUrl.toLowerCase();
+        const lowerId = chapterId.toLowerCase();
         
-        if (lowerUrl.includes("mangapill.com") || lowerUrl.includes("readdetectiveconan.com") || chapterId.includes("mangapill")) {
+        // Identify provider by URL or by ID prefix
+        if (lowerUrl.includes("mangapill.com") || lowerUrl.includes("readdetectiveconan.com") || lowerId.startsWith("mangapill")) {
           referer = "https://mangapill.com/";
-        } else if (lowerUrl.includes("mangasee")) {
+        } else if (lowerUrl.includes("mangasee") || lowerId.startsWith("mangasee")) {
           referer = "https://mangasee123.com/";
-        } else if (lowerUrl.includes("mangafire")) {
+        } else if (lowerUrl.includes("mangafire") || lowerId.startsWith("mangafire")) {
           referer = "https://mangafire.to/";
+        } else if (lowerId.startsWith("anify")) {
+          // Some Anify sources might need specific referers, but often mangadex is fine
+          if (lowerUrl.includes("mangadex")) referer = "https://mangadex.org/";
         }
         
         if (referer) {
@@ -462,11 +467,15 @@ export class MangaService {
         return originalUrl;
       };
 
-      let resMeta: any = null;
       let url = "";
-      const parts = chapterId.split("___");
+      
+      // Support both triple and double underscores as delimiters
+      let parts = chapterId.split("___");
+      if (parts.length < 2) {
+        parts = chapterId.split("__");
+      }
 
-      if (parts.length === 3) {
+      if (parts.length >= 2) {
         const provider = parts[0];
         const actualId =
           provider === "mangadex_direct"
@@ -475,7 +484,7 @@ export class MangaService {
         const baseUrl =
           provider === "mangadex_direct"
             ? "https://api.mangadex.org"
-            : Buffer.from(parts[2], "base64url").toString("utf-8");
+            : parts[2] ? Buffer.from(parts[2], "base64url").toString("utf-8") : "https://consumet-api-clone.vercel.app";
 
         if (provider === "anify") {
           const pagesRes = await axios.get(
@@ -512,13 +521,6 @@ export class MangaService {
         } else {
           url = `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
         }
-      } else if (parts.length === 2) {
-        const provider = parts[0];
-        const actualId = Buffer.from(parts[1], "base64url").toString("utf-8");
-        const baseUrl = "https://consumet-api-clone.vercel.app";
-        url = provider === "anilist" 
-          ? `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`
-          : `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
       } else {
         url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${chapterId}&provider=mangadex`;
       }
