@@ -108,8 +108,15 @@ export class StreamingService {
       // This is the most stable way to stream today
       let iframeUrl = (sources as any)?.iframeUrl || null;
       if (malId && episodeNumber) {
-        // VidLink is the primary stable provider
-        iframeUrl = `https://vidlink.pro/anime/${malId}/${episodeNumber}?primaryColor=6366f1`;
+        // If the ID looks like an AniList ID (very high value) or the handshake fails,
+        // we try to resolve the real MAL ID.
+        let resolvedMalId = malId;
+        if (parseInt(malId, 10) > 100000) { // Simple heuristic: MAL IDs are usually smaller than AniList IDs for newer shows
+           const mapping = await this.idMappingService.getMalId(parseInt(malId, 10));
+           if (mapping) resolvedMalId = mapping.toString();
+        }
+
+        iframeUrl = `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}?primaryColor=6366f1`;
       }
 
       return {
@@ -125,11 +132,17 @@ export class StreamingService {
 
       // HIGH-RELIABILITY FALLBACK: If HiAnime fails, but we have MAL ID and EP, use VidLink
       if (malId && episodeNumber) {
-        this.logger.log(`Using VidLink fallback for MAL ID: ${malId}, EP: ${episodeNumber}`);
+        let resolvedMalId = malId;
+        if (parseInt(malId, 10) > 100000) {
+           const mapping = await this.idMappingService.getMalId(parseInt(malId, 10));
+           if (mapping) resolvedMalId = mapping.toString();
+        }
+        
+        this.logger.log(`Using VidLink fallback for MAL ID: ${resolvedMalId}, EP: ${episodeNumber}`);
         return {
           provider: "fallback",
           sources: [],
-          iframeUrl: `https://vidlink.pro/anime/${malId}/${episodeNumber}?primaryColor=6366f1`,
+          iframeUrl: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}?primaryColor=6366f1`,
         };
       }
 

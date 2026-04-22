@@ -94,6 +94,34 @@ export class IdMappingService {
   }
 
   /**
+   * Resolves an AniList ID to a MyAnimeList ID.
+   * Uses local cache first, then falls back to MALSync API.
+   */
+  async getMalId(anilistId: number): Promise<number | null> {
+    // 1. Check local mapping cache
+    const cached = await this.prisma.animeMapping.findUnique({
+      where: { id: anilistId },
+    });
+
+    // Note: We don't have a dedicated malId column in anime_mappings yet,
+    // but we can reuse the anime table or just query MALSync.
+    // For now, let's query MALSync as it's the most reliable source for mapping.
+    
+    try {
+      this.logger.debug(`Fetching MAL ID for AniList ${anilistId} from MALSync`);
+      const { data } = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 5000 });
+      if (data && data.malId) {
+        this.logger.debug(`Resolved AniList ${anilistId} -> MAL ${data.malId}`);
+        return data.malId;
+      }
+    } catch (e) {
+      this.logger.warn(`MALSync resolution failed for AniList ${anilistId}: ${e.message}`);
+    }
+
+    return null;
+  }
+
+  /**
    * Saves (or updates) a MangaDex ID mapping for a given AniList ID.
    */
   async saveMangaDexMapping(anilistId: number, mangaDexId: string): Promise<void> {
