@@ -55,7 +55,7 @@ export class AnimeService {
           per_page: data.pageInfo.perPage,
         },
       },
-      data: data.media.map(this.mapAnilistToResponse),
+      data: data.media.map((item) => this.mapAnilistToResponse(item)),
     };
   }
 
@@ -123,21 +123,21 @@ export class AnimeService {
     }
 
     return {
-      data: data.map(this.mapAnilistToResponse),
+      data: (data || []).map((item) => this.mapAnilistToResponse(item)),
     };
   }
 
   async getAnimeByType(type: string, page: number = 1) {
     const data = await this.anilistService.getPopular(page);
     return {
-      data: data.map(this.mapAnilistToResponse),
+      data: data.map((item) => this.mapAnilistToResponse(item)),
     };
   }
 
   async getUpcomingNextSeason(page: number = 1) {
     const data = await this.anilistService.getNextSeason(page);
     return {
-      data: data.map(this.mapAnilistToResponse),
+      data: data.map((item) => this.mapAnilistToResponse(item)),
     };
   }
 
@@ -175,7 +175,7 @@ export class AnimeService {
 
     const data = await this.anilistService.getThisSeason(season, year);
     return {
-      data: data.map(this.mapAnilistToResponse),
+      data: data.map((item) => this.mapAnilistToResponse(item)),
     };
   }
 
