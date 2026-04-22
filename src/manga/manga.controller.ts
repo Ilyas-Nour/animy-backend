@@ -29,26 +29,6 @@ export class MangaController {
     return this.mangaService.getTopManga(type, filter, page);
   }
 
-  @Get(":id/full")
-  async getByIdFull(@Param("id", ParseIntPipe) id: number) {
-    return this.mangaService.getMangaById(id);
-  }
-
-  @Get(":id")
-  async getById(@Param("id", ParseIntPipe) id: number) {
-    return this.mangaService.getMangaById(id);
-  }
-
-  @Get(":id/characters")
-  async getCharacters(@Param("id", ParseIntPipe) id: number) {
-    return this.mangaService.getMangaCharacters(id);
-  }
-
-  @Get(":id/read-chapters")
-  async getReadChapters(@Param("id", ParseIntPipe) id: number) {
-    return this.mangaService.getMangaChapters(id);
-  }
-
   @Get("read/:chapterId")
   async getChapterPages(@Param("chapterId") chapterId: string, @Req() req: Request) {
     // Build absolute proxy base URL dynamically from the request host
@@ -69,5 +49,25 @@ export class MangaController {
       throw new HttpException("URL parameter is required", HttpStatus.BAD_REQUEST);
     }
     return this.mangaService.proxyImage(url, referer, res);
+  }
+
+  @Get(":id/full")
+  async getByIdFull(@Param("id", ParseIntPipe) id: number) {
+    return this.mangaService.getMangaById(id);
+  }
+
+  @Get(":id")
+  async getById(@Param("id", ParseIntPipe) id: number) {
+    return this.mangaService.getMangaById(id);
+  }
+
+  @Get(":id/characters")
+  async getCharacters(@Param("id", ParseIntPipe) id: number) {
+    return this.mangaService.getMangaCharacters(id);
+  }
+
+  @Get(":id/read-chapters")
+  async getReadChapters(@Param("id", ParseIntPipe) id: number) {
+    return this.mangaService.getMangaChapters(id);
   }
 }
