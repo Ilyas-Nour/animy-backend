@@ -198,6 +198,7 @@ export class AnimeService {
 
   private mapAnilistToPrisma(data: any) {
     return {
+      idMal: data.idMal,
       title: data.title.romaji || data.title.english || data.title.native,
       titleEnglish: data.title.english,
       titleJapanese: data.title.native,
@@ -209,9 +210,10 @@ export class AnimeService {
       status: data.status,
       rating: "PG-13", // Default/Placeholder as AniList doesn't give simple rating string like MAL
       score: data.averageScore ? data.averageScore / 10 : null,
-      rank: null,
+      rank: data.rankings?.find((r: any) => r.allTime)?.rank || data.rankings?.[0]?.rank,
       popularity: data.popularity,
       imageUrl: data.coverImage.extraLarge || data.coverImage.large,
+      bannerImage: data.bannerImage,
       duration: data.duration ? `${data.duration} min` : null,
       source: data.source,
       airing: data.status === "RELEASING",
@@ -223,13 +225,40 @@ export class AnimeService {
       },
       scoredBy: null,
       members: data.popularity, // Use popularity as members count proxy
-      favorites: null,
+      favorites: data.favourites,
       background: null,
       year: data.seasonYear,
       season: data.season,
       genres: data.genres?.map((g: string) => ({ name: g })) || [], // Map to object structure if DB expects JSON
       studios: data.studios?.nodes?.map((s: any) => ({ name: s.name })) || [],
-      streamingLinks: [],
+      streamingLinks:
+        data.externalLinks?.map((link: any) => ({
+          name: link.site,
+          url: link.url,
+        })) || [],
+      characters:
+        data.characters?.edges?.filter((edge: any) => edge && edge.node) || [],
+      recommendations:
+        data.recommendations?.nodes?.filter(
+          (node: any) => node && node.mediaRecommendation,
+        ) || [],
+      staff:
+        data.staff?.edges
+          ?.filter((edge: any) => edge && edge.node)
+          .map((edge: any) => ({
+            role: edge.role,
+            node: edge.node,
+          })) || [],
+      relations:
+        data.relations?.edges
+          ?.filter((edge: any) => edge && edge.node)
+          .map((edge: any) => ({
+            relationType: edge.relationType,
+            node: edge.node,
+          })) || [],
+      trailerUrl: data.trailer
+        ? `https://www.youtube.com/watch?v=${data.trailer.id}`
+        : null,
     };
   }
 
@@ -311,6 +340,8 @@ export class AnimeService {
   private mapDbToResponse(dbAnime: any) {
     return {
       mal_id: dbAnime.id,
+      anilistId: dbAnime.id,
+      idMal: dbAnime.idMal || dbAnime.id,
       title: dbAnime.title,
       title_english: dbAnime.titleEnglish,
       title_japanese: dbAnime.titleJapanese,
@@ -330,6 +361,7 @@ export class AnimeService {
       members: dbAnime.members,
       favorites: dbAnime.favorites,
       background: dbAnime.background,
+      bannerImage: dbAnime.bannerImage,
       images: {
         jpg: {
           image_url: dbAnime.imageUrl || "",
@@ -344,7 +376,9 @@ export class AnimeService {
       },
       trailer: {
         url: dbAnime.trailerUrl,
-        youtube_id: dbAnime.trailerUrl?.split("v=")[1],
+        youtube_id: dbAnime.trailerUrl?.includes("v=")
+          ? dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]
+          : dbAnime.trailerUrl?.split("/").pop(),
       },
       year: dbAnime.year,
       season: dbAnime.season,
@@ -353,10 +387,12 @@ export class AnimeService {
       streaming: Array.isArray(dbAnime.streamingLinks)
         ? dbAnime.streamingLinks
         : [],
-      relations: [], // DB doesn't store these yet, will be fetched in separate call or refresh
-      staff: [],
-      recommendations: [],
-      characters: [],
+      relations: Array.isArray(dbAnime.relations) ? dbAnime.relations : [],
+      staff: Array.isArray(dbAnime.staff) ? dbAnime.staff : [],
+      recommendations: Array.isArray(dbAnime.recommendations)
+        ? dbAnime.recommendations
+        : [],
+      characters: Array.isArray(dbAnime.characters) ? dbAnime.characters : [],
     };
   }
 }

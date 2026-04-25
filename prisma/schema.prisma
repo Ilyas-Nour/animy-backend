@@ -213,7 +213,8 @@ model Contact {
 
 // Anime Data Model (Cached/Static)
 model Anime {
-  id              Int      @id // MyAnimeList ID
+  id              Int      @id // AniList ID
+  idMal           Int?     // MyAnimeList ID
   title           String
   titleEnglish    String?
   titleJapanese   String?
@@ -226,6 +227,7 @@ model Anime {
   rank            Int?
   popularity      Int?
   imageUrl        String?
+  bannerImage     String?
   duration        String?
   source          String?
   airing          Boolean?
@@ -241,6 +243,9 @@ model Anime {
   streamingLinks  Json // Store streaming platforms as JSON
   characters      Json? // Cached characters list
   recommendations Json? // Cached recommendations
+  staff           Json? // Cached staff list
+  relations       Json? // Cached relations list
+  trailerUrl      String? // Youtube trailer URL
 
   lastUpdated DateTime @updatedAt
   createdAt   DateTime @default(now())
@@ -250,27 +255,32 @@ model Anime {
 
 // Manga Data Model (Cached/Static)
 model Manga {
-  id            Int     @id // MyAnimeList ID
-  title         String
-  titleEnglish  String?
-  titleJapanese String?
-  synopsis      String? @db.Text
-  type          String? // Manga, Novel, etc.
-  chapters      Int?
-  volumes       Int?
-  status        String?
-  score         Float?
-  rank          Int?
-  popularity    Int?
-  imageUrl      String?
-  authors       Json // Store as JSON
-  genres        Json // Store as JSON
-  background    String? @db.Text
-  published     Json? // Store full Jikan published object
-  scoredBy      Int?
-  members       Int?
-  favorites     Int?
-  chaptersList  Json? // Cached chapters list
+  id              Int     @id // AniList ID
+  idMal           Int?    // MyAnimeList ID
+  title           String
+  titleEnglish    String?
+  titleJapanese   String?
+  synopsis        String? @db.Text
+  type            String? // Manga, Novel, etc.
+  chapters        Int?
+  volumes         Int?
+  status          String?
+  score           Float?
+  rank            Int?
+  popularity      Int?
+  imageUrl        String?
+  authors         Json // Store as JSON
+  genres          Json // Store as JSON
+  background      String? @db.Text
+  published       Json? // Store full Jikan published object
+  scoredBy        Int?
+  members         Int?
+  favorites       Int?
+  chaptersList    Json? // Cached chapters list
+  characters      Json? // Cached characters list
+  recommendations Json? // Cached recommendations
+  staff           Json? // Cached staff list
+  relations       Json? // Cached relations list
 
   lastUpdated DateTime @updatedAt
   createdAt   DateTime @default(now())

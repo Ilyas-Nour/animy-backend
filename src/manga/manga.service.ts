@@ -429,6 +429,7 @@ export class MangaService {
 
   private mapAnilistToPrisma(data: any) {
     return {
+      idMal: data.idMal,
       title: data.title.romaji || data.title.english || data.title.native,
       titleEnglish: data.title.english,
       titleJapanese: data.title.native,
@@ -440,7 +441,7 @@ export class MangaService {
       volumes: data.volumes,
       status: data.status,
       score: data.averageScore ? data.averageScore / 10 : null,
-      rank: null,
+      rank: data.rankings?.find((r: any) => r.allTime)?.rank || data.rankings?.[0]?.rank,
       popularity: data.popularity,
       imageUrl: data.coverImage.extraLarge || data.coverImage.large,
       authors:
@@ -452,7 +453,48 @@ export class MangaService {
       },
       scoredBy: null,
       members: data.popularity,
-      favorites: null,
+      favorites: data.favourites,
+      characters:
+        data.characters?.edges?.map((edge: any) => ({
+          role: edge.role,
+          character: {
+            mal_id: edge.node.id,
+            name: edge.node.name.full,
+            images: {
+              jpg: { image_url: edge.node.image.large },
+            },
+          },
+        })) || [],
+      relations:
+        data.relations?.edges?.map((edge: any) => ({
+          relation: edge.relationType,
+          entry: [
+            {
+              mal_id: edge.node.id,
+              type: edge.node.type,
+              name: edge.node.title.english || edge.node.title.romaji,
+              images: {
+                jpg: { image_url: edge.node.coverImage.large },
+              },
+            },
+          ],
+        })) || [],
+      recommendations:
+        data.recommendations?.nodes?.map((node: any) => ({
+          entry: {
+            mal_id: node.mediaRecommendation.id,
+            title:
+              node.mediaRecommendation.title.english ||
+              node.mediaRecommendation.title.romaji,
+            images: {
+              jpg: { image_url: node.mediaRecommendation.coverImage.large },
+            },
+          },
+        })) || [],
+      staff:
+        data.staff?.nodes?.map((s: any) => ({
+          name: s.name.full,
+        })) || [],
     };
   }
 
@@ -492,6 +534,54 @@ export class MangaService {
       authors:
         data.staff?.nodes?.map((s: any) => ({ name: s.name.full })) || [],
       genres: data.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
+      characters:
+        data.characters?.edges?.map((edge: any) => ({
+          role: edge.role,
+          character: {
+            mal_id: edge.node.id,
+            name: edge.node.name.full,
+            images: {
+              jpg: { image_url: edge.node.image.large },
+            },
+          },
+        })) ||
+        data.characters?.nodes?.map((char: any) => ({
+          character: {
+            mal_id: char.id,
+            name: char.name.full,
+            images: {
+              jpg: { image_url: char.image.large },
+            },
+          },
+          role: "Main",
+        })) ||
+        [],
+      relations:
+        data.relations?.edges?.map((edge: any) => ({
+          relation: edge.relationType,
+          entry: [
+            {
+              mal_id: edge.node.id,
+              type: edge.node.type,
+              name: edge.node.title.english || edge.node.title.romaji,
+              images: {
+                jpg: { image_url: edge.node.coverImage.large },
+              },
+            },
+          ],
+        })) || [],
+      recommendations:
+        data.recommendations?.nodes?.map((node: any) => ({
+          entry: {
+            mal_id: node.mediaRecommendation.id,
+            title:
+              node.mediaRecommendation.title.english ||
+              node.mediaRecommendation.title.romaji,
+            images: {
+              jpg: { image_url: node.mediaRecommendation.coverImage.large },
+            },
+          },
+        })) || [],
     };
   }
 
@@ -528,6 +618,12 @@ export class MangaService {
       },
       authors: Array.isArray(dbManga.authors) ? dbManga.authors : [],
       genres: Array.isArray(dbManga.genres) ? dbManga.genres : [],
+      characters: Array.isArray(dbManga.characters) ? dbManga.characters : [],
+      relations: Array.isArray(dbManga.relations) ? dbManga.relations : [],
+      recommendations: Array.isArray(dbManga.recommendations)
+        ? dbManga.recommendations
+        : [],
+      staff: Array.isArray(dbManga.staff) ? dbManga.staff : [],
     };
   }
 }
