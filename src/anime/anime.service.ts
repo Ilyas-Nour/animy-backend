@@ -60,6 +60,10 @@ export class AnimeService {
   }
 
   async getAnimeById(id: number) {
+    if (!id || isNaN(id)) {
+      this.logger.warn(`Invalid anime ID received: ${id}`);
+      return null;
+    }
     try {
       // 1. Check Database (Stale-While-Revalidate logic)
       const cachedAnime = await this.prisma.anime.findUnique({ where: { id } });

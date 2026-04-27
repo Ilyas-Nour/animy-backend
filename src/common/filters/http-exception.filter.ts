@@ -45,6 +45,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       "HttpExceptionFilter",
     );
 
-    response.status(status).json(errorResponse);
+    if (!response.headersSent) {
+      response.status(status).json(errorResponse);
+    }
   }
 }
