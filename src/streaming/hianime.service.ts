@@ -61,17 +61,16 @@ export class HiAnimeService {
       const description = $page(".film-description .text").text().trim();
 
       // Extract the numeric ID from the page (needed for episodes AJAX)
-      // Usually it's in a script or data-id attribute
       const numericId = $page("#wrapper").attr("data-id") || id.split("-").pop();
 
-      // 2. Fetch episodes via AJAX (HiAnime style)
+      // 2. Fetch episodes via AJAX
       const epUrl = `${this.baseUrl}/ajax/v2/episode/list/${numericId}`;
       const { data: epData } = await axios.get(epUrl, { headers: this.headers });
       const $eps = cheerio.load(epData.html);
       
       const episodes: any[] = [];
       $eps(".detail-en-list .ep-item").each((_, el) => {
-        const item = $(el);
+        const item = $eps(el);
         const epId = item.attr("href")?.split("/").pop();
         const number = parseInt(item.attr("data-number") || "0");
         const epTitle = item.attr("title");
@@ -94,7 +93,7 @@ export class HiAnimeService {
   }
 
   /**
-   * Get streaming sources (The hard part)
+   * Get streaming sources
    */
   async fetchEpisodeSources(episodeId: string) {
     try {
@@ -106,11 +105,12 @@ export class HiAnimeService {
       const servers: any[] = [];
       $(".server-item").each((_, el) => {
         const item = $(el);
+        const sType = item.closest(".pswp-col").find(".type").text().toLowerCase();
         servers.push({
           id: item.attr("data-id"),
           serverId: item.attr("data-server-id"),
           name: item.text().trim(),
-          type: item.closest(".pswp-col").find(".type").text().toLowerCase().includes("sub") ? "sub" : "dub"
+          type: sType.includes("sub") ? "sub" : "dub"
         });
       });
 
@@ -122,15 +122,12 @@ export class HiAnimeService {
       const sourceUrl = `${this.baseUrl}/ajax/v2/episode/sources?id=${targetServer.id}`;
       const { data: sourceData } = await axios.get(sourceUrl, { headers: this.headers });
       
-      // The sourceData.link is an embed URL (e.g., https://megacloud.tv/embed-2/e-1/...)
       const embedUrl = sourceData.link;
       if (!embedUrl) throw new Error("No embed link found");
 
-      // 4. Return the data. We'll let the frontend handle the iframe if possible,
-      // but we provide the iframeUrl directly.
       return {
         headers: { Referer: this.baseUrl },
-        sources: [], // We'll use the iframe for now as it's more stable
+        sources: [], 
         iframeUrl: embedUrl,
         servers: servers.map(s => ({ name: s.name, type: s.type, id: s.id }))
       };
