@@ -6,16 +6,12 @@ export class NewsEngagementService {
   constructor(private prisma: PrismaService) {}
 
   async getEngagement(providerId: string, userId?: string) {
-    // Find existing engagement record
-    let engagement = await this.prisma.newsEngagement.findUnique({
+    // Initialize or find existing engagement record safely
+    const engagement = await this.prisma.newsEngagement.upsert({
       where: { providerId },
+      create: { providerId },
+      update: {}, // No change needed if it already exists
     });
-
-    if (!engagement) {
-      engagement = await this.prisma.newsEngagement.create({
-        data: { providerId },
-      });
-    }
 
     // PERFORM DIRECT TABLE COUNTS (Source of Truth)
     // This ensures comments without an explicit engagementId but with the same providerId are counted.
