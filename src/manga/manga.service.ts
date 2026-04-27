@@ -179,10 +179,14 @@ export class MangaService {
           if (res.length > 0) return res;
           throw new Error('No chapters');
         }),
+        this.fetchMangaPillChapters(id, titlesToSearch).then(res => {
+          if (res.length > 0) return res;
+          throw new Error('No chapters');
+        }),
         // Global safety timeout to return cache if it exists, or empty
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 12000))
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
       ]).catch(() => {
-        return cachedManga?.chaptersList || [];
+        return (cachedManga?.chaptersList as any[]) || [];
       });
 
       if (chapters && Array.isArray(chapters) && chapters.length > 0) {
@@ -320,6 +324,28 @@ export class MangaService {
     return [];
   }
 
+  private async fetchMangaPillChapters(id: number, titles: string[]): Promise<any[]> {
+    try {
+      this.logger.debug(`[Parallel] Trying MangaPill for: ${titles[0]}`);
+      const baseUrl = "https://consumet-api-clone.vercel.app";
+      const searchRes = await axios.get(`${baseUrl}/manga/mangapill/${encodeURIComponent(titles[0])}`, { timeout: 8000 });
+      
+      if (searchRes.data?.results?.length > 0) {
+        const providerId = searchRes.data.results[0].id;
+        const infoRes = await axios.get(`${baseUrl}/manga/mangapill/info?id=${providerId}`, { timeout: 8000 });
+        if (infoRes.data?.chapters?.length > 0) {
+          return infoRes.data.chapters.map((c: any) => ({
+            id: `mangapill___${Buffer.from(c.id).toString("base64url")}___${Buffer.from(baseUrl).toString("base64url")}`,
+            title: c.title || `Chapter ${c.chapterNumber || c.number}`,
+            chapterNumber: (c.chapterNumber || c.number || "0").toString(),
+          }));
+        }
+      }
+    } catch (e) {
+      this.logger.debug(`MangaPill parallel fetch failed: ${e.message}`);
+    }
+    return [];
+  }
 
   async proxyImage(url: string, referer: string, res: Response) {
     return this.streamingProxyService.proxy(url, referer, res);
