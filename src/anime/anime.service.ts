@@ -309,6 +309,7 @@ export class AnimeService {
           ? `https://www.youtube.com/watch?v=${data.trailer.id}`
           : null,
         youtube_id: data.trailer?.id,
+        thumbnail: data.trailer?.thumbnail,
       },
       year: data.seasonYear,
       season: data.season,
