@@ -49,12 +49,12 @@ export class StreamingProxyService {
       res.setHeader("Cache-Control", "public, max-age=3600");
 
       if (response.headers["content-range"]) {
-          res.setHeader("Content-Range", response.headers["content-range"]);
+          res.setHeader("Content-Range", String(response.headers["content-range"]));
           res.status(HttpStatus.PARTIAL_CONTENT);
       }
       
       if (response.headers["content-length"]) {
-          res.setHeader("Content-Length", response.headers["content-length"]);
+          res.setHeader("Content-Length", String(response.headers["content-length"]));
       }
 
       // If it's a manifest file, we might need to rewrite it
