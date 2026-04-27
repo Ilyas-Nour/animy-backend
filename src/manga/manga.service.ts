@@ -163,28 +163,40 @@ export class MangaService {
 
       const titlesToSearch = [title, englishTitle, nativeTitle].filter(t => t && t.length > 1);
 
-      // --- PARALLEL FETCHING STRATEGY ---
-      this.logger.debug(`Triggering parallel chapter search for: ${title}`);
+      // --- FAST RACE STRATEGY ---
+      this.logger.debug(`Triggering fast race chapter search for: ${title}`);
       
-      const providerResults = await Promise.allSettled([
-        this.fetchAnifyChapters(id, title),
-        this.fetchMangaDexChapters(id, titlesToSearch),
-        this.fetchConsumetChapters(id, titlesToSearch)
-      ]);
+      const chapters = await Promise.any([
+        this.fetchAnifyChapters(id, title).then(res => {
+          if (res.length > 0) return res;
+          throw new Error('No chapters');
+        }),
+        this.fetchMangaDexChapters(id, titlesToSearch).then(res => {
+          if (res.length > 0) return res;
+          throw new Error('No chapters');
+        }),
+        this.fetchConsumetChapters(id, titlesToSearch).then(res => {
+          if (res.length > 0) return res;
+          throw new Error('No chapters');
+        }),
+        // Global safety timeout to return cache if it exists, or empty
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 12000))
+      ]).catch(() => {
+        return cachedManga?.chaptersList || [];
+      });
 
-      for (const result of providerResults) {
-        if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
-          const chapters = result.value.sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber));
-          this.logger.debug(`Found successful chapters from parallel search. Updating cache.`);
-          
-          // Background update DB cache
-          this.prisma.manga.update({ 
-            where: { id }, 
-            data: { chaptersList: chapters } 
-          }).catch(e => this.logger.error(`Failed to update chapter cache: ${e.message}`));
-
-          return { chapters };
+      if (chapters && chapters.length > 0) {
+        const sortedChapters = chapters.sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber));
+        
+        // Background update DB cache if it changed or was empty
+        if (!cachedManga?.chaptersList || cachedManga.chaptersList.length !== sortedChapters.length) {
+            this.prisma.manga.update({ 
+              where: { id }, 
+              data: { chaptersList: sortedChapters, lastUpdated: new Date() } 
+            }).catch(e => this.logger.error(`Failed to update chapter cache: ${e.message}`));
         }
+
+        return { chapters: sortedChapters };
       }
 
       this.logger.warn(`All parallel providers failed for manga ${id}`);
