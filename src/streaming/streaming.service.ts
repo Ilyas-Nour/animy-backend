@@ -1,11 +1,33 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConsumetService } from "./consumet.service";
+import axios from "axios";
 
 @Injectable()
 export class StreamingService {
   private readonly logger = new Logger(StreamingService.name);
 
   constructor(private readonly consumetService: ConsumetService) {}
+
+  /**
+   * Search for anime
+   */
+  async searchAnime(query: string) {
+    return this.consumetService.search(query);
+  }
+
+  /**
+   * Get anime info
+   */
+  async getAnimeInfo(id: string) {
+    return this.consumetService.getAnimeInfo(id);
+  }
+
+  /**
+   * Find anime by title (AniList fallback)
+   */
+  async findAnimeByTitle(title: string, titleEnglish?: string, anilistId?: number) {
+    return this.consumetService.search(title);
+  }
 
   /**
    * Resilience Mesh v5: Unified Streaming Resolver
@@ -45,8 +67,6 @@ export class StreamingService {
 
       // 2. Verified Mirror Cluster (Solid 2026 Solution)
       if (episodeNumber) {
-        // Most anime mirrors in 2026 use MAL IDs for /embed/anime/ paths
-        // or TMDB IDs for /embed/tv/ paths.
         const mirrors = [
           { name: 'Mirror 1 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
           { name: 'Mirror 2 (VidSrc.su)', url: `https://vidsrc.su/embed/anime/${malId || episodeId}/${episodeNumber}` },
@@ -89,19 +109,31 @@ export class StreamingService {
     }
   }
 
-  async findAnime(title: string, titleEnglish?: string, anilistId?: string) {
-    this.logger.debug(`Finding Anime: ${title}`);
-    
-    // Check cache first (implementation omitted for brevity, but recommended)
-    
-    const results = await this.consumetService.search(title);
-    if (results.length > 0) return results;
+  /**
+   * Proxy Stream to bypass CORS and 403s
+   */
+  async proxyStream(url: string, referer: string, res: any, req: any) {
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          Referer: referer,
+          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
+        },
+        responseType: "stream",
+        timeout: 10000,
+      });
 
-    if (titleEnglish) {
-      const resultsEng = await this.consumetService.search(titleEnglish);
-      if (resultsEng.length > 0) return resultsEng;
+      // Forward headers
+      res.set("Content-Type", response.headers["content-type"]);
+      if (response.headers["content-length"]) {
+        res.set("Content-Length", response.headers["content-length"]);
+      }
+      res.set("Access-Control-Allow-Origin", "*");
+
+      response.data.pipe(res);
+    } catch (error) {
+      this.logger.error(`Proxy failed for ${url}: ${error.message}`);
+      res.status(500).send("Proxy error");
     }
-
-    return [];
   }
 }
