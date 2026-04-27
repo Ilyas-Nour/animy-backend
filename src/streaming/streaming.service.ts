@@ -35,11 +35,11 @@ export class StreamingService {
    */
   async getAnimeInfo(animeId: string) {
     try {
-      this.logger.debug(`Fetching info for ${animeId} from Consumet`);
+      this.logger.debug(`Fetching info for ${animeId} from Consumet Mesh`);
       const info = await this.consumetService.getAnimeInfo(animeId);
 
       if (!info) {
-        throw new NotFoundException(`Anime not found on Consumet`);
+        throw new NotFoundException(`Anime not found on current nodes`);
       }
 
       return {
@@ -73,7 +73,7 @@ export class StreamingService {
       // Build the servers list for the frontend
       const servers: any[] = [];
       
-      // 1. Add Consumet Native HLS Sources (Best for Mobile/Speed)
+      // 1. Add Consumet Native HLS Sources (Ultra-Low Latency)
       if (streamData && streamData.sources.length > 0) {
         const referer = streamData.headers.Referer || '';
         const updatedSources = streamData.sources.map((s: any) => {
@@ -85,14 +85,14 @@ export class StreamingService {
         });
 
         servers.push({
-          name: 'HLS (Ultra Speed)',
+          name: 'Main (High Speed)',
           sources: updatedSources,
           provider: 'consumet',
           isNative: true
         });
       }
 
-      // 2. Add External Aggregator Fallbacks (WidLink, VidSrc)
+      // 2. Add Industry-Standard External Backups (2026 Resilience)
       if (malId && episodeNumber) {
         let resolvedMalId = malId;
         if (parseInt(malId, 10) > 100000) {
@@ -100,41 +100,43 @@ export class StreamingService {
            if (mapping) resolvedMalId = mapping.toString();
         }
 
+        // Vidsrc.me - The most stable backup for MAL IDs
+        servers.push({
+          name: 'Mirror (Vidsrc.me)',
+          url: `https://vidsrc.me/embed/anime?mal=${resolvedMalId}&episode=${episodeNumber}`,
+          provider: 'vidsrc-me'
+        });
+
+        // VidLink - Good secondary fallback
         servers.push({ 
           name: 'Mirror (VidLink)', 
           url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'vidlink'
         });
-
-        servers.push({
-          name: 'Mirror (Vidsrc)',
-          url: `https://vidsrc.to/embed/anime/${resolvedMalId}/${episodeNumber}`,
-          provider: 'vidsrc'
-        });
       }
 
       return {
-        provider: "consumet",
+        provider: "mesh",
         sources: streamData?.sources || [],
         servers: servers,
         headers: streamData?.headers
       };
     } catch (error) {
-      this.logger.error(`Error fetching sources: ${error.message}`);
+      this.logger.error(`Node Mesh failure: ${error.message}`);
       
-      // Ultimate Fallback
+      // Critical Failover
       if (malId && episodeNumber) {
         return {
-          provider: "fallback",
+          provider: "failover",
           sources: [],
           servers: [
-            { name: 'VidLink (Mirror)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' },
-            { name: 'Vidsrc (Mirror)', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'vidsrc' }
+            { name: 'Emergency (Vidsrc)', url: `https://vidsrc.me/embed/anime?mal=${malId}&episode=${episodeNumber}`, provider: 'vidsrc-me' },
+            { name: 'Emergency (VidLink)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
           ]
         };
       }
 
-      throw new HttpException("All nodes offline", HttpStatus.SERVICE_UNAVAILABLE);
+      throw new HttpException("Mesh Offline - No active nodes", HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
