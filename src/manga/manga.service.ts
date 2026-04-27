@@ -431,7 +431,9 @@ export class MangaService {
           };
         }
 
-        if (provider === "anilist") {
+        if (provider === "mangapill") {
+          url = `${baseUrl}/manga/mangapill/read?chapterId=${actualId}`;
+        } else if (provider === "anilist") {
           url = `${baseUrl}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`;
         } else {
           url = `${baseUrl}/manga/${provider}/read?chapterId=${actualId}`;
@@ -440,9 +442,14 @@ export class MangaService {
         url = `https://consumet-api-clone.vercel.app/meta/anilist-manga/read?chapterId=${chapterId}&provider=mangadex`;
       }
 
-      const { data } = await axios.get(url);
+      this.logger.debug(`Fetching pages from: ${url}`);
+      const { data } = await axios.get(url, { timeout: 10000 });
       const rawPages = Array.isArray(data) ? data : (data.pages || []);
       
+      if (!rawPages || rawPages.length === 0) {
+        throw new Error("No pages returned from provider");
+      }
+
       return {
         pages: rawPages.map((p: any, i: number) => ({
           img: wrapInProxy(p.img || p.url || p),
