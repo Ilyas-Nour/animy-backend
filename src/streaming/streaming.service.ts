@@ -93,55 +93,71 @@ export class StreamingService {
         });
       }
 
-      // 2. Add New Verified 2026 Mirrors (TMDB + MAL Hybrid)
-      if ((malId || tmdbId) && episodeNumber) {
-        // Use TMDB ID if available (it's more stable for VidSrc 2026)
-        const primaryId = tmdbId || malId;
+      // 2. Add 2026 Verified Mirror Cluster (Solid Solution)
+      if (episodeNumber) {
+        const idToUse = tmdbId || malId;
         
-        servers.push({
-          name: 'Mirror (VidSrc.su)',
-          url: `https://vidsrc-embed.su/embed/tv/${primaryId}/1-${episodeNumber}`,
-          provider: 'vidsrc-su'
-        });
-
-        servers.push({ 
-          name: 'Mirror (VidLink)', 
-          url: `https://vidlink.pro/anime/${primaryId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
-          provider: 'vidlink'
-        });
-        
-        // If we have both, add the other one as a backup
-        if (tmdbId && malId && tmdbId !== malId) {
-             servers.push({
-                name: 'Mirror (MAL ID)',
-                url: `https://vidsrc-embed.su/embed/tv/${malId}/1-${episodeNumber}`,
-                provider: 'vidsrc-mal'
+        if (idToUse) {
+            // New 2026 Domains (Documentation Verified)
+            servers.push({
+                name: 'Mirror 1 (VidSrc.su)',
+                url: `https://vidsrc-embed.su/embed/tv/${idToUse}/1-${episodeNumber}`,
+                provider: 'vidsrc-su'
             });
+
+            servers.push({
+                name: 'Mirror 2 (Vsrc.su)',
+                url: `https://vsrc.su/embed/tv/${idToUse}/1-${episodeNumber}`,
+                provider: 'vsrc'
+            });
+
+            servers.push({
+                name: 'Mirror 3 (VidLink)',
+                url: `https://vidlink.pro/anime/${idToUse}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
+                provider: 'vidlink'
+            });
+
+            servers.push({
+                name: 'Mirror 4 (Vsembed)',
+                url: `https://vsembed.ru/embed/tv/${idToUse}/1-${episodeNumber}`,
+                provider: 'vsembed'
+            });
+            
+            // Backup with MAL ID specifically if we have it
+            if (malId && malId !== idToUse) {
+                servers.push({
+                    name: 'Mirror 5 (MAL-Node)',
+                    url: `https://vidsrc.me/embed/anime/${malId}/${episodeNumber}`,
+                    provider: 'vidsrc-me'
+                });
+            }
         }
       }
 
       return {
-        provider: "mesh-v4",
+        provider: "mesh-v5",
         sources: streamData?.sources || [],
         servers: servers,
         headers: streamData?.headers
       };
     } catch (error) {
-      this.logger.error(`Mesh-v4 failure: ${error.message}`);
+      this.logger.error(`Mesh-v5 failure: ${error.message}`);
       
-      const primaryId = tmdbId || malId;
-      if (primaryId && episodeNumber) {
+      // EMERGENCY FALLBACK (Solid Solution)
+      const idToUse = tmdbId || malId;
+      if (idToUse && episodeNumber) {
         return {
-          provider: "failover",
+          provider: "emergency-mesh",
           sources: [],
           servers: [
-            { name: 'Emergency (VidSrc)', url: `https://vidsrc-embed.su/embed/tv/${primaryId}/1-${episodeNumber}`, provider: 'vidsrc-su' },
-            { name: 'Emergency (VidLink)', url: `https://vidlink.pro/anime/${primaryId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
+            { name: 'Emergency 1 (VidSrc)', url: `https://vidsrc-embed.su/embed/tv/${idToUse}/1-${episodeNumber}`, provider: 'vidsrc-su' },
+            { name: 'Emergency 2 (Vsrc)', url: `https://vsrc.su/embed/tv/${idToUse}/1-${episodeNumber}`, provider: 'vsrc' },
+            { name: 'Emergency 3 (VidLink)', url: `https://vidlink.pro/anime/${idToUse}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
           ]
         };
       }
 
-      throw new HttpException("Mesh Offline", HttpStatus.SERVICE_UNAVAILABLE);
+      throw new HttpException("All Streaming Nodes Offline", HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
