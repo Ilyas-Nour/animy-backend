@@ -23,30 +23,42 @@ export class ConsumetService {
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Fast Search: ${query}`);
+      this.logger.debug(`Resilience Search Mesh v5: ${query}`);
       
-      const searchWithTimeout = async (provider: any) => {
+      const searchWithTimeout = async (provider: any, timeout = 6000) => {
         return Promise.race([
           provider.search(query),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
         ]);
       };
 
-      // Try AnimePahe first
+      // Try HiAnime (Zoro) FIRST - Most stable in 2026
       try {
-        const res: any = await searchWithTimeout(this.animepahe);
-        if (res?.results?.length > 0) return res.results;
+        const res: any = await searchWithTimeout(this.hianime);
+        if (res?.results?.length > 0) {
+          this.logger.debug(`Mesh HIT: HiAnime`);
+          return res.results;
+        }
+      } catch (e) {
+        this.logger.warn(`HiAnime search slow: ${e.message}`);
+      }
+
+      // Try AnimePahe second
+      try {
+        const res: any = await searchWithTimeout(this.animepahe, 4000);
+        if (res?.results?.length > 0) {
+          this.logger.debug(`Mesh HIT: AnimePahe`);
+          return res.results;
+        }
       } catch (e) {
         this.logger.warn(`AnimePahe search slow: ${e.message}`);
       }
 
-      // Try HiAnime (Zoro)
+      // Try KickAss as ultimate fallback
       try {
-        const res: any = await searchWithTimeout(this.hianime);
+        const res: any = await searchWithTimeout(this.kickass, 4000);
         if (res?.results?.length > 0) return res.results;
-      } catch (e) {
-        this.logger.warn(`HiAnime search slow: ${e.message}`);
-      }
+      } catch (e) {}
 
       return [];
     } catch (error) {

@@ -67,12 +67,13 @@ export class StreamingService {
 
       // 2. Verified Mirror Cluster (Solid 2026 Solution)
       if (episodeNumber) {
+        const cleanTitle = encodeURIComponent(malId ? '' : 'search'); // Title search fallback logic
         const mirrors = [
           { name: 'Mirror 1 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
           { name: 'Mirror 2 (VidSrc.su)', url: `https://vidsrc.su/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 3 (VidLink)', url: `https://vidlink.pro/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 4 (Vsrc.cc)', url: `https://vidsrc.cc/v2/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 5 (Vidsrc.pm)', url: `https://vidsrc.pm/embed/anime/${malId || episodeId}/${episodeNumber}` },
+          { name: 'Mirror 3 (VidLink)', url: `https://vidlink.pro/embed/anime/${malId || episodeId}/${episodeNumber}?primaryColor=6366f1` },
+          { name: 'Mirror 4 (Vidsrc.pm)', url: `https://vidsrc.pm/embed/anime/${malId || episodeId}/${episodeNumber}` },
+          { name: 'Mirror 5 (Vidsrc.xyz)', url: `https://vidsrc.xyz/embed/anime/${malId || episodeId}/${episodeNumber}` },
         ];
 
         mirrors.forEach(m => {
