@@ -185,14 +185,15 @@ export class MangaService {
         return cachedManga?.chaptersList || [];
       });
 
-      if (chapters && chapters.length > 0) {
-        const sortedChapters = chapters.sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber));
+      if (chapters && Array.isArray(chapters) && chapters.length > 0) {
+        const sortedChapters = (chapters as any[]).sort((a, b) => Number(b.chapterNumber) - Number(a.chapterNumber));
         
         // Background update DB cache if it changed or was empty
-        if (!cachedManga?.chaptersList || cachedManga.chaptersList.length !== sortedChapters.length) {
+        const cachedList = (cachedManga?.chaptersList as any[]) || [];
+        if (!cachedManga?.chaptersList || cachedList.length !== sortedChapters.length) {
             this.prisma.manga.update({ 
               where: { id }, 
-              data: { chaptersList: sortedChapters, lastUpdated: new Date() } 
+              data: { chaptersList: sortedChapters as any, lastUpdated: new Date() } 
             }).catch(e => this.logger.error(`Failed to update chapter cache: ${e.message}`));
         }
 
