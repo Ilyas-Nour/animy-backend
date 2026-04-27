@@ -5,11 +5,10 @@ import { ANIME } from "@consumet/extensions";
 export class ConsumetService {
   private readonly logger = new Logger(ConsumetService.name);
   
-  // Providers list - Industry Standard 2026
-  private readonly zoro = new ANIME.Zoro();
-  private readonly gogo = new ANIME.Gogoanime();
-  private readonly enime = new ANIME.Enime();
+  // Providers list - Industry Standard 2026 (Updated Naming)
+  private readonly hianime = new ANIME.Hianime();
   private readonly animepahe = new ANIME.AnimePahe();
+  private readonly animekai = new ANIME.AnimeKai();
 
   /**
    * Search across all top providers
@@ -18,20 +17,20 @@ export class ConsumetService {
     try {
       this.logger.debug(`Searching for: ${query}`);
       
-      // Try Zoro (HiAnime) first - Best metadata/images
+      // Try HiAnime first - Best metadata/images
       try {
-        const zoroRes = await this.zoro.search(query);
-        if (zoroRes.results.length > 0) return zoroRes.results;
+        const hianimeRes = await this.hianime.search(query);
+        if (hianimeRes.results.length > 0) return hianimeRes.results;
       } catch (e) {
-        this.logger.warn(`Zoro search failed: ${e.message}`);
+        this.logger.warn(`HiAnime search failed: ${e.message}`);
       }
 
-      // Fallback to GogoAnime
+      // Fallback to AnimePahe (Very stable in 2026)
       try {
-        const gogoRes = await this.gogo.search(query);
-        if (gogoRes.results.length > 0) return gogoRes.results;
+        const paheRes = await this.animepahe.search(query);
+        if (paheRes.results.length > 0) return paheRes.results;
       } catch (e) {
-        this.logger.warn(`Gogo search failed: ${e.message}`);
+        this.logger.warn(`AnimePahe search failed: ${e.message}`);
       }
 
       return [];
@@ -48,20 +47,20 @@ export class ConsumetService {
     try {
       this.logger.debug(`Fetching info for ID: ${id}`);
       
-      // Try Zoro first
+      // Try HiAnime first
       try {
-        const info = await this.zoro.fetchAnimeInfo(id);
+        const info = await this.hianime.fetchAnimeInfo(id);
         if (info) return info;
       } catch (e) {
-        this.logger.warn(`Zoro info failed for ${id}: ${e.message}`);
+        this.logger.warn(`HiAnime info failed for ${id}: ${e.message}`);
       }
 
-      // Try Gogo fallback
+      // Try AnimePahe fallback
       try {
-        const info = await this.gogo.fetchAnimeInfo(id);
+        const info = await this.animepahe.fetchAnimeInfo(id);
         if (info) return info;
       } catch (e) {
-        this.logger.warn(`Gogo info failed for ${id}: ${e.message}`);
+        this.logger.warn(`AnimePahe info failed for ${id}: ${e.message}`);
       }
 
       return null;
@@ -72,25 +71,23 @@ export class ConsumetService {
   }
 
   /**
-   * Get Streaming Sources (The Gold Standard)
+   * Get Streaming Sources
    */
-  async getEpisodeSources(episodeId: string, provider: 'zoro' | 'gogo' = 'zoro') {
+  async getEpisodeSources(episodeId: string, provider: 'hianime' | 'animepahe' = 'hianime') {
     try {
       this.logger.debug(`Fetching sources for EP: ${episodeId} using ${provider}`);
       
       let sources: any = null;
       
-      if (provider === 'zoro') {
+      if (provider === 'hianime') {
         try {
-          sources = await this.zoro.fetchEpisodeSources(episodeId);
+          sources = await this.hianime.fetchEpisodeSources(episodeId);
         } catch (e) {
-          this.logger.warn(`Zoro sources failed: ${e.message}. Trying Gogo...`);
-          // Note: In real life, episode IDs are different between providers,
-          // but we return this so the StreamingService can handle it.
+          this.logger.warn(`HiAnime sources failed: ${e.message}. Trying AnimePahe...`);
           return null; 
         }
       } else {
-        sources = await this.gogo.fetchEpisodeSources(episodeId);
+        sources = await this.animepahe.fetchEpisodeSources(episodeId);
       }
 
       if (!sources) return null;

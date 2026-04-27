@@ -60,7 +60,7 @@ export class StreamingService {
    */
   async getEpisodeLinks(
     episodeId: string,
-    provider: string = "zoro",
+    provider: string = "hianime",
     proxyBaseUrl?: string,
     malId?: string,
     episodeNumber?: string,
