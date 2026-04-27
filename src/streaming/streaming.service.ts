@@ -35,19 +35,20 @@ export class StreamingService {
   async getTmdbId(title: string): Promise<string | null> {
     try {
       this.logger.debug(`Resolving TMDB ID for: ${title}`);
-      const searchUrl = `https://api.themoviedb.org/3/search/tv?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}`;
+      // Use a more robust search endpoint
+      const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
       const res = await axios.get(searchUrl);
-      if (res.data.results?.length > 0) {
-        return res.data.results[0].id.toString();
-      }
-      return null;
+      const results = res.data.results || [];
+      const bestMatch = results.find((r: any) => r.media_type === 'tv' || r.media_type === 'movie');
+      return bestMatch ? bestMatch.id.toString() : null;
     } catch (e) {
+      this.logger.warn(`TMDB Resolve Failed: ${e.message}`);
       return null;
     }
   }
 
   /**
-   * Resilience Mesh v5: Unified Streaming Resolver
+   * Resilience Mesh v6.1: Unified Streaming Resolver
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -58,18 +59,19 @@ export class StreamingService {
     tmdbId?: string
   ) {
     try {
-      this.logger.debug(`Mesh-v5 Call: ID=${episodeId}, MAL=${malId}, TMDB=${tmdbId}`);
+      this.logger.debug(`Mesh-v6.1 Call: ID=${episodeId}, MAL=${malId}, TMDB=${tmdbId}`);
       
       // Try to resolve TMDB ID if missing (Critical for VidSrc mirrors)
       let finalTmdbId = tmdbId;
-      if (!finalTmdbId || finalTmdbId === 'undefined') {
+      if (!finalTmdbId || finalTmdbId === 'undefined' || finalTmdbId === 'null') {
         const info = await this.consumetService.getAnimeInfo(episodeId);
-        if (info?.title) {
-          finalTmdbId = await this.getTmdbId(typeof info.title === 'string' ? info.title : info.title.english || info.title.romaji);
+        const searchTitle = typeof info?.title === 'string' ? info.title : info?.title?.english || info?.title?.romaji;
+        if (searchTitle) {
+          finalTmdbId = await this.getTmdbId(searchTitle);
         }
       }
 
-      const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime"); // HiAnime is primary now
+      const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime");
       const servers: any[] = [];
       
       // 1. Primary Node (HLS via Proxy)
@@ -94,15 +96,18 @@ export class StreamingService {
       // 2. Verified 2026 Mirror Cluster (Solid Solution)
       if (episodeNumber) {
         const mirrors = [
+          // VIDLINK: NO /embed in the path! Correct: vidlink.pro/anime/{malId}/{ep}
           { name: 'Mirror 1 (VidLink)', url: `https://vidlink.pro/anime/${malId || episodeId}/${episodeNumber}/sub?fallback=true` },
-          { name: 'Mirror 2 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 3 (VidSrc.su)', url: `https://vidsrc-embed.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
-          { name: 'Mirror 4 (Vsrc.su)', url: `https://vsrc.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
+          { name: 'Mirror 2 (VidSrc.su)', url: `https://vidsrc-embed.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
+          { name: 'Mirror 3 (Vsrc.su)', url: `https://vsrc.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
+          { name: 'Mirror 4 (Vidsrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
           { name: 'Mirror 5 (VidSrc.pm)', url: `https://vidsrc.pm/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
         ];
 
         mirrors.forEach(m => {
-          if (m.url.includes('undefined') || (m.url.includes('/tv//') && !malId)) return;
+          // Skip broken mirrors if ID is missing
+          if (m.url.includes('/tv//') && !m.url.includes('vidlink')) return;
+          
           servers.push({
             name: m.name,
             url: m.url,
@@ -113,13 +118,13 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v5",
+        provider: "mesh-v6.1",
         sources: streamData?.sources || [],
         servers: servers,
         headers: streamData?.headers
       };
     } catch (error) {
-      this.logger.error(`Mesh-v5 failure: ${error.message}`);
+      this.logger.error(`Mesh-v6.1 failure: ${error.message}`);
       
       // Emergency Mirror Cluster (VidLink is most reliable for MAL)
       if (malId && episodeNumber) {
