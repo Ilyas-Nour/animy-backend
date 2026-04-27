@@ -73,7 +73,10 @@ export class AnimeService {
         cachedAnime &&
         cachedAnime.lastUpdated > sevenDaysAgo &&
         cachedAnime.imageUrl &&
-        cachedAnime.synopsis
+        cachedAnime.synopsis &&
+        cachedAnime.idMal && // Ensure we have the MAL ID for streaming
+        cachedAnime.characters && // Ensure deep data exists
+        (cachedAnime.characters as any[]).length > 0
       ) {
         // DB Filter Check (Simple check for Hentai if genres stored)
         const isRestricted =
@@ -89,7 +92,7 @@ export class AnimeService {
           );
         }
 
-        this.logger.debug(`DB HIT: Anime ${id}`);
+        this.logger.debug(`DB HIT (DEEP): Anime ${id}`);
         return this.mapDbToResponse(cachedAnime);
       }
 
