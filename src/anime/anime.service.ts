@@ -347,7 +347,8 @@ export class AnimeService {
 
   private mapDbToResponse(dbAnime: any) {
     return {
-      mal_id: dbAnime.id,
+      id: dbAnime.id,
+      mal_id: dbAnime.idMal || dbAnime.id,
       anilistId: dbAnime.id,
       idMal: dbAnime.idMal || dbAnime.id,
       title: dbAnime.title,
