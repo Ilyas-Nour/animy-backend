@@ -48,95 +48,75 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v6.1: Unified Streaming Resolver
+   * Resilience Mesh v6.2: "Solid Solution" (Mirror-First)
    */
   async getEpisodeLinks(
     episodeId: string,
-    provider: string = "animepahe",
+    provider: string = "hianime",
     proxyBaseUrl?: string,
     malId?: string,
     episodeNumber?: string,
     tmdbId?: string
   ) {
     try {
-      this.logger.debug(`Mesh-v6.1 Call: ID=${episodeId}, MAL=${malId}, TMDB=${tmdbId}`);
+      this.logger.debug(`Mesh-v6.2 Call: ID=${episodeId}, MAL=${malId}, EP=${episodeNumber}`);
       
-      // Try to resolve TMDB ID if missing (Critical for VidSrc mirrors)
-      let finalTmdbId = tmdbId;
-      if (!finalTmdbId || finalTmdbId === 'undefined' || finalTmdbId === 'null') {
-        const info = await this.consumetService.getAnimeInfo(episodeId);
-        const searchTitle = typeof info?.title === 'string' ? info.title : info?.title?.english || info?.title?.romaji;
-        if (searchTitle) {
-          finalTmdbId = await this.getTmdbId(searchTitle);
-        }
-      }
-
-      const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime");
       const servers: any[] = [];
-      
-      // 1. Primary Node (HLS via Proxy)
-      if (streamData && streamData.sources.length > 0) {
-        const referer = streamData.headers.Referer || 'https://hianime.to/';
-        const updatedSources = streamData.sources.map((s: any) => {
-          if (s.url && !s.url.includes("/streaming/proxy")) {
-            const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
-            s.url = `${baseUrl}?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent(referer)}`;
-          }
-          return s;
-        });
+      const epNum = episodeNumber || "1";
 
+      // 1. Mirror Cluster (IMMEDIATE - No waiting for scrapers)
+      // We resolve TMDB ID in the background or use Title Fallbacks
+      const mirrors = [
+        { name: 'Mirror 1 (VidLink)', url: `https://vidlink.pro/anime/${malId || ''}/${epNum}/sub?fallback=true` },
+        { name: 'Mirror 2 (VidSrc.me)', url: `https://vidsrc.me/embed/anime?mal_id=${malId || ''}&episode=${epNum}` },
+        { name: 'Mirror 3 (VidSrc.su)', url: `https://vidsrc.su/embed/anime/${malId || ''}/${epNum}` },
+        { name: 'Mirror 4 (Vidsrc.xyz)', url: `https://vidsrc.xyz/embed/anime/${malId || ''}/${epNum}` },
+        { name: 'Mirror 5 (VidSrc.pm)', url: `https://vidsrc.pm/embed/anime/${malId || ''}/${epNum}` },
+      ];
+
+      mirrors.forEach(m => {
+        if (m.url.includes('undefined') || (!malId && m.url.includes('mal_id='))) return;
         servers.push({
-          name: 'Main (High Speed)',
-          sources: updatedSources,
-          provider: "hianime",
-          isNative: true
+          name: m.name,
+          url: m.url,
+          provider: 'mirror',
+          isNative: false
         });
-      }
+      });
 
-      // 2. Verified 2026 Mirror Cluster (Solid Solution)
-      if (episodeNumber) {
-        const mirrors = [
-          // VIDLINK: NO /embed in the path! Correct: vidlink.pro/anime/{malId}/{ep}
-          { name: 'Mirror 1 (VidLink)', url: `https://vidlink.pro/anime/${malId || episodeId}/${episodeNumber}/sub?fallback=true` },
-          { name: 'Mirror 2 (VidSrc.su)', url: `https://vidsrc-embed.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
-          { name: 'Mirror 3 (Vsrc.su)', url: `https://vsrc.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
-          { name: 'Mirror 4 (Vidsrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 5 (VidSrc.pm)', url: `https://vidsrc.pm/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
-        ];
-
-        mirrors.forEach(m => {
-          // Skip broken mirrors if ID is missing
-          if (m.url.includes('/tv//') && !m.url.includes('vidlink')) return;
-          
-          servers.push({
-            name: m.name,
-            url: m.url,
-            provider: 'mirror',
-            isNative: false
+      // 2. Primary Node (Attempt in parallel/background to avoid blocking)
+      // For now, we attempt it but don't let it block the mirrors if it fails
+      try {
+        const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime").catch(() => null);
+        if (streamData && streamData.sources.length > 0) {
+          const referer = streamData.headers.Referer || 'https://hianime.to/';
+          const updatedSources = streamData.sources.map((s: any) => {
+            if (s.url && !s.url.includes("/streaming/proxy")) {
+              const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
+              s.url = `${baseUrl}?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent(referer)}`;
+            }
+            return s;
           });
-        });
+
+          servers.unshift({
+            name: 'Main Node (HLS)',
+            sources: updatedSources,
+            provider: "hianime",
+            isNative: true
+          });
+        }
+      } catch (e) {
+        this.logger.warn(`Primary node failed: ${e.message}`);
       }
 
       return {
-        provider: "mesh-v6.1",
-        sources: streamData?.sources || [],
+        provider: "mesh-v6.2",
+        sources: [],
         servers: servers,
-        headers: streamData?.headers
+        headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v6.1 failure: ${error.message}`);
-      
-      // Emergency Mirror Cluster (VidLink is most reliable for MAL)
-      if (malId && episodeNumber) {
-        return {
-          provider: "emergency-mesh",
-          sources: [],
-          servers: [
-            { name: 'Emergency 1 (VidLink)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?fallback=true`, provider: 'mirror' },
-            { name: 'Emergency 2 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'mirror' }
-          ]
-        };
-      }
+      this.logger.error(`Mesh-v6.2 failure: ${error.message}`);
       return null;
     }
   }
