@@ -25,7 +25,7 @@ export class StreamingService {
   async searchAnime(query: string) {
     const results = await this.consumetService.search(query);
     return {
-      provider: "mesh-v2",
+      provider: "mesh-v3",
       results: results || [],
     };
   }
@@ -43,7 +43,7 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v2",
+        provider: "mesh-v3",
         ...info,
       };
     } catch (error) {
@@ -73,7 +73,7 @@ export class StreamingService {
       // Build the servers list for the frontend
       const servers: any[] = [];
       
-      // 1. Add AllAnime Native HLS (The 2026 Gold Standard)
+      // 1. Add AllAnime Native HLS (Primary 2026 Node)
       if (streamData && streamData.sources.length > 0) {
         const referer = streamData.headers.Referer || 'https://allanime.site/';
         const updatedSources = streamData.sources.map((s: any) => {
@@ -92,7 +92,7 @@ export class StreamingService {
         });
       }
 
-      // 2. Add New Verified Mirrors (April 2026 Resilient)
+      // 2. Add New Verified 2026 Mirrors (From Official Docs)
       if (malId && episodeNumber) {
         let resolvedMalId = malId;
         if (parseInt(malId, 10) > 100000) {
@@ -100,14 +100,15 @@ export class StreamingService {
            if (mapping) resolvedMalId = mapping.toString();
         }
 
-        // New VidSrc domain from screenshot: vsembed.su
+        // New VidSrc domain from Docs: vidsrc-embed.su
+        // Using the TV path pattern: /embed/tv/{id}/1-{episode}
         servers.push({
           name: 'Mirror (VidSrc.su)',
-          url: `https://vsembed.su/embed/anime?mal=${resolvedMalId}&episode=${episodeNumber}`,
-          provider: 'vsembed'
+          url: `https://vidsrc-embed.su/embed/tv/${resolvedMalId}/1-${episodeNumber}`,
+          provider: 'vidsrc-su'
         });
 
-        // VidLink - Secondary fallback
+        // VidLink - Optimized with MAL ID
         servers.push({ 
           name: 'Mirror (VidLink)', 
           url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
@@ -116,21 +117,21 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v2",
+        provider: "mesh-v3",
         sources: streamData?.sources || [],
         servers: servers,
         headers: streamData?.headers
       };
     } catch (error) {
-      this.logger.error(`Mesh-v2 failure: ${error.message}`);
+      this.logger.error(`Mesh-v3 failure: ${error.message}`);
       
-      // Emergency Failover
+      // Emergency Failover with new 2026 endpoints
       if (malId && episodeNumber) {
         return {
           provider: "failover",
           sources: [],
           servers: [
-            { name: 'Emergency (VidSrc)', url: `https://vsembed.su/embed/anime?mal=${malId}&episode=${episodeNumber}`, provider: 'vsembed' },
+            { name: 'Emergency (VidSrc)', url: `https://vidsrc-embed.su/embed/tv/${malId}/1-${episodeNumber}`, provider: 'vidsrc-su' },
             { name: 'Emergency (VidLink)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
           ]
         };
@@ -146,10 +147,6 @@ export class StreamingService {
 
   async findAnimeByTitle(title: string, titleEnglish?: string, anilistId?: number) {
     try {
-      if (anilistId) {
-        // We'll rely on the search engine for now since HiAnime mapping is unstable during the sweep
-      }
-
       const results = await this.consumetService.search(title);
       return results;
     } catch (error) {
