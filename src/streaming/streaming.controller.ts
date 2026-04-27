@@ -120,6 +120,6 @@ export class StreamingController {
     }
 
     const res = req.res;
-    return this.streamingService.proxyStream(url, referer, res);
+    return this.streamingService.proxyStream(url, referer, res, req);
   }
 }

@@ -104,19 +104,45 @@ export class StreamingService {
         return source;
       });
 
-      // HIGH-RELIABILITY IFRAME GENERATION (VidLink)
+      // HIGH-RELIABILITY IFRAME GENERATION (Multi-Server)
       // This is the most stable way to stream today
       let iframeUrl = (sources as any)?.iframeUrl || null;
+      const servers: any[] = [];
+
+      // 1. Add HiAnime Native (if sources exist)
+      if (updatedSources.length > 0) {
+        servers.push({ name: 'HiAnime (Native)', provider: 'hianime' });
+      }
+
       if (malId && episodeNumber) {
-        // If the ID looks like an AniList ID (very high value) or the handshake fails,
-        // we try to resolve the real MAL ID.
         let resolvedMalId = malId;
-        if (parseInt(malId, 10) > 100000) { // Simple heuristic: MAL IDs are usually smaller than AniList IDs for newer shows
+        if (parseInt(malId, 10) > 100000) { 
            const mapping = await this.idMappingService.getMalId(parseInt(malId, 10));
            if (mapping) resolvedMalId = mapping.toString();
         }
 
         iframeUrl = `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}?primaryColor=6366f1`;
+        
+        // Add VidLink as Primary Stable
+        servers.push({ 
+          name: 'VidLink (Stable)', 
+          url: iframeUrl,
+          provider: 'vidlink'
+        });
+
+        // Add Vidsrc.to
+        servers.push({
+          name: 'Vidsrc.to (Fast)',
+          url: `https://vidsrc.to/embed/anime/${resolvedMalId}/${episodeNumber}`,
+          provider: 'vidsrc'
+        });
+
+        // Add Vidsrc.me
+        servers.push({
+          name: 'Vidsrc.me (Alternative)',
+          url: `https://vidsrc.me/embed/anime/${resolvedMalId}/${episodeNumber}`,
+          provider: 'vidsrc'
+        });
       }
 
       return {
@@ -124,6 +150,7 @@ export class StreamingService {
         ...sources,
         sources: updatedSources,
         iframeUrl: iframeUrl,
+        servers: servers,
       };
     } catch (error) {
       this.logger.error(
@@ -138,11 +165,16 @@ export class StreamingService {
            if (mapping) resolvedMalId = mapping.toString();
         }
         
-        this.logger.log(`Using VidLink fallback for MAL ID: ${resolvedMalId}, EP: ${episodeNumber}`);
+        this.logger.log(`Using Multi-Server fallback for MAL ID: ${resolvedMalId}, EP: ${episodeNumber}`);
         return {
           provider: "fallback",
           sources: [],
           iframeUrl: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}?primaryColor=6366f1`,
+          servers: [
+             { name: 'VidLink (Stable)', url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}?primaryColor=6366f1`, provider: 'vidlink' },
+             { name: 'Vidsrc.to (Fast)', url: `https://vidsrc.to/embed/anime/${resolvedMalId}/${episodeNumber}`, provider: 'vidsrc' },
+             { name: 'Vidsrc.me (Alternative)', url: `https://vidsrc.me/embed/anime/${resolvedMalId}/${episodeNumber}`, provider: 'vidsrc' }
+          ]
         };
       }
 
@@ -156,8 +188,8 @@ export class StreamingService {
   /**
    * Proxies a stream request
    */
-  async proxyStream(url: string, referer: string, res: any) {
-    return this.streamingProxyService.proxy(url, referer, res);
+  async proxyStream(url: string, referer: string, res: any, req?: any) {
+    return this.streamingProxyService.proxy(url, referer, res, req);
   }
 
   /**

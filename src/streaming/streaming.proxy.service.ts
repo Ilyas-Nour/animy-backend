@@ -10,29 +10,30 @@ export class StreamingProxyService {
    * Proxies a request to a remote video source and pipes result to response
    * Rewrites manifest files to proxy chunks as well
    */
-  async proxy(url: string, referer: string, res: Response) {
+  async proxy(url: string, referer: string, res: Response, req?: any) {
     try {
       const urlObj = new URL(url);
       const origin = `${urlObj.protocol}//${urlObj.host}`;
 
+      const headers: any = {
+        Referer: referer || "https://hianime.to/",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        Accept: "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        Origin: referer ? new URL(referer).origin : origin,
+      };
+
+      // Forward Range header if present
+      if (req?.headers?.range) {
+        headers.Range = req.headers.range;
+      }
+
       const response = await axios.get(url, {
-        headers: {
-          Referer: referer || "https://hianime.to/",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-          Accept: "*/*",
-          "Accept-Language": "en-US,en;q=0.9",
-          Origin: referer ? new URL(referer).origin : origin,
-          "Sec-Ch-Ua":
-            '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-          "Sec-Ch-Ua-Mobile": "?0",
-          "Sec-Ch-Ua-Platform": '"Windows"',
-          "Sec-Fetch-Dest": "empty",
-          "Sec-Fetch-Mode": "cors",
-          "Sec-Fetch-Site": "cross-site",
-        },
+        headers,
         responseType: "stream",
-        timeout: 10000,
+        timeout: 15000,
+        validateStatus: (status) => status >= 200 && status < 300 || status === 206,
       });
 
       // Forward relevant headers
@@ -46,6 +47,15 @@ export class StreamingProxyService {
       res.setHeader("Content-Type", contentType);
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cache-Control", "public, max-age=3600");
+
+      if (response.headers["content-range"]) {
+          res.setHeader("Content-Range", response.headers["content-range"]);
+          res.status(HttpStatus.PARTIAL_CONTENT);
+      }
+      
+      if (response.headers["content-length"]) {
+          res.setHeader("Content-Length", response.headers["content-length"]);
+      }
 
       // If it's a manifest file, we might need to rewrite it
       if (
