@@ -1,212 +1,142 @@
 import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import axios from "axios";
+import * as cheerio from "cheerio";
+import * as CryptoJS from "crypto-js";
+import * as qs from "qs";
 
 @Injectable()
 export class HiAnimeService {
   private readonly logger = new Logger(HiAnimeService.name);
-  // Use multi-host failover to guarantee uptime.
-  private readonly apiHosts = [
-    "https://aniwatch-api-net.vercel.app/api/v2/hianime",
-    "https://hianime-api.vercel.app/anime",
-  ];
+  private readonly baseUrl = "https://hianime.to";
+  
+  // Headers to mimic a real browser
+  private readonly headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://hianime.to/",
+    "X-Requested-With": "XMLHttpRequest"
+  };
 
+  /**
+   * Search for anime directly on HiAnime
+   */
   async search(query: string) {
-    for (const host of this.apiHosts) {
-      try {
-        // v2 API format: /search?q={query}
-        const url = `${host}/search?q=${encodeURIComponent(query)}`;
-        const { data } = await axios.get(url, { timeout: 8000 });
-
-        // V2 returns data.data.animes (or sometimes results depending on host version)
-        const rawResults =
-          data.data?.animes || data.data?.results || data.data?.response || [];
-
-        if (rawResults.length > 0) {
-          return {
-            results: rawResults.map((item: any) => ({
-              id: item.id,
-              title: item.title || item.name,
-              image: item.poster || item.image,
-              url: `/anime/${item.id}`,
-            })),
-          };
-        }
-      } catch (error) {
-        this.logger.debug(`Search failed on ${host}: ${error.message}`);
-      }
-    }
-    return { results: [] };
-  }
-
-  async fetchAnimeInfo(id: string) {
-    for (const host of this.apiHosts) {
-      try {
-        const url = `${host}/anime/${id}`;
-        const { data } = await axios.get(url, { timeout: 8000 });
-
-        if (data.success && data.data) {
-          // v2 returns data.anime.info
-          const info = data.data.anime?.info || data.data;
-
-          // Fetch episodes -> v2 is /anime/{id}/episodes or /episodes/{id} depending on the exact implementation fork
-          let episodesUrl = `${host}/anime/${id}/episodes`;
-          if (host.includes("hianime-api."))
-            episodesUrl = `${host}/episodes/${id}`;
-
-          const episodesData = await axios.get(episodesUrl);
-
-          let episodes = [];
-          // v2 returns data.episodes
-          const rawEpisodes =
-            episodesData.data.data?.episodes || episodesData.data.data || [];
-
-          if (Array.isArray(rawEpisodes)) {
-            episodes = rawEpisodes.map((ep: any) => ({
-              id: ep.episodeId || ep.id,
-              number: ep.number || ep.episodeNumber,
-              title: ep.title,
-              isFiller: ep.isFiller,
-              url: `/watch/${ep.episodeId || ep.id}`,
-            }));
-          }
-
-          return {
-            id: info.id || id,
-            title: info.name || info.title,
-            image: info.poster || info.image,
-            description: info.description || info.synopsis,
-            episodes: episodes,
-          };
-        }
-      } catch (error) {
-        this.logger.debug(`Info fetch failed on ${host}: ${error.message}`);
-      }
-    }
-    return null;
-  }
-
-  async fetchEpisodeSources(episodeId: string) {
-    for (const host of this.apiHosts) {
-      try {
-        // 1. Try default
-        const sources = await this.fetchSourceFromApi(host, episodeId);
-        if (sources.sources && sources.sources.length > 0) return sources;
-
-        // 2. Fetch server list
-        this.logger.warn(
-          `Default server failed on ${host} for ${episodeId}, fetching server list...`,
-        );
-        let serversUrl = `${host}/episode/servers?animeEpisodeId=${encodeURIComponent(episodeId)}`;
-        if (host.includes("hianime-api."))
-          serversUrl = `${host}/servers?id=${encodeURIComponent(episodeId)}`;
-
-        const { data: serverData } = await axios.get(serversUrl);
-
-        if (serverData.success && serverData.data) {
-          const servers = [
-            ...(serverData.data.sub || []).map((s: any) => ({
-              ...s,
-              type: "sub",
-            })),
-            ...(serverData.data.dub || []).map((s: any) => ({
-              ...s,
-              type: "dub",
-            })),
-          ];
-
-          const candidates = servers.sort((a: any, b: any) => {
-            const nameA = a.serverName || a.name || "";
-            const nameB = b.serverName || b.name || "";
-            if (nameA.includes("HD-2") || nameA.includes("Vidstreaming"))
-              return -1;
-            if (nameB.includes("HD-2") || nameB.includes("Vidstreaming"))
-              return 1;
-            return 0;
-          });
-
-          for (const server of candidates) {
-            const sName = server.serverName || server.name;
-            if (!sName) continue;
-
-            try {
-              const result = await this.fetchSourceFromApi(
-                host,
-                episodeId,
-                sName,
-                server.type,
-              );
-              if (result.sources && result.sources.length > 0) return result;
-            } catch (e) {
-              // ignore and continue
-            }
-          }
-        }
-      } catch (error) {
-        this.logger.debug(
-          `Fetching sources failed on ${host}: ${error.message}`,
-        );
-      }
-    }
-    throw new HttpException(
-      `Failed to get sources from all providers`,
-      HttpStatus.INTERNAL_SERVER_ERROR,
-    );
-  }
-
-  private async fetchSourceFromApi(
-    host: string,
-    id: string,
-    server?: string,
-    type: "sub" | "dub" = "sub",
-  ) {
-    let url = `${host}/episode/sources?animeEpisodeId=${encodeURIComponent(id)}`;
-    if (host.includes("hianime-api."))
-      url = `${host}/stream?id=${encodeURIComponent(id)}`;
-
-    if (server) url += `&server=${encodeURIComponent(server)}`;
-    if (server && type) url += `&category=${type}&type=${type}`; // v2 uses category, v1 uses type
-
     try {
-      const { data } = await axios.get(url, { timeout: 8000 });
+      const url = `${this.baseUrl}/search?keyword=${encodeURIComponent(query)}`;
+      const { data } = await axios.get(url, { headers: this.headers });
+      const $ = cheerio.load(data);
+      const results: any[] = [];
 
-      if (data.success && data.data) {
-        const sources = [];
-        const link = data.data.link;
-        if (link && (link.file || link.directUrl)) {
-          sources.push({
-            url: link.directUrl || link.file,
-            isM3U8: link.type === "hls" || link.isM3U8,
-            quality: "auto",
-          });
-        }
+      $(".film_list-wrap .flw-item").each((_, el) => {
+        const item = $(el);
+        const id = item.find(".film-detail .film-name a").attr("href")?.split("/").pop()?.split("?")[0];
+        const title = item.find(".film-detail .film-name a").text().trim();
+        const image = item.find(".film-poster img").attr("data-src");
 
-        if (data.data.sources && Array.isArray(data.data.sources)) {
-          data.data.sources.forEach((s: any) => {
-            sources.push({
-              url: s.url,
-              isM3U8: s.type === "hls" || s.isM3U8,
-              quality: "auto",
-            });
-          });
+        if (id) {
+          results.push({ id, title, image, url: `/anime/${id}` });
         }
+      });
 
-        if (sources.length > 0) {
-          return {
-            headers: { Referer: "https://megacloud.tv" },
-            sources: sources,
-            iframeUrl: data.data.iframeUrl || data.data.link?.iframeUrl || null,
-            subtitles:
-              data.data.tracks?.map((track: any) => ({
-                url: track.file,
-                lang: track.label,
-                kind: track.kind,
-              })) || [],
-          };
-        }
-      }
-    } catch (e) {
-      // ignore error in fetchSourceFromApi
+      return { results };
+    } catch (error) {
+      this.logger.error(`Search failed: ${error.message}`);
+      return { results: [] };
     }
-    return { sources: [] };
+  }
+
+  /**
+   * Get episodes for a specific anime
+   */
+  async fetchAnimeInfo(id: string) {
+    try {
+      // 1. Get the anime page to find the numeric ID
+      const animeUrl = `${this.baseUrl}/${id}`;
+      const { data: pageData } = await axios.get(animeUrl, { headers: this.headers });
+      const $page = cheerio.load(pageData);
+      
+      const title = $page(".an-info-block .film-name").text().trim();
+      const image = $page(".film-poster img").attr("src");
+      const description = $page(".film-description .text").text().trim();
+
+      // Extract the numeric ID from the page (needed for episodes AJAX)
+      // Usually it's in a script or data-id attribute
+      const numericId = $page("#wrapper").attr("data-id") || id.split("-").pop();
+
+      // 2. Fetch episodes via AJAX (HiAnime style)
+      const epUrl = `${this.baseUrl}/ajax/v2/episode/list/${numericId}`;
+      const { data: epData } = await axios.get(epUrl, { headers: this.headers });
+      const $eps = cheerio.load(epData.html);
+      
+      const episodes: any[] = [];
+      $eps(".detail-en-list .ep-item").each((_, el) => {
+        const item = $(el);
+        const epId = item.attr("href")?.split("/").pop();
+        const number = parseInt(item.attr("data-number") || "0");
+        const epTitle = item.attr("title");
+
+        if (epId) {
+          episodes.push({
+            id: epId,
+            number,
+            title: epTitle,
+            url: `/watch/${epId}`
+          });
+        }
+      });
+
+      return { id, title, image, description, episodes };
+    } catch (error) {
+      this.logger.error(`Info fetch failed for ${id}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get streaming sources (The hard part)
+   */
+  async fetchEpisodeSources(episodeId: string) {
+    try {
+      // 1. Get Servers
+      const serversUrl = `${this.baseUrl}/ajax/v2/episode/servers?episodeId=${episodeId.split("?ep=").pop() || episodeId}`;
+      const { data: serversData } = await axios.get(serversUrl, { headers: this.headers });
+      const $ = cheerio.load(serversData.html);
+
+      const servers: any[] = [];
+      $(".server-item").each((_, el) => {
+        const item = $(el);
+        servers.push({
+          id: item.attr("data-id"),
+          serverId: item.attr("data-server-id"),
+          name: item.text().trim(),
+          type: item.closest(".pswp-col").find(".type").text().toLowerCase().includes("sub") ? "sub" : "dub"
+        });
+      });
+
+      // 2. Pick a server (Default to HD-1/Vidstreaming)
+      const targetServer = servers.find(s => s.name.includes("HD-1") || s.name.includes("Vidstreaming")) || servers[0];
+      if (!targetServer) throw new Error("No servers found");
+
+      // 3. Get the Embed ID
+      const sourceUrl = `${this.baseUrl}/ajax/v2/episode/sources?id=${targetServer.id}`;
+      const { data: sourceData } = await axios.get(sourceUrl, { headers: this.headers });
+      
+      // The sourceData.link is an embed URL (e.g., https://megacloud.tv/embed-2/e-1/...)
+      const embedUrl = sourceData.link;
+      if (!embedUrl) throw new Error("No embed link found");
+
+      // 4. Return the data. We'll let the frontend handle the iframe if possible,
+      // but we provide the iframeUrl directly.
+      return {
+        headers: { Referer: this.baseUrl },
+        sources: [], // We'll use the iframe for now as it's more stable
+        iframeUrl: embedUrl,
+        servers: servers.map(s => ({ name: s.name, type: s.type, id: s.id }))
+      };
+    } catch (error) {
+      this.logger.error(`Source fetch failed for ${episodeId}: ${error.message}`);
+      throw new HttpException("Failed to get sources", HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }
