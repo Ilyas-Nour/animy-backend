@@ -48,7 +48,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v7.1: Final Solid Solution
+   * Resilience Mesh v7.2: Final Solid Solution
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -59,14 +59,31 @@ export class StreamingService {
     tmdbId?: string
   ) {
     try {
-      // 1. Sanitize IDs
       const malId = (malIdParam && malIdParam !== 'undefined' && malIdParam !== 'null' && malIdParam !== '0') ? malIdParam : null;
       const epNum = episodeNumber || "1";
-      this.logger.debug(`Mesh-v7.1 Call: ID=${episodeId}, MAL=${malId}, EP=${epNum}`);
+      this.logger.debug(`Mesh-v7.2 Call: ID=${episodeId}, MAL=${malId}, EP=${epNum}`);
       
       const servers: any[] = [];
 
-      // 2. Verified Mirror Cluster (The Solid Solution)
+      // 1. ANIFY.TV (Primary Resolver)
+      // If we have a malId/anilistId, this is the most reliable way to get sources
+      const anilistId = malId || ((episodeId.length > 5 && !episodeId.includes('-')) ? episodeId : tmdbId);
+      if (anilistId && anilistId !== 'undefined') {
+        try {
+          const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${episodeId}&episodeNumber=${epNum}&id=${anilistId}&subType=sub`;
+          const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
+          if (anifyRes?.data?.sources) {
+            servers.push({
+              name: 'Main (High Speed)',
+              sources: anifyRes.data.sources.map((s: any) => ({ url: s.url, quality: s.quality || 'auto', isM3U8: true })),
+              provider: "anify",
+              isNative: true
+            });
+          }
+        } catch (e) {}
+      }
+
+      // 2. VERIFIED MIRRORS (The Solid Backup)
       if (malId) {
         servers.push({
           name: 'Mirror 1 (VidLink)',
@@ -88,31 +105,29 @@ export class StreamingService {
         });
       }
 
-      // 3. High-Speed Node (Anify)
-      try {
-        const anilistId = (episodeId.length > 5 && !episodeId.includes('-')) ? episodeId : tmdbId;
-        if (anilistId && anilistId !== 'undefined') {
-          const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${episodeId}&episodeNumber=${epNum}&id=${anilistId}&subType=sub`;
-          const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
-          if (anifyRes?.data?.sources) {
-            servers.unshift({
-              name: 'Main (High Speed)',
-              sources: anifyRes.data.sources.map((s: any) => ({ url: s.url, quality: s.quality || 'auto', isM3U8: true })),
-              provider: "anify",
+      // 3. LEGACY NODE (Consumet)
+      if (servers.length < 2) {
+        try {
+          const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime").catch(() => null);
+          if (streamData?.sources?.length) {
+            servers.push({
+              name: 'Mirror 4 (Legacy)',
+              sources: streamData.sources,
+              provider: "hianime",
               isNative: true
             });
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
 
       return {
-        provider: "mesh-v7.1",
+        provider: "mesh-v7.2",
         sources: [],
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v7.1 failure: ${error.message}`);
+      this.logger.error(`Mesh-v7.2 failure: ${error.message}`);
       return null;
     }
   }

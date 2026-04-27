@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { ANIME } from "@consumet/extensions";
+import axios from "axios";
 
 @Injectable()
 export class ConsumetService {
@@ -19,45 +20,24 @@ export class ConsumetService {
   }
 
   /**
-   * Search across top providers with a very strict timeout to prevent 524s
+   * Resilience Search Mesh v6.0: "Solid Solution"
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Resilience Search Mesh v5: ${query}`);
+      this.logger.debug(`Resilience Search Mesh v6.0: ${query}`);
       
-      const searchWithTimeout = async (provider: any, timeout = 6000) => {
-        return Promise.race([
-          provider.search(query),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
-        ]);
-      };
-
-      // Try HiAnime (Zoro) FIRST - Most stable in 2026
+      // 1. Anify.tv (Professional 2026 Choice)
       try {
-        const res: any = await searchWithTimeout(this.hianime);
-        if (res?.results?.length > 0) {
-          this.logger.debug(`Mesh HIT: HiAnime`);
-          return res.results;
+        const anifyUrl = `https://api.anify.tv/search/anime/${encodeURIComponent(query)}`;
+        const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
+        if (anifyRes?.data && Array.isArray(anifyRes.data)) {
+          return anifyRes.data.map((a: any) => ({
+            id: a.id,
+            title: a.title.english || a.title.romaji,
+            image: a.coverImage,
+            provider: 'anify'
+          }));
         }
-      } catch (e) {
-        this.logger.warn(`HiAnime search slow: ${e.message}`);
-      }
-
-      // Try AnimePahe second
-      try {
-        const res: any = await searchWithTimeout(this.animepahe, 4000);
-        if (res?.results?.length > 0) {
-          this.logger.debug(`Mesh HIT: AnimePahe`);
-          return res.results;
-        }
-      } catch (e) {
-        this.logger.warn(`AnimePahe search slow: ${e.message}`);
-      }
-
-      // Try KickAss as ultimate fallback
-      try {
-        const res: any = await searchWithTimeout(this.kickass, 4000);
-        if (res?.results?.length > 0) return res.results;
       } catch (e) {}
 
       return [];
@@ -68,28 +48,36 @@ export class ConsumetService {
   }
 
   /**
-   * Get Anime Info with timeout protection
+   * Get Anime Info (Anify First)
    */
   async getAnimeInfo(id: string) {
     try {
-      const fetchWithTimeout = async (provider: any) => {
-        return Promise.race([
-          provider.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ]);
-      };
-
-      try {
-        const info = await fetchWithTimeout(this.animepahe);
-        if (info) return info;
-      } catch (e) {
-        try {
-          const info = await fetchWithTimeout(this.hianime);
-          if (info) return info;
-        } catch (e2) {
-          this.logger.warn(`Info fetch failed`);
+      // 1. If it's a numeric ID, use Anify
+      if (!isNaN(Number(id))) {
+        const anifyUrl = `https://api.anify.tv/info/${id}`;
+        const anifyRes = await axios.get(anifyUrl, { timeout: 5000 }).catch(() => null);
+        if (anifyRes?.data) {
+          return {
+            id: anifyRes.data.id,
+            title: anifyRes.data.title,
+            episodes: anifyRes.data.episodes?.data?.map((e: any) => ({
+              id: e.id,
+              episodeId: e.id,
+              number: e.number,
+              title: e.title
+            })) || []
+          };
         }
       }
+
+      // 2. Traditional Fallback
+      try {
+        const info = await Promise.race([
+          this.hianime.fetchAnimeInfo(id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]).catch(() => null);
+        if (info) return info;
+      } catch (e) {}
 
       return null;
     } catch (error) {
