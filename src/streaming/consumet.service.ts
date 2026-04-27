@@ -5,24 +5,24 @@ import { ANIME } from "@consumet/extensions";
 export class ConsumetService {
   private readonly logger = new Logger(ConsumetService.name);
   
-  // The "Last Stand" nodes of April 2026
-  private readonly allanime = new ANIME.AllAnime();
-  private readonly hianime = new ANIME.Hianime();
+  // The "Stable Mesh" nodes of April 2026
+  private readonly animekai = new ANIME.AnimeKai();
   private readonly animepahe = new ANIME.AnimePahe();
+  private readonly hianime = new ANIME.Hianime();
 
   /**
-   * Search across top providers with emergency failover
+   * Search across top providers with failover
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Emergency Search: ${query}`);
+      this.logger.debug(`Searching Mesh: ${query}`);
       
-      // AllAnime - The most stable node in April 2026
+      // AnimeKai - Extremely stable in 2026
       try {
-        const res = await this.allanime.search(query);
+        const res = await this.animekai.search(query);
         if (res.results.length > 0) return res.results;
       } catch (e) {
-        this.logger.warn(`AllAnime node failed: ${e.message}`);
+        this.logger.warn(`AnimeKai node failed: ${e.message}`);
       }
 
       // AnimePahe fallback
@@ -47,12 +47,20 @@ export class ConsumetService {
     try {
       this.logger.debug(`Fetching info for ID: ${id}`);
       
-      // Try AllAnime first
+      // Try AnimeKai first
       try {
-        const info = await this.allanime.fetchAnimeInfo(id);
+        const info = await this.animekai.fetchAnimeInfo(id);
         if (info) return info;
       } catch (e) {
-        this.logger.warn(`AllAnime info node failure: ${e.message}`);
+        this.logger.warn(`AnimeKai info node failure: ${e.message}`);
+      }
+
+      // Fallback to AnimePahe
+      try {
+        const info = await this.animepahe.fetchAnimeInfo(id);
+        if (info) return info;
+      } catch (e) {
+        this.logger.warn(`AnimePahe info node failure: ${e.message}`);
       }
 
       return null;
@@ -63,22 +71,27 @@ export class ConsumetService {
   }
 
   /**
-   * Get Streaming Sources
+   * Get Streaming Sources (High Performance Mesh)
    */
-  async getEpisodeSources(episodeId: string, provider: string = 'allanime') {
+  async getEpisodeSources(episodeId: string, provider: string = 'animekai') {
     try {
       this.logger.debug(`Fetching transmission via: ${provider}`);
       
       let sources: any = null;
       
-      // AllAnime is the king of 2026 uptime
-      if (provider === 'allanime' || true) { 
-        try {
-          sources = await this.allanime.fetchEpisodeSources(episodeId);
-        } catch (e) {
-          this.logger.warn(`AllAnime transmission failed. Mesh destabilized.`);
-          return null; 
+      try {
+        // Try the requested provider (Default AnimeKai)
+        if (provider === 'animekai' || !provider) {
+          sources = await this.animekai.fetchEpisodeSources(episodeId);
+        } else if (provider === 'animepahe') {
+          sources = await this.animepahe.fetchEpisodeSources(episodeId);
+        } else {
+          sources = await this.hianime.fetchEpisodeSources(episodeId);
         }
+      } catch (e) {
+        this.logger.warn(`${provider} transmission failed. Trying secondary mesh...`);
+        // We return null so the StreamingService can handle the mirror failover
+        return null;
       }
 
       if (!sources || !sources.sources) return null;
@@ -91,7 +104,7 @@ export class ConsumetService {
         })),
         subtitles: sources.subtitles || [],
         headers: {
-          Referer: 'https://allanime.site/',
+          Referer: 'https://animekai.to/',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
         }
       };

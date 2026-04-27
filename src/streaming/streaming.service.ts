@@ -60,7 +60,7 @@ export class StreamingService {
    */
   async getEpisodeLinks(
     episodeId: string,
-    provider: string = "allanime",
+    provider: string = "animekai",
     proxyBaseUrl?: string,
     malId?: string,
     episodeNumber?: string,
