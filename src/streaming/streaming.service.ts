@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from "@nestjs/common";
-import { HiAnimeService } from "./hianime.service";
+import { ConsumetService } from "./consumet.service";
 import { StreamingProxyService } from "./streaming.proxy.service";
 import { IdMappingService } from "./id-mapping.service";
 
@@ -14,7 +14,7 @@ export class StreamingService {
   private readonly logger = new Logger(StreamingService.name);
 
   constructor(
-    private readonly hiAnimeService: HiAnimeService,
+    private readonly consumetService: ConsumetService,
     private readonly streamingProxyService: StreamingProxyService,
     private readonly idMappingService: IdMappingService,
   ) {}
@@ -23,9 +23,9 @@ export class StreamingService {
    * Search for an anime on the streaming provider
    */
   async searchAnime(query: string) {
-    const results = await this.findAnimeByTitle(query);
+    const results = await this.consumetService.search(query);
     return {
-      provider: "universal",
+      provider: "consumet",
       results: results || [],
     };
   }
@@ -35,15 +35,15 @@ export class StreamingService {
    */
   async getAnimeInfo(animeId: string) {
     try {
-      this.logger.debug(`Fetching info for ${animeId} from Universal Scraper`);
-      const info = await this.hiAnimeService.fetchAnimeInfo(animeId);
+      this.logger.debug(`Fetching info for ${animeId} from Consumet`);
+      const info = await this.consumetService.getAnimeInfo(animeId);
 
       if (!info) {
-        throw new NotFoundException(`Anime not found on any provider`);
+        throw new NotFoundException(`Anime not found on Consumet`);
       }
 
       return {
-        provider: "universal",
+        provider: "consumet",
         ...info,
       };
     } catch (error) {
@@ -60,7 +60,7 @@ export class StreamingService {
    */
   async getEpisodeLinks(
     episodeId: string,
-    provider: string = "hianime",
+    provider: string = "zoro",
     proxyBaseUrl?: string,
     malId?: string,
     episodeNumber?: string,
@@ -68,17 +68,31 @@ export class StreamingService {
     try {
       this.logger.debug(`Fetching sources for ${episodeId} (MAL: ${malId}, EP: ${episodeNumber})`);
       
-      const scraperResult = await this.hiAnimeService.fetchEpisodeSources(episodeId);
+      const streamData = await this.consumetService.getEpisodeSources(episodeId, provider as any);
 
       // Build the servers list for the frontend
       const servers: any[] = [];
       
-      // 1. Add Scraper Servers (Gogo, AniWatch Mirror)
-      if (scraperResult.servers && scraperResult.servers.length > 0) {
-        servers.push(...scraperResult.servers);
+      // 1. Add Consumet Native HLS Sources (Best for Mobile/Speed)
+      if (streamData && streamData.sources.length > 0) {
+        const referer = streamData.headers.Referer || '';
+        const updatedSources = streamData.sources.map((s: any) => {
+          if (s.url && !s.url.includes("/streaming/proxy")) {
+            const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
+            s.url = `${baseUrl}?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent(referer)}`;
+          }
+          return s;
+        });
+
+        servers.push({
+          name: 'HLS (Ultra Speed)',
+          sources: updatedSources,
+          provider: 'consumet',
+          isNative: true
+        });
       }
 
-      // 2. Add External Aggregator Fallbacks if we have MAL ID
+      // 2. Add External Aggregator Fallbacks (WidLink, VidSrc)
       if (malId && episodeNumber) {
         let resolvedMalId = malId;
         if (parseInt(malId, 10) > 100000) {
@@ -87,24 +101,23 @@ export class StreamingService {
         }
 
         servers.push({ 
-          name: 'VidLink (External)', 
+          name: 'Mirror (VidLink)', 
           url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'vidlink'
         });
 
         servers.push({
-          name: 'Vidsrc.to',
+          name: 'Mirror (Vidsrc)',
           url: `https://vidsrc.to/embed/anime/${resolvedMalId}/${episodeNumber}`,
           provider: 'vidsrc'
         });
       }
 
       return {
-        provider: "universal",
-        sources: scraperResult.sources || [],
-        iframeUrl: scraperResult.iframeUrl || (servers.length > 0 ? servers[0].url : null),
+        provider: "consumet",
+        sources: streamData?.sources || [],
         servers: servers,
-        headers: scraperResult.headers
+        headers: streamData?.headers
       };
     } catch (error) {
       this.logger.error(`Error fetching sources: ${error.message}`);
@@ -114,15 +127,14 @@ export class StreamingService {
         return {
           provider: "fallback",
           sources: [],
-          iframeUrl: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
           servers: [
-            { name: 'VidLink (Safe)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' },
-            { name: 'Vidsrc.to', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'vidsrc' }
+            { name: 'VidLink (Mirror)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' },
+            { name: 'Vidsrc (Mirror)', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'vidsrc' }
           ]
         };
       }
 
-      throw new HttpException("All nodes unreachable", HttpStatus.SERVICE_UNAVAILABLE);
+      throw new HttpException("All nodes offline", HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
@@ -137,11 +149,8 @@ export class StreamingService {
         if (resolvedId) return [{ id: resolvedId, title: title, image: "" }];
       }
 
-      let results = await this.hiAnimeService.search(title);
-      if (results.results.length === 0 && titleEnglish) {
-        results = await this.hiAnimeService.search(titleEnglish);
-      }
-      return results.results;
+      const results = await this.consumetService.search(title);
+      return results;
     } catch (error) {
       this.logger.error(`Search failed for ${title}`, error.message);
       return [];
