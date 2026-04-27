@@ -86,7 +86,7 @@ export class StreamingService {
         });
 
         servers.push({
-          name: 'Main (High Speed)',
+          name: 'VidStreaming (HLS)',
           sources: updatedSources,
           provider: provider,
           isNative: true

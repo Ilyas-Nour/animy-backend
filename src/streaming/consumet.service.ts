@@ -7,13 +7,15 @@ export class ConsumetService {
   
   private readonly animekai = new ANIME.AnimeKai();
   private readonly animepahe = new ANIME.AnimePahe();
-  private readonly gogo = new ANIME.Gogoanime();
+  private readonly kickass = new ANIME.KickAssAnime();
   private readonly hianime = new ANIME.Hianime();
 
   constructor() {
     // Override domains for 2026 stability
     (this.animepahe as any).baseUrl = 'https://animepahe.ru';
-    (this.gogo as any).baseUrl = 'https://gogoanime3.co';
+    (this.kickass as any).baseUrl = 'https://kickassanime.am';
+    (this.hianime as any).baseUrl = 'https://hianime.to';
+    (this.animekai as any).baseUrl = 'https://animekai.to';
   }
 
   /**
@@ -38,12 +40,12 @@ export class ConsumetService {
         this.logger.warn(`AnimePahe search slow: ${e.message}`);
       }
 
-      // Try Gogo secondary
+      // Try HiAnime (Zoro)
       try {
-        const res: any = await searchWithTimeout(this.gogo);
+        const res: any = await searchWithTimeout(this.hianime);
         if (res?.results?.length > 0) return res.results;
       } catch (e) {
-        this.logger.warn(`Gogo search slow: ${e.message}`);
+        this.logger.warn(`HiAnime search slow: ${e.message}`);
       }
 
       return [];
@@ -65,15 +67,12 @@ export class ConsumetService {
         ]);
       };
 
-      // Detect provider from ID format
-      const isGogo = !id.includes('$') && id.split('-').length > 1;
-
       try {
-        const info = await fetchWithTimeout(isGogo ? this.gogo : this.animepahe);
+        const info = await fetchWithTimeout(this.animepahe);
         if (info) return info;
       } catch (e) {
         try {
-          const info = await fetchWithTimeout(this.animekai);
+          const info = await fetchWithTimeout(this.hianime);
           if (info) return info;
         } catch (e2) {
           this.logger.warn(`Info fetch failed`);
@@ -99,15 +98,18 @@ export class ConsumetService {
       };
 
       let sources: any = null;
-      let targetProvider = this.animepahe;
+      let targetProvider: any = this.animepahe;
       let referer = 'https://animepahe.ru/';
 
-      if (provider === 'gogoanime' || provider === 'gogo') {
-        targetProvider = this.gogo;
-        referer = 'https://gogoanime3.co/';
+      if (provider === 'kickassanime' || provider === 'kickass') {
+        targetProvider = this.kickass;
+        referer = 'https://kickassanime.am/';
       } else if (provider === 'animekai') {
         targetProvider = this.animekai;
         referer = 'https://animekai.to/';
+      } else if (provider === 'hianime' || provider === 'zoro') {
+        targetProvider = this.hianime;
+        referer = 'https://hianime.to/';
       }
 
       try {
