@@ -48,7 +48,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v6.2: "Solid Solution" (Mirror-First)
+   * Resilience Mesh v7.0: Anify + Mirrors (Solid Solution)
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -59,19 +59,43 @@ export class StreamingService {
     tmdbId?: string
   ) {
     try {
-      this.logger.debug(`Mesh-v6.2 Call: ID=${episodeId}, MAL=${malId}, EP=${episodeNumber}`);
+      this.logger.debug(`Mesh-v7.0 Call: ID=${episodeId}, MAL=${malId}, EP=${episodeNumber}`);
       
       const servers: any[] = [];
-      const epNum = episodeNumber || "1";
+      const epNum = parseInt(episodeNumber || "1");
 
-      // 1. Mirror Cluster (IMMEDIATE - No waiting for scrapers)
-      // We resolve TMDB ID in the background or use Title Fallbacks
+      // 1. Primary Node (Anify.tv - Professional 2026 Choice)
+      // This works directly with AniList IDs (which the user already has)
+      try {
+        const anilistId = episodeId.length > 5 ? episodeId : tmdbId; // Heuristic for AniList ID
+        if (anilistId) {
+          this.logger.debug(`Anify Resolve: ${anilistId}`);
+          const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${episodeId}&episodeNumber=${epNum}&id=${anilistId}&subType=sub`;
+          const anifyRes = await axios.get(anifyUrl, { timeout: 5000 }).catch(() => null);
+          
+          if (anifyRes?.data?.sources) {
+            const sources = anifyRes.data.sources.map((s: any) => ({
+              url: s.url,
+              quality: s.quality || 'auto',
+              isM3U8: s.url.includes('.m3u8')
+            }));
+
+            servers.push({
+              name: 'Anify (High Speed)',
+              sources: sources,
+              provider: "anify",
+              isNative: true
+            });
+          }
+        }
+      } catch (e) {}
+
+      // 2. Mirror Cluster (Reliable Mirrors)
       const mirrors = [
         { name: 'Mirror 1 (VidLink)', url: `https://vidlink.pro/anime/${malId || ''}/${epNum}/sub?fallback=true` },
         { name: 'Mirror 2 (VidSrc.me)', url: `https://vidsrc.me/embed/anime?mal_id=${malId || ''}&episode=${epNum}` },
         { name: 'Mirror 3 (VidSrc.su)', url: `https://vidsrc.su/embed/anime/${malId || ''}/${epNum}` },
-        { name: 'Mirror 4 (Vidsrc.xyz)', url: `https://vidsrc.xyz/embed/anime/${malId || ''}/${epNum}` },
-        { name: 'Mirror 5 (VidSrc.pm)', url: `https://vidsrc.pm/embed/anime/${malId || ''}/${epNum}` },
+        { name: 'Mirror 4 (Vsrc.su)', url: `https://vsrc.su/embed/tv/${tmdbId || ''}/1-${epNum}` },
       ];
 
       mirrors.forEach(m => {
@@ -84,39 +108,30 @@ export class StreamingService {
         });
       });
 
-      // 2. Primary Node (Attempt in parallel/background to avoid blocking)
-      // For now, we attempt it but don't let it block the mirrors if it fails
-      try {
-        const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime").catch(() => null);
-        if (streamData && streamData.sources.length > 0) {
-          const referer = streamData.headers.Referer || 'https://hianime.to/';
-          const updatedSources = streamData.sources.map((s: any) => {
-            if (s.url && !s.url.includes("/streaming/proxy")) {
-              const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
-              s.url = `${baseUrl}?url=${encodeURIComponent(s.url)}&referer=${encodeURIComponent(referer)}`;
-            }
-            return s;
-          });
-
-          servers.unshift({
-            name: 'Main Node (HLS)',
-            sources: updatedSources,
-            provider: "hianime",
-            isNative: true
-          });
-        }
-      } catch (e) {
-        this.logger.warn(`Primary node failed: ${e.message}`);
+      // 3. HiAnime Fallback
+      if (servers.length < 3) {
+        try {
+          const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime").catch(() => null);
+          if (streamData && streamData.sources.length > 0) {
+            const referer = streamData.headers.Referer || 'https://hianime.to/';
+            servers.push({
+              name: 'HiAnime (Node)',
+              sources: streamData.sources,
+              provider: "hianime",
+              isNative: true
+            });
+          }
+        } catch (e) {}
       }
 
       return {
-        provider: "mesh-v6.2",
+        provider: "mesh-v7.0",
         sources: [],
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v6.2 failure: ${error.message}`);
+      this.logger.error(`Mesh-v7.0 failure: ${error.message}`);
       return null;
     }
   }
