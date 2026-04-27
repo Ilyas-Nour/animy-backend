@@ -30,6 +30,23 @@ export class StreamingService {
   }
 
   /**
+   * Resolve TMDB ID from title (Fallback for mirrors)
+   */
+  async getTmdbId(title: string): Promise<string | null> {
+    try {
+      this.logger.debug(`Resolving TMDB ID for: ${title}`);
+      const searchUrl = `https://api.themoviedb.org/3/search/tv?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}`;
+      const res = await axios.get(searchUrl);
+      if (res.data.results?.length > 0) {
+        return res.data.results[0].id.toString();
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Resilience Mesh v5: Unified Streaming Resolver
    */
   async getEpisodeLinks(
@@ -43,12 +60,21 @@ export class StreamingService {
     try {
       this.logger.debug(`Mesh-v5 Call: ID=${episodeId}, MAL=${malId}, TMDB=${tmdbId}`);
       
-      const streamData = await this.consumetService.getEpisodeSources(episodeId, provider);
+      // Try to resolve TMDB ID if missing (Critical for VidSrc mirrors)
+      let finalTmdbId = tmdbId;
+      if (!finalTmdbId || finalTmdbId === 'undefined') {
+        const info = await this.consumetService.getAnimeInfo(episodeId);
+        if (info?.title) {
+          finalTmdbId = await this.getTmdbId(typeof info.title === 'string' ? info.title : info.title.english || info.title.romaji);
+        }
+      }
+
+      const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime"); // HiAnime is primary now
       const servers: any[] = [];
       
       // 1. Primary Node (HLS via Proxy)
       if (streamData && streamData.sources.length > 0) {
-        const referer = streamData.headers.Referer || 'https://animepahe.ru/';
+        const referer = streamData.headers.Referer || 'https://hianime.to/';
         const updatedSources = streamData.sources.map((s: any) => {
           if (s.url && !s.url.includes("/streaming/proxy")) {
             const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
@@ -58,25 +84,25 @@ export class StreamingService {
         });
 
         servers.push({
-          name: 'VidStreaming (HLS)',
+          name: 'Main (High Speed)',
           sources: updatedSources,
-          provider: provider,
+          provider: "hianime",
           isNative: true
         });
       }
 
-      // 2. Verified Mirror Cluster (Solid 2026 Solution)
+      // 2. Verified 2026 Mirror Cluster (Solid Solution)
       if (episodeNumber) {
-        const cleanTitle = encodeURIComponent(malId ? '' : 'search'); // Title search fallback logic
         const mirrors = [
-          { name: 'Mirror 1 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 2 (VidSrc.su)', url: `https://vidsrc.su/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 3 (VidLink)', url: `https://vidlink.pro/embed/anime/${malId || episodeId}/${episodeNumber}?primaryColor=6366f1` },
-          { name: 'Mirror 4 (Vidsrc.pm)', url: `https://vidsrc.pm/embed/anime/${malId || episodeId}/${episodeNumber}` },
-          { name: 'Mirror 5 (Vidsrc.xyz)', url: `https://vidsrc.xyz/embed/anime/${malId || episodeId}/${episodeNumber}` },
+          { name: 'Mirror 1 (VidLink)', url: `https://vidlink.pro/anime/${malId || episodeId}/${episodeNumber}/sub?fallback=true` },
+          { name: 'Mirror 2 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId || episodeId}/${episodeNumber}` },
+          { name: 'Mirror 3 (VidSrc.su)', url: `https://vidsrc-embed.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
+          { name: 'Mirror 4 (Vsrc.su)', url: `https://vsrc.su/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
+          { name: 'Mirror 5 (VidSrc.pm)', url: `https://vidsrc.pm/embed/tv/${finalTmdbId || ''}/1-${episodeNumber}` },
         ];
 
         mirrors.forEach(m => {
+          if (m.url.includes('undefined') || (m.url.includes('/tv//') && !malId)) return;
           servers.push({
             name: m.name,
             url: m.url,
@@ -95,14 +121,14 @@ export class StreamingService {
     } catch (error) {
       this.logger.error(`Mesh-v5 failure: ${error.message}`);
       
-      // Emergency Mirror Cluster
+      // Emergency Mirror Cluster (VidLink is most reliable for MAL)
       if (malId && episodeNumber) {
         return {
           provider: "emergency-mesh",
           sources: [],
           servers: [
-            { name: 'Emergency 1 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'mirror' },
-            { name: 'Emergency 2 (VidLink)', url: `https://vidlink.pro/embed/anime/${malId}/${episodeNumber}`, provider: 'mirror' }
+            { name: 'Emergency 1 (VidLink)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?fallback=true`, provider: 'mirror' },
+            { name: 'Emergency 2 (VidSrc.to)', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'mirror' }
           ]
         };
       }
@@ -118,7 +144,7 @@ export class StreamingService {
       const response = await axios.get(url, {
         headers: {
           Referer: referer,
-          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
+          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         },
         responseType: "stream",
         timeout: 10000,
