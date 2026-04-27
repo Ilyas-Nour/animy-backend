@@ -25,7 +25,7 @@ export class StreamingService {
   async searchAnime(query: string) {
     const results = await this.consumetService.search(query);
     return {
-      provider: "mesh-v3",
+      provider: "mesh-v4",
       results: results || [],
     };
   }
@@ -43,7 +43,7 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v3",
+        provider: "mesh-v4",
         ...info,
       };
     } catch (error) {
@@ -60,22 +60,23 @@ export class StreamingService {
    */
   async getEpisodeLinks(
     episodeId: string,
-    provider: string = "animekai",
+    provider: string = "animepahe",
     proxyBaseUrl?: string,
     malId?: string,
     episodeNumber?: string,
+    tmdbId?: string
   ) {
     try {
-      this.logger.debug(`Fetching sources for ${episodeId} (MAL: ${malId}, EP: ${episodeNumber})`);
+      this.logger.debug(`Fetching sources for ${episodeId} (MAL: ${malId}, TMDB: ${tmdbId})`);
       
       const streamData = await this.consumetService.getEpisodeSources(episodeId, provider);
 
       // Build the servers list for the frontend
       const servers: any[] = [];
       
-      // 1. Add AllAnime Native HLS (Primary 2026 Node)
+      // 1. Add High-Speed HLS (Primary Node)
       if (streamData && streamData.sources.length > 0) {
-        const referer = streamData.headers.Referer || 'https://allanime.site/';
+        const referer = streamData.headers.Referer || 'https://animepahe.ru/';
         const updatedSources = streamData.sources.map((s: any) => {
           if (s.url && !s.url.includes("/streaming/proxy")) {
             const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
@@ -87,52 +88,55 @@ export class StreamingService {
         servers.push({
           name: 'Main (High Speed)',
           sources: updatedSources,
-          provider: 'allanime',
+          provider: provider,
           isNative: true
         });
       }
 
-      // 2. Add New Verified 2026 Mirrors (From Official Docs)
-      if (malId && episodeNumber) {
-        let resolvedMalId = malId;
-        if (parseInt(malId, 10) > 100000) {
-           const mapping = await this.idMappingService.getMalId(parseInt(malId, 10));
-           if (mapping) resolvedMalId = mapping.toString();
-        }
-
-        // New VidSrc domain from Docs: vidsrc-embed.su
-        // Using the TV path pattern: /embed/tv/{id}/1-{episode}
+      // 2. Add New Verified 2026 Mirrors (TMDB + MAL Hybrid)
+      if ((malId || tmdbId) && episodeNumber) {
+        // Use TMDB ID if available (it's more stable for VidSrc 2026)
+        const primaryId = tmdbId || malId;
+        
         servers.push({
           name: 'Mirror (VidSrc.su)',
-          url: `https://vidsrc-embed.su/embed/tv/${resolvedMalId}/1-${episodeNumber}`,
+          url: `https://vidsrc-embed.su/embed/tv/${primaryId}/1-${episodeNumber}`,
           provider: 'vidsrc-su'
         });
 
-        // VidLink - Optimized with MAL ID
         servers.push({ 
           name: 'Mirror (VidLink)', 
-          url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
+          url: `https://vidlink.pro/anime/${primaryId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'vidlink'
         });
+        
+        // If we have both, add the other one as a backup
+        if (tmdbId && malId && tmdbId !== malId) {
+             servers.push({
+                name: 'Mirror (MAL ID)',
+                url: `https://vidsrc-embed.su/embed/tv/${malId}/1-${episodeNumber}`,
+                provider: 'vidsrc-mal'
+            });
+        }
       }
 
       return {
-        provider: "mesh-v3",
+        provider: "mesh-v4",
         sources: streamData?.sources || [],
         servers: servers,
         headers: streamData?.headers
       };
     } catch (error) {
-      this.logger.error(`Mesh-v3 failure: ${error.message}`);
+      this.logger.error(`Mesh-v4 failure: ${error.message}`);
       
-      // Emergency Failover with new 2026 endpoints
-      if (malId && episodeNumber) {
+      const primaryId = tmdbId || malId;
+      if (primaryId && episodeNumber) {
         return {
           provider: "failover",
           sources: [],
           servers: [
-            { name: 'Emergency (VidSrc)', url: `https://vidsrc-embed.su/embed/tv/${malId}/1-${episodeNumber}`, provider: 'vidsrc-su' },
-            { name: 'Emergency (VidLink)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
+            { name: 'Emergency (VidSrc)', url: `https://vidsrc-embed.su/embed/tv/${primaryId}/1-${episodeNumber}`, provider: 'vidsrc-su' },
+            { name: 'Emergency (VidLink)', url: `https://vidlink.pro/anime/${primaryId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
           ]
         };
       }

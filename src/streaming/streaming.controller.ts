@@ -56,6 +56,7 @@ export class StreamingController {
     @Query("malId") malId?: string,
     @Query("ep") ep?: string,
     @Query("proxyBaseUrl") customProxyUrl?: string,
+    @Query("tmdbId") tmdbId?: string,
   ) {
     if (!id) {
       throw new HttpException("Episode ID is required", HttpStatus.BAD_REQUEST);
@@ -73,10 +74,11 @@ export class StreamingController {
 
     return this.streamingService.getEpisodeLinks(
       id,
-      "hianime",
+      "animepahe",
       proxyBaseUrl,
       malId,
       ep,
+      tmdbId,
     );
   }
 

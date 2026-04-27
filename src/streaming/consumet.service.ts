@@ -5,92 +5,100 @@ import { ANIME } from "@consumet/extensions";
 export class ConsumetService {
   private readonly logger = new Logger(ConsumetService.name);
   
-  // The "Stable Mesh" nodes of April 2026
   private readonly animekai = new ANIME.AnimeKai();
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly hianime = new ANIME.Hianime();
 
   /**
-   * Search across top providers with failover
+   * Search across top providers with a strict timeout to prevent 524s
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Searching Mesh: ${query}`);
+      this.logger.debug(`Timed Search: ${query}`);
       
-      // AnimeKai - Extremely stable in 2026
+      const searchWithTimeout = async (provider: any) => {
+        return Promise.race([
+          provider.search(query),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+        ]);
+      };
+
+      // Try AnimePahe first (Currently faster)
       try {
-        const res = await this.animekai.search(query);
-        if (res.results.length > 0) return res.results;
+        const res: any = await searchWithTimeout(this.animepahe);
+        if (res?.results?.length > 0) return res.results;
       } catch (e) {
-        this.logger.warn(`AnimeKai node failed: ${e.message}`);
+        this.logger.warn(`AnimePahe node slow/offline: ${e.message}`);
       }
 
-      // AnimePahe fallback
+      // Try AnimeKai secondary
       try {
-        const res = await this.animepahe.search(query);
-        if (res.results.length > 0) return res.results;
+        const res: any = await searchWithTimeout(this.animekai);
+        if (res?.results?.length > 0) return res.results;
       } catch (e) {
-        this.logger.warn(`AnimePahe node failed: ${e.message}`);
+        this.logger.warn(`AnimeKai node slow/offline: ${e.message}`);
       }
 
       return [];
     } catch (error) {
-      this.logger.error(`Search engine failure: ${error.message}`);
+      this.logger.error(`Search mesh stalled: ${error.message}`);
       return [];
     }
   }
 
   /**
-   * Get Anime Info & Episodes
+   * Get Anime Info with timeout protection
    */
   async getAnimeInfo(id: string) {
     try {
-      this.logger.debug(`Fetching info for ID: ${id}`);
-      
-      // Try AnimeKai first
-      try {
-        const info = await this.animekai.fetchAnimeInfo(id);
-        if (info) return info;
-      } catch (e) {
-        this.logger.warn(`AnimeKai info node failure: ${e.message}`);
-      }
+      const fetchWithTimeout = async (provider: any) => {
+        return Promise.race([
+          provider.fetchAnimeInfo(id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+        ]);
+      };
 
-      // Fallback to AnimePahe
       try {
-        const info = await this.animepahe.fetchAnimeInfo(id);
+        const info = await fetchWithTimeout(this.animepahe);
         if (info) return info;
       } catch (e) {
-        this.logger.warn(`AnimePahe info node failure: ${e.message}`);
+        try {
+          const info = await fetchWithTimeout(this.animekai);
+          if (info) return info;
+        } catch (e2) {
+          this.logger.warn(`Info mesh stalled`);
+        }
       }
 
       return null;
     } catch (error) {
-      this.logger.error(`Info engine failure: ${error.message}`);
       return null;
     }
   }
 
   /**
-   * Get Streaming Sources (High Performance Mesh)
+   * Get Episode Sources
    */
-  async getEpisodeSources(episodeId: string, provider: string = 'animekai') {
+  async getEpisodeSources(episodeId: string, provider: string = 'animepahe') {
     try {
-      this.logger.debug(`Fetching transmission via: ${provider}`);
-      
+      const extractWithTimeout = async (target: any) => {
+        return Promise.race([
+          target.fetchEpisodeSources(episodeId),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 12000))
+        ]);
+      };
+
       let sources: any = null;
-      
       try {
-        // Try the requested provider (Default AnimeKai)
-        if (provider === 'animekai' || !provider) {
-          sources = await this.animekai.fetchEpisodeSources(episodeId);
-        } else if (provider === 'animepahe') {
-          sources = await this.animepahe.fetchEpisodeSources(episodeId);
+        if (provider === 'animepahe') {
+          sources = await extractWithTimeout(this.animepahe);
+        } else if (provider === 'animekai') {
+          sources = await extractWithTimeout(this.animekai);
         } else {
-          sources = await this.hianime.fetchEpisodeSources(episodeId);
+          sources = await extractWithTimeout(this.hianime);
         }
       } catch (e) {
-        this.logger.warn(`${provider} transmission failed. Trying secondary mesh...`);
-        // We return null so the StreamingService can handle the mirror failover
+        this.logger.warn(`Extraction timeout on ${provider}`);
         return null;
       }
 
@@ -104,12 +112,11 @@ export class ConsumetService {
         })),
         subtitles: sources.subtitles || [],
         headers: {
-          Referer: 'https://animekai.to/',
+          Referer: provider === 'animepahe' ? 'https://animepahe.ru/' : 'https://animekai.to/',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
         }
       };
     } catch (error) {
-      this.logger.error(`Transmission engine failure: ${error.message}`);
       return null;
     }
   }
