@@ -1,139 +1,143 @@
 import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import axios from "axios";
 import * as cheerio from "cheerio";
-import * as CryptoJS from "crypto-js";
-import * as qs from "qs";
 
 @Injectable()
 export class HiAnimeService {
   private readonly logger = new Logger(HiAnimeService.name);
-  private readonly baseUrl = "https://hianime.sx";
   
-  // Headers to mimic a real browser
+  // Working mirrors for 2026
+  private readonly hianimeMirror = "https://aniwatchtv.to";
+  private readonly gogoMirror = "https://gogoanime3.co";
+
   private readonly headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://hianime.to/",
-    "X-Requested-With": "XMLHttpRequest"
   };
 
   /**
-   * Search for anime directly on HiAnime
+   * Universal Search (Tries multiple providers)
    */
   async search(query: string) {
     try {
-      const url = `${this.baseUrl}/search?keyword=${encodeURIComponent(query)}`;
-      const { data } = await axios.get(url, { headers: this.headers });
-      const $ = cheerio.load(data);
-      const results: any[] = [];
+      // Try HiAnime Mirror First
+      const hianimeResults = await this.searchHiAnime(query);
+      if (hianimeResults.length > 0) return { results: hianimeResults };
 
-      $(".film_list-wrap .flw-item").each((_, el) => {
-        const item = $(el);
-        const id = item.find(".film-detail .film-name a").attr("href")?.split("/").pop()?.split("?")[0];
-        const title = item.find(".film-detail .film-name a").text().trim();
-        const image = item.find(".film-poster img").attr("data-src");
-
-        if (id) {
-          results.push({ id, title, image, url: `/anime/${id}` });
-        }
-      });
-
-      return { results };
+      // Fallback to GogoAnime
+      const gogoResults = await this.searchGogo(query);
+      return { results: gogoResults };
     } catch (error) {
       this.logger.error(`Search failed: ${error.message}`);
       return { results: [] };
     }
   }
 
-  /**
-   * Get episodes for a specific anime
-   */
-  async fetchAnimeInfo(id: string) {
+  private async searchHiAnime(query: string) {
     try {
-      // 1. Get the anime page to find the numeric ID
-      const animeUrl = `${this.baseUrl}/${id}`;
-      const { data: pageData } = await axios.get(animeUrl, { headers: this.headers });
-      const $page = cheerio.load(pageData);
-      
-      const title = $page(".an-info-block .film-name").text().trim();
-      const image = $page(".film-poster img").attr("src");
-      const description = $page(".film-description .text").text().trim();
-
-      // Extract the numeric ID from the page (needed for episodes AJAX)
-      const numericId = $page("#wrapper").attr("data-id") || id.split("-").pop();
-
-      // 2. Fetch episodes via AJAX
-      const epUrl = `${this.baseUrl}/ajax/v2/episode/list/${numericId}`;
-      const { data: epData } = await axios.get(epUrl, { headers: this.headers });
-      const $eps = cheerio.load(epData.html);
-      
-      const episodes: any[] = [];
-      $eps(".detail-en-list .ep-item").each((_, el) => {
-        const item = $eps(el);
-        const epId = item.attr("href")?.split("/").pop();
-        const number = parseInt(item.attr("data-number") || "0");
-        const epTitle = item.attr("title");
-
-        if (epId) {
-          episodes.push({
-            id: epId,
-            number,
-            title: epTitle,
-            url: `/watch/${epId}`
-          });
-        }
+      const { data } = await axios.get(`${this.hianimeMirror}/search?keyword=${encodeURIComponent(query)}`, { headers: this.headers, timeout: 5000 });
+      const $ = cheerio.load(data);
+      const results: any[] = [];
+      $(".film_list-wrap .flw-item").each((_, el) => {
+        const item = $(el);
+        const id = item.find(".film-detail .film-name a").attr("href")?.split("/").pop()?.split("?")[0];
+        if (id) results.push({ id, title: item.find(".film-name").text().trim(), image: item.find("img").attr("data-src"), url: `/anime/${id}`, provider: 'hianime' });
       });
+      return results;
+    } catch { return []; }
+  }
 
-      return { id, title, image, description, episodes };
-    } catch (error) {
-      this.logger.error(`Info fetch failed for ${id}: ${error.message}`);
-      return null;
-    }
+  private async searchGogo(query: string) {
+    try {
+      const { data } = await axios.get(`${this.gogoMirror}/search.html?keyword=${encodeURIComponent(query)}`, { headers: this.headers, timeout: 5000 });
+      const $ = cheerio.load(data);
+      const results: any[] = [];
+      $(".last_episodes ul.items li").each((_, el) => {
+        const item = $(el);
+        const id = item.find("a").attr("href")?.split("/").pop();
+        if (id) results.push({ id, title: item.find(".name").text().trim(), image: item.find("img").attr("src"), url: `/anime/${id}`, provider: 'gogo' });
+      });
+      return results;
+    } catch { return []; }
   }
 
   /**
-   * Get streaming sources
+   * Universal Info
+   */
+  async fetchAnimeInfo(id: string) {
+    // If it looks like a Gogo ID (doesn't have the hianime suffix pattern) or if hianime fails
+    const info = await this.fetchHiAnimeInfo(id);
+    if (info) return info;
+
+    return this.fetchGogoInfo(id);
+  }
+
+  private async fetchHiAnimeInfo(id: string) {
+    try {
+      const { data } = await axios.get(`${this.hianimeMirror}/${id}`, { headers: this.headers, timeout: 5000 });
+      const $ = cheerio.load(data);
+      const numericId = $("#wrapper").attr("data-id") || id.split("-").pop();
+      const { data: epData } = await axios.get(`${this.hianimeMirror}/ajax/v2/episode/list/${numericId}`, { headers: this.headers });
+      const $eps = cheerio.load(epData.html);
+      const episodes: any[] = [];
+      $eps(".detail-en-list .ep-item").each((_, el) => {
+        const item = $eps(el);
+        episodes.push({ id: item.attr("href")?.split("/").pop(), number: parseInt(item.attr("data-number") || "0"), title: item.attr("title"), provider: 'hianime' });
+      });
+      return { id, title: $(".film-name").text().trim(), image: $(".film-poster img").attr("src"), episodes };
+    } catch { return null; }
+  }
+
+  private async fetchGogoInfo(id: string) {
+    try {
+      const { data } = await axios.get(`${this.gogoMirror}/category/${id}`, { headers: this.headers, timeout: 5000 });
+      const $ = cheerio.load(data);
+      const movie_id = $("#movie_id").val();
+      const alias = $("#alias_anime").val();
+      const { data: epData } = await axios.get(`https://ajax.gogocdn.net/ajax/load-list-episode?ep_start=0&ep_end=2000&id=${movie_id}&default_ep=0&alias=${alias}`);
+      const $eps = cheerio.load(epData);
+      const episodes: any[] = [];
+      $eps("#episode_related li").each((_, el) => {
+        const item = $eps(el);
+        const epNum = item.find(".name").text().replace("EP ", "").trim();
+        const epId = item.find("a").attr("href")?.trim().split("/").pop();
+        episodes.push({ id: epId, number: parseFloat(epNum), title: `Episode ${epNum}`, provider: 'gogo' });
+      });
+      return { id, title: $(".anime_info_body_bg h1").text().trim(), image: $(".anime_info_body_bg img").attr("src"), episodes: episodes.reverse() };
+    } catch { return null; }
+  }
+
+  /**
+   * Universal Sources
    */
   async fetchEpisodeSources(episodeId: string) {
+    // 1. Try Gogo first for seasonal speed
+    const gogoSource = await this.fetchGogoSources(episodeId);
+    if (gogoSource) return gogoSource;
+
+    // 2. Fallback to HiAnime mirror
+    return this.fetchHiAnimeSources(episodeId);
+  }
+
+  private async fetchGogoSources(episodeId: string) {
     try {
-      // 1. Get Servers
-      const serversUrl = `${this.baseUrl}/ajax/v2/episode/servers?episodeId=${episodeId.split("?ep=").pop() || episodeId}`;
-      const { data: serversData } = await axios.get(serversUrl, { headers: this.headers });
-      const $ = cheerio.load(serversData.html);
+      const { data } = await axios.get(`${this.gogoMirror}/${episodeId}`, { headers: this.headers, timeout: 5000 });
+      const $ = cheerio.load(data);
+      const embedUrl = "https:" + $(".anime_video_body_watch_items .streaming_source.active a").attr("data-video");
+      return { iframeUrl: embedUrl, servers: [{ name: 'Gogo (Fast)', url: embedUrl, provider: 'gogo' }] };
+    } catch { return null; }
+  }
 
-      const servers: any[] = [];
-      $(".server-item").each((_, el) => {
-        const item = $(el);
-        const sType = item.closest(".pswp-col").find(".type").text().toLowerCase();
-        servers.push({
-          id: item.attr("data-id"),
-          serverId: item.attr("data-server-id"),
-          name: item.text().trim(),
-          type: sType.includes("sub") ? "sub" : "dub"
-        });
-      });
-
-      // 2. Pick a server (Default to HD-1/Vidstreaming)
-      const targetServer = servers.find(s => s.name.includes("HD-1") || s.name.includes("Vidstreaming")) || servers[0];
-      if (!targetServer) throw new Error("No servers found");
-
-      // 3. Get the Embed ID
-      const sourceUrl = `${this.baseUrl}/ajax/v2/episode/sources?id=${targetServer.id}`;
-      const { data: sourceData } = await axios.get(sourceUrl, { headers: this.headers });
-      
-      const embedUrl = sourceData.link;
-      if (!embedUrl) throw new Error("No embed link found");
-
-      return {
-        headers: { Referer: this.baseUrl },
-        sources: [], 
-        iframeUrl: embedUrl,
-        servers: servers.map(s => ({ name: s.name, type: s.type, id: s.id }))
-      };
-    } catch (error) {
-      this.logger.error(`Source fetch failed for ${episodeId}: ${error.message}`);
-      throw new HttpException("Failed to get sources", HttpStatus.INTERNAL_SERVER_ERROR);
+  private async fetchHiAnimeSources(episodeId: string) {
+    try {
+      const epNum = episodeId.split("?ep=").pop() || episodeId;
+      const { data: sData } = await axios.get(`${this.hianimeMirror}/ajax/v2/episode/servers?episodeId=${epNum}`, { headers: this.headers });
+      const $ = cheerio.load(sData.html);
+      const serverId = $(".server-item").first().attr("data-id");
+      const { data: srcData } = await axios.get(`${this.hianimeMirror}/ajax/v2/episode/sources?id=${serverId}`, { headers: this.headers });
+      return { iframeUrl: srcData.link, servers: [{ name: 'AniWatch (Mirror)', url: srcData.link, provider: 'hianime' }] };
+    } catch (e) {
+      throw new HttpException("All providers offline", HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 }

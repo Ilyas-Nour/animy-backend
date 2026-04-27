@@ -25,7 +25,7 @@ export class StreamingService {
   async searchAnime(query: string) {
     const results = await this.findAnimeByTitle(query);
     return {
-      provider: "hianime",
+      provider: "universal",
       results: results || [],
     };
   }
@@ -35,15 +35,15 @@ export class StreamingService {
    */
   async getAnimeInfo(animeId: string) {
     try {
-      this.logger.debug(`Fetching info for ${animeId} from HiAnime Scraper`);
+      this.logger.debug(`Fetching info for ${animeId} from Universal Scraper`);
       const info = await this.hiAnimeService.fetchAnimeInfo(animeId);
 
       if (!info) {
-        throw new NotFoundException(`Anime not found on HiAnime`);
+        throw new NotFoundException(`Anime not found on any provider`);
       }
 
       return {
-        provider: "hianime",
+        provider: "universal",
         ...info,
       };
     } catch (error) {
@@ -73,26 +73,21 @@ export class StreamingService {
       // Build the servers list for the frontend
       const servers: any[] = [];
       
-      // 1. Add HiAnime Scraper Source (Primary)
-      if (scraperResult.iframeUrl) {
-        servers.push({
-          name: 'HiAnime (Main)',
-          url: scraperResult.iframeUrl,
-          provider: 'hianime'
-        });
+      // 1. Add Scraper Servers (Gogo, AniWatch Mirror)
+      if (scraperResult.servers && scraperResult.servers.length > 0) {
+        servers.push(...scraperResult.servers);
       }
 
-      // 2. Add Multi-Server Fallbacks if we have MAL ID
+      // 2. Add External Aggregator Fallbacks if we have MAL ID
       if (malId && episodeNumber) {
         let resolvedMalId = malId;
-        // Resolve mapping for large IDs if needed
         if (parseInt(malId, 10) > 100000) {
            const mapping = await this.idMappingService.getMalId(parseInt(malId, 10));
            if (mapping) resolvedMalId = mapping.toString();
         }
 
         servers.push({ 
-          name: 'VidLink (Backup)', 
+          name: 'VidLink (External)', 
           url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'vidlink'
         });
@@ -105,29 +100,29 @@ export class StreamingService {
       }
 
       return {
-        provider: "hianime",
+        provider: "universal",
         sources: scraperResult.sources || [],
-        iframeUrl: scraperResult.iframeUrl,
+        iframeUrl: scraperResult.iframeUrl || (servers.length > 0 ? servers[0].url : null),
         servers: servers,
         headers: scraperResult.headers
       };
     } catch (error) {
       this.logger.error(`Error fetching sources: ${error.message}`);
       
-      // If everything fails, try to return basic MAL-based iframes if possible
+      // Ultimate Fallback
       if (malId && episodeNumber) {
         return {
           provider: "fallback",
           sources: [],
           iframeUrl: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
           servers: [
-            { name: 'VidLink', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' },
+            { name: 'VidLink (Safe)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' },
             { name: 'Vidsrc.to', url: `https://vidsrc.to/embed/anime/${malId}/${episodeNumber}`, provider: 'vidsrc' }
           ]
         };
       }
 
-      throw new HttpException("Failed to get sources", HttpStatus.NOT_FOUND);
+      throw new HttpException("All nodes unreachable", HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
