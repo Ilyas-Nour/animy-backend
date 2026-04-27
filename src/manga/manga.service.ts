@@ -242,15 +242,21 @@ export class MangaService {
       }
 
       if (!mangaDexId) {
-        // Direct API search fallback
+        // Direct API search fallback - try all titles
         for (const t of titles) {
-          const searchRes = await axios.get(
-            `https://api.mangadex.org/manga?title=${encodeURIComponent(t)}&limit=1`,
-            { timeout: 5000 }
-          );
-          if (searchRes.data.data?.[0]) {
-            mangaDexId = searchRes.data.data[0].id;
-            break;
+          try {
+            this.logger.debug(`[Parallel] Trying MangaDex Search for: ${t}`);
+            const searchRes = await axios.get(
+              `https://api.mangadex.org/manga?title=${encodeURIComponent(t)}&limit=1`,
+              { timeout: 5000 }
+            );
+            if (searchRes.data.data?.[0]) {
+              mangaDexId = searchRes.data.data[0].id;
+              this.logger.debug(`[Parallel] Found MangaDex ID via search: ${mangaDexId}`);
+              break;
+            }
+          } catch (e) {
+             this.logger.debug(`MangaDex search failed for title ${t}: ${e.message}`);
           }
         }
       }
