@@ -7,7 +7,7 @@ import * as qs from "qs";
 @Injectable()
 export class HiAnimeService {
   private readonly logger = new Logger(HiAnimeService.name);
-  private readonly baseUrl = "https://hianime.to";
+  private readonly baseUrl = "https://hianime.sx";
   
   // Headers to mimic a real browser
   private readonly headers = {
