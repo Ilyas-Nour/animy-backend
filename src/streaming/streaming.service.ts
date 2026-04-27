@@ -25,7 +25,7 @@ export class StreamingService {
   async searchAnime(query: string) {
     const results = await this.consumetService.search(query);
     return {
-      provider: "consumet",
+      provider: "mesh-v2",
       results: results || [],
     };
   }
@@ -35,15 +35,15 @@ export class StreamingService {
    */
   async getAnimeInfo(animeId: string) {
     try {
-      this.logger.debug(`Fetching info for ${animeId} from Consumet Mesh`);
+      this.logger.debug(`Fetching info for ${animeId} from AllAnime Mesh`);
       const info = await this.consumetService.getAnimeInfo(animeId);
 
       if (!info) {
-        throw new NotFoundException(`Anime not found on current nodes`);
+        throw new NotFoundException(`Anime not found on stable nodes`);
       }
 
       return {
-        provider: "consumet",
+        provider: "mesh-v2",
         ...info,
       };
     } catch (error) {
@@ -60,7 +60,7 @@ export class StreamingService {
    */
   async getEpisodeLinks(
     episodeId: string,
-    provider: string = "hianime",
+    provider: string = "allanime",
     proxyBaseUrl?: string,
     malId?: string,
     episodeNumber?: string,
@@ -68,14 +68,14 @@ export class StreamingService {
     try {
       this.logger.debug(`Fetching sources for ${episodeId} (MAL: ${malId}, EP: ${episodeNumber})`);
       
-      const streamData = await this.consumetService.getEpisodeSources(episodeId, provider as any);
+      const streamData = await this.consumetService.getEpisodeSources(episodeId, provider);
 
       // Build the servers list for the frontend
       const servers: any[] = [];
       
-      // 1. Add Consumet Native HLS Sources (Ultra-Low Latency)
+      // 1. Add AllAnime Native HLS (The 2026 Gold Standard)
       if (streamData && streamData.sources.length > 0) {
-        const referer = streamData.headers.Referer || '';
+        const referer = streamData.headers.Referer || 'https://allanime.site/';
         const updatedSources = streamData.sources.map((s: any) => {
           if (s.url && !s.url.includes("/streaming/proxy")) {
             const baseUrl = proxyBaseUrl || "/api/v1/streaming/proxy";
@@ -87,12 +87,12 @@ export class StreamingService {
         servers.push({
           name: 'Main (High Speed)',
           sources: updatedSources,
-          provider: 'consumet',
+          provider: 'allanime',
           isNative: true
         });
       }
 
-      // 2. Add Industry-Standard External Backups (2026 Resilience)
+      // 2. Add New Verified Mirrors (April 2026 Resilient)
       if (malId && episodeNumber) {
         let resolvedMalId = malId;
         if (parseInt(malId, 10) > 100000) {
@@ -100,14 +100,14 @@ export class StreamingService {
            if (mapping) resolvedMalId = mapping.toString();
         }
 
-        // Vidsrc.me - The most stable backup for MAL IDs
+        // New VidSrc domain from screenshot: vsembed.su
         servers.push({
-          name: 'Mirror (Vidsrc.me)',
-          url: `https://vidsrc.me/embed/anime?mal=${resolvedMalId}&episode=${episodeNumber}`,
-          provider: 'vidsrc-me'
+          name: 'Mirror (VidSrc.su)',
+          url: `https://vsembed.su/embed/anime?mal=${resolvedMalId}&episode=${episodeNumber}`,
+          provider: 'vsembed'
         });
 
-        // VidLink - Good secondary fallback
+        // VidLink - Secondary fallback
         servers.push({ 
           name: 'Mirror (VidLink)', 
           url: `https://vidlink.pro/anime/${resolvedMalId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`,
@@ -116,27 +116,27 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh",
+        provider: "mesh-v2",
         sources: streamData?.sources || [],
         servers: servers,
         headers: streamData?.headers
       };
     } catch (error) {
-      this.logger.error(`Node Mesh failure: ${error.message}`);
+      this.logger.error(`Mesh-v2 failure: ${error.message}`);
       
-      // Critical Failover
+      // Emergency Failover
       if (malId && episodeNumber) {
         return {
           provider: "failover",
           sources: [],
           servers: [
-            { name: 'Emergency (Vidsrc)', url: `https://vidsrc.me/embed/anime?mal=${malId}&episode=${episodeNumber}`, provider: 'vidsrc-me' },
+            { name: 'Emergency (VidSrc)', url: `https://vsembed.su/embed/anime?mal=${malId}&episode=${episodeNumber}`, provider: 'vsembed' },
             { name: 'Emergency (VidLink)', url: `https://vidlink.pro/anime/${malId}/${episodeNumber}/sub?primaryColor=6366f1&fallback=true`, provider: 'vidlink' }
           ]
         };
       }
 
-      throw new HttpException("Mesh Offline - No active nodes", HttpStatus.SERVICE_UNAVAILABLE);
+      throw new HttpException("Mesh Offline", HttpStatus.SERVICE_UNAVAILABLE);
     }
   }
 
@@ -147,8 +147,7 @@ export class StreamingService {
   async findAnimeByTitle(title: string, titleEnglish?: string, anilistId?: number) {
     try {
       if (anilistId) {
-        const resolvedId = await this.idMappingService.resolveHiAnimeId(anilistId, title, titleEnglish);
-        if (resolvedId) return [{ id: resolvedId, title: title, image: "" }];
+        // We'll rely on the search engine for now since HiAnime mapping is unstable during the sweep
       }
 
       const results = await this.consumetService.search(title);

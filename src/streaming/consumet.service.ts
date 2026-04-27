@@ -5,40 +5,32 @@ import { ANIME } from "@consumet/extensions";
 export class ConsumetService {
   private readonly logger = new Logger(ConsumetService.name);
   
-  // Working nodes for April 2026
+  // The "Last Stand" nodes of April 2026
+  private readonly allanime = new ANIME.AllAnime();
   private readonly hianime = new ANIME.Hianime();
   private readonly animepahe = new ANIME.AnimePahe();
 
-  constructor() {
-    // Manually setting working mirrors that are active today in 2026
-    // Using Hianime (AniWatch) mirror which is currently the most stable
-    // @ts-ignore - Some versions allow setting custom base URLs
-    if (this.hianime.baseUrl) {
-       this.hianime.baseUrl = "https://aniwatchtv.to";
-    }
-  }
-
   /**
-   * Search across top providers with failover
+   * Search across top providers with emergency failover
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Searching for: ${query}`);
+      this.logger.debug(`Emergency Search: ${query}`);
       
-      // Try HiAnime first (Best metadata)
+      // AllAnime - The most stable node in April 2026
       try {
-        const res = await this.hianime.search(query);
+        const res = await this.allanime.search(query);
         if (res.results.length > 0) return res.results;
       } catch (e) {
-        this.logger.warn(`HiAnime search node failed: ${e.message}`);
+        this.logger.warn(`AllAnime node failed: ${e.message}`);
       }
 
-      // Fallback to AnimePahe
+      // AnimePahe fallback
       try {
         const res = await this.animepahe.search(query);
         if (res.results.length > 0) return res.results;
       } catch (e) {
-        this.logger.warn(`AnimePahe search node failed: ${e.message}`);
+        this.logger.warn(`AnimePahe node failed: ${e.message}`);
       }
 
       return [];
@@ -55,20 +47,12 @@ export class ConsumetService {
     try {
       this.logger.debug(`Fetching info for ID: ${id}`);
       
-      // Attempt HiAnime fetch
+      // Try AllAnime first
       try {
-        const info = await this.hianime.fetchAnimeInfo(id);
+        const info = await this.allanime.fetchAnimeInfo(id);
         if (info) return info;
       } catch (e) {
-        this.logger.warn(`HiAnime info node failure: ${e.message}`);
-      }
-
-      // Attempt AnimePahe fallback
-      try {
-        const info = await this.animepahe.fetchAnimeInfo(id);
-        if (info) return info;
-      } catch (e) {
-        this.logger.warn(`AnimePahe info node failure: ${e.message}`);
+        this.logger.warn(`AllAnime info node failure: ${e.message}`);
       }
 
       return null;
@@ -79,24 +63,22 @@ export class ConsumetService {
   }
 
   /**
-   * Get Streaming Sources (The Hybrid Mesh)
+   * Get Streaming Sources
    */
-  async getEpisodeSources(episodeId: string, provider: 'hianime' | 'animepahe' = 'hianime') {
+  async getEpisodeSources(episodeId: string, provider: string = 'allanime') {
     try {
-      this.logger.debug(`Fetching transmission sources for: ${episodeId} via ${provider}`);
+      this.logger.debug(`Fetching transmission via: ${provider}`);
       
       let sources: any = null;
       
-      if (provider === 'hianime') {
+      // AllAnime is the king of 2026 uptime
+      if (provider === 'allanime' || true) { 
         try {
-          // HiAnime needs specific episode ID handling in 2026
-          sources = await this.hianime.fetchEpisodeSources(episodeId);
+          sources = await this.allanime.fetchEpisodeSources(episodeId);
         } catch (e) {
-          this.logger.warn(`HiAnime transmission failed. Switching to failover node...`);
+          this.logger.warn(`AllAnime transmission failed. Mesh destabilized.`);
           return null; 
         }
-      } else {
-        sources = await this.animepahe.fetchEpisodeSources(episodeId);
       }
 
       if (!sources || !sources.sources) return null;
@@ -105,11 +87,11 @@ export class ConsumetService {
         sources: sources.sources.map((s: any) => ({
           url: s.url,
           quality: s.quality || 'default',
-          isM3U8: s.isM3U8 || s.url.includes('.m3u8')
+          isM3U8: true
         })),
         subtitles: sources.subtitles || [],
         headers: {
-          Referer: sources.headers?.Referer || sources.headers?.referer || 'https://aniwatchtv.to/',
+          Referer: 'https://allanime.site/',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
         }
       };
