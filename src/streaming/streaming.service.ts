@@ -56,7 +56,8 @@ export class StreamingService {
     proxyBaseUrl?: string,
     malIdParam?: string,
     episodeNumber?: string,
-    tmdbId?: string
+    tmdbId?: string,
+    title?: string
   ) {
     try {
       const malId = (malIdParam && malIdParam !== 'undefined' && malIdParam !== 'null' && malIdParam !== '0') ? malIdParam : null;
@@ -94,7 +95,7 @@ export class StreamingService {
 
         // 🚀 AnimeKai (MegaUp) - NEW PREMIUM MIRROR
         try {
-          const kaiSources = await this.consumetService.getAnimeKaiSources(episodeId).catch(() => null);
+          const kaiSources = await this.consumetService.getAnimeKaiSources(episodeId, title).catch(() => null);
           if (kaiSources?.sources?.length) {
             servers.push({
               name: 'Mirror 2 (MegaUp/Anikai)',
@@ -122,10 +123,23 @@ export class StreamingService {
       // 3. LEGACY NODE (Consumet)
       if (servers.length < 2) {
         try {
-          const streamData = await this.consumetService.getEpisodeSources(episodeId, "hianime").catch(() => null);
+          let targetEpisodeId = episodeId;
+          
+          // If ID is numeric (AniList) and Anify failed, try searching HiAnime by title
+          if (!isNaN(Number(episodeId)) && title) {
+            this.logger.debug(`AniList ID detected, resolving HiAnime ID via title: ${title}`);
+            const searchRes = await this.consumetService.search(title).catch(() => null);
+            const hianimeResult = searchRes?.find((r: any) => r.provider === 'hianime');
+            if (hianimeResult) {
+              targetEpisodeId = hianimeResult.id;
+              this.logger.debug(`Resolved HiAnime ID: ${targetEpisodeId}`);
+            }
+          }
+
+          const streamData = await this.consumetService.getEpisodeSources(targetEpisodeId, "hianime").catch(() => null);
           if (streamData?.sources?.length) {
             servers.push({
-              name: 'Mirror 4 (Legacy)',
+              name: 'Mirror 5 (Legacy)',
               sources: streamData.sources,
               provider: "hianime",
               isNative: true

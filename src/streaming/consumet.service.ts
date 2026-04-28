@@ -29,13 +29,40 @@ export class ConsumetService {
       // 1. Anify.tv (Professional 2026 Choice)
       try {
         const anifyUrl = `https://api.anify.tv/search/anime/${encodeURIComponent(query)}`;
-        const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
+        const anifyRes = await axios.get(anifyUrl, { timeout: 3000 }).catch(() => null);
         if (anifyRes?.data && Array.isArray(anifyRes.data)) {
           return anifyRes.data.map((a: any) => ({
             id: a.id,
             title: a.title.english || a.title.romaji,
             image: a.coverImage,
             provider: 'anify'
+          }));
+        }
+      } catch (e) {}
+
+      // 2. HiAnime Fallback (Direct Scraper)
+      try {
+        this.logger.debug(`Anify failed, falling back to HiAnime search...`);
+        const hianimeRes = await this.hianime.search(query).catch(() => null);
+        if (hianimeRes?.results?.length) {
+          return hianimeRes.results.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            image: r.image,
+            provider: 'hianime'
+          }));
+        }
+      } catch (e) {}
+
+      // 3. AnimePahe Fallback
+      try {
+        const paheRes = await this.animepahe.search(query).catch(() => null);
+        if (paheRes?.results?.length) {
+          return paheRes.results.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            image: r.image,
+            provider: 'animepahe'
           }));
         }
       } catch (e) {}
@@ -141,10 +168,23 @@ export class ConsumetService {
   /**
    * Get Episode Sources from AnimeKai (MegaUp)
    */
-  async getAnimeKaiSources(episodeId: string) {
+  async getAnimeKaiSources(episodeId: string, title?: string) {
     try {
       this.logger.debug(`Fetching AnimeKai (MegaUp) sources for: ${episodeId}`);
-      const sources = await this.animekai.fetchEpisodeSources(episodeId).catch(() => null);
+      
+      let targetId = episodeId;
+
+      // If ID is numeric (AniList) and search is needed
+      if (!isNaN(Number(episodeId)) && title) {
+        this.logger.debug(`Numeric ID detected for AnimeKai, searching by title: ${title}`);
+        const searchRes = await this.animekai.search(title).catch(() => null);
+        if (searchRes?.results?.length) {
+          targetId = searchRes.results[0].id;
+          this.logger.debug(`Found AnimeKai mapping: ${targetId}`);
+        }
+      }
+
+      const sources = await this.animekai.fetchEpisodeSources(targetId).catch(() => null);
       if (!sources || !sources.sources) return null;
 
       return {

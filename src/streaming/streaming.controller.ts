@@ -57,6 +57,7 @@ export class StreamingController {
     @Query("ep") ep?: string,
     @Query("proxyBaseUrl") customProxyUrl?: string,
     @Query("tmdbId") tmdbId?: string,
+    @Query("title") title?: string,
   ) {
     if (!id) {
       throw new HttpException("Episode ID is required", HttpStatus.BAD_REQUEST);
@@ -79,6 +80,7 @@ export class StreamingController {
       malId,
       ep,
       tmdbId,
+      title,
     );
   }
 
