@@ -21,6 +21,7 @@ import { CommentsModule } from "./comments/comments.module";
 import { ReactionsModule } from "./reactions/reactions.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { StreamingModule } from "./streaming/streaming.module";
+import { PeopleModule } from "./people/people.module";
 // import { ConsumetModule } from './consumet/consumet.module';
 import * as redisStore from "cache-manager-redis-store";
 
@@ -76,6 +77,7 @@ import * as redisStore from "cache-manager-redis-store";
     ReactionsModule,
     NotificationsModule,
     StreamingModule,
+    PeopleModule,
     // ConsumetModule,
   ],
   controllers: [],
