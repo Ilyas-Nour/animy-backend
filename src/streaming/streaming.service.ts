@@ -67,11 +67,11 @@ export class StreamingService {
     title?: string
   ) {
     try {
-      const aniListId = parseInt(malIdParam || (episodeId.length > 5 ? episodeId : ""), 10);
+      const aniListId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       const activeAniListId = !isNaN(aniListId) ? aniListId : null;
       
-      this.logger.debug(`Mesh-v7.8 surgical-clean: ID=${episodeId}, EP=${epNum}`);
+      this.logger.debug(`Mesh-v7.9 universal-resolve: ID=${episodeId}, AL=${activeAniListId}, EP=${epNum}`);
       
       // 1. Instant MAL ID Resolution (with 1s Cutoff)
       const malId = await Promise.race([
@@ -131,7 +131,7 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v7.8-clean",
+        provider: "mesh-v7.9-universal",
         servers: servers,
         headers: {}
       };
