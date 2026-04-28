@@ -1,12 +1,17 @@
-import { Injectable, Logger } from "@nestjs/common";
 import { ConsumetService } from "./consumet.service";
+import { IdMappingService } from "./id-mapping.service";
+import { EpisodeCacheService } from "./episode-cache.service";
 import axios from "axios";
 
 @Injectable()
 export class StreamingService {
   private readonly logger = new Logger(StreamingService.name);
 
-  constructor(private readonly consumetService: ConsumetService) {}
+  constructor(
+    private readonly consumetService: ConsumetService,
+    private readonly mappingService: IdMappingService,
+    private readonly cacheService: EpisodeCacheService,
+  ) {}
 
   /**
    * Search for anime
@@ -48,7 +53,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v7.3: MegaUp/Anikai Edition
+   * Resilience Mesh v7.5: "The Solid Solution" (Caching & Mapping Layer)
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -60,80 +65,86 @@ export class StreamingService {
     title?: string
   ) {
     try {
-      const malId = (malIdParam && malIdParam !== 'undefined' && malIdParam !== 'null' && malIdParam !== '0') ? malIdParam : null;
-      const epNum = episodeNumber || "1";
-      this.logger.debug(`Mesh-v7.2 Call: ID=${episodeId}, MAL=${malId}, EP=${epNum}`);
+      const aniListId = parseInt(malIdParam || episodeId, 10);
+      const epNum = parseInt(episodeNumber || "1", 10);
+      const isNumericId = !isNaN(aniListId);
+      
+      this.logger.debug(`Mesh-v7.5 resolving: ID=${episodeId}, Title=${title}, EP=${epNum}`);
       
       const servers: any[] = [];
 
-      // 1. ANIFY.TV (Primary Resolver)
-      // If we have a malId/anilistId, this is the most reliable way to get sources
-      const anilistId = malId || ((episodeId.length > 5 && !episodeId.includes('-')) ? episodeId : tmdbId);
-      if (anilistId && anilistId !== 'undefined') {
-        try {
-          const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${episodeId}&episodeNumber=${epNum}&id=${anilistId}&subType=sub`;
-          const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
-          if (anifyRes?.data?.sources) {
-            servers.push({
-              name: 'Main (High Speed)',
-              sources: anifyRes.data.sources.map((s: any) => ({ url: s.url, quality: s.quality || 'auto', isM3U8: true })),
-              provider: "anify",
-              isNative: true
-            });
-          }
-        } catch (e) {}
+      // --- LAYER 1: CACHE CHECK ---
+      if (isNumericId) {
+        const cachedAnify = await this.cacheService.getCachedLinks(aniListId, epNum, 'anify');
+        if (cachedAnify) {
+          servers.push({ name: 'Main (High Speed - Cached)', ...cachedAnify, isNative: true });
+        }
+        
+        const cachedKai = await this.cacheService.getCachedLinks(aniListId, epNum, 'animekai');
+        if (cachedKai) {
+          servers.push({ name: 'Mirror 2 (MegaUp - Cached)', ...cachedKai, isNative: true });
+        }
       }
 
-      // 2. VERIFIED MIRRORS (The Solid Backup)
-      if (malId) {
+      // --- LAYER 2: PRIMARY RESOLVER (ANIFY) ---
+      if (servers.length === 0 && isNumericId) {
+        try {
+          const anifyId = await this.mappingService.resolveAnifyId(aniListId);
+          if (anifyId) {
+            const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${episodeId}&episodeNumber=${epNum}&id=${anifyId}&subType=sub`;
+            const anifyRes = await axios.get(anifyUrl, { timeout: 3500 }).catch(() => null);
+            if (anifyRes?.data?.sources) {
+              const streamData = {
+                sources: anifyRes.data.sources.map((s: any) => ({ url: s.url, quality: s.quality || 'auto', isM3U8: true })),
+                provider: "anify"
+              };
+              servers.push({ name: 'Main (High Speed)', ...streamData, isNative: true });
+              await this.cacheService.cacheLinks(aniListId, epNum, 'anify', streamData);
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`Anify Resolver failed: ${e.message}`);
+        }
+      }
+
+      // --- LAYER 3: VERIFIED MIRRORS (MAPPINGS) ---
+      if (isNumericId) {
+        // A. VidLink (Native Support for MAL IDs)
         servers.push({
           name: 'Mirror 1 (VidLink)',
-          url: `https://vidlink.pro/anime/${malId}/${epNum}/sub?fallback=true`,
+          url: `https://vidlink.pro/anime/${aniListId}/${epNum}/sub?fallback=true`,
           provider: 'mirror',
           isNative: false
         });
 
-        // 🚀 AnimeKai (MegaUp) - NEW PREMIUM MIRROR
-        try {
-          const kaiSources = await this.consumetService.getAnimeKaiSources(episodeId, title).catch(() => null);
-          if (kaiSources?.sources?.length) {
-            servers.push({
-              name: 'Mirror 2 (MegaUp/Anikai)',
-              sources: kaiSources.sources,
-              provider: "animekai",
-              isNative: true
-            });
-          }
-        } catch (e) {}
+        // B. AnimeKai (MegaUp) - Using Mapping Fallback
+        if (!servers.some(s => s.provider === 'animekai')) {
+          try {
+            const kaiId = title ? await this.mappingService.resolveAnikaiId(aniListId, title) : episodeId;
+            const kaiSources = await this.consumetService.getAnimeKaiSources(kaiId, title).catch(() => null);
+            if (kaiSources?.sources?.length) {
+              const streamData = { sources: kaiSources.sources, provider: "animekai" };
+              servers.push({ name: 'Mirror 2 (MegaUp/Anikai)', ...streamData, isNative: true });
+              await this.cacheService.cacheLinks(aniListId, epNum, 'animekai', streamData);
+            }
+          } catch (e) {}
+        }
 
+        // C. Standard Mirrors
         servers.push({
           name: 'Mirror 3 (VidSrc.me)',
-          url: `https://vidsrc.me/embed/anime?mal_id=${malId}&episode=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-        servers.push({
-          name: 'Mirror 4 (VidSrc.su)',
-          url: `https://vidsrc.su/embed/anime/${malId}/${epNum}`,
+          url: `https://vidsrc.me/embed/anime?mal_id=${aniListId}&episode=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
       }
 
-      // 3. LEGACY NODE (Consumet)
-      if (servers.length < 2) {
+      // --- LAYER 4: SCRAPER FALLBACK (HI-ANIME) ---
+      if (servers.length < 3) {
         try {
           let targetEpisodeId = episodeId;
-          
-          // If ID is numeric (AniList) and Anify failed, try searching HiAnime by title
-          if (!isNaN(Number(episodeId)) && title) {
-            this.logger.debug(`AniList ID detected, resolving HiAnime ID via title: ${title}`);
-            const searchRes = await this.consumetService.search(title).catch(() => null);
-            const hianimeResult = searchRes?.find((r: any) => r.provider === 'hianime');
-            if (hianimeResult) {
-              targetEpisodeId = hianimeResult.id;
-              this.logger.debug(`Resolved HiAnime ID: ${targetEpisodeId}`);
-            }
+          if (isNumericId && title) {
+            targetEpisodeId = await this.mappingService.resolveHiAnimeId(aniListId, title) || episodeId;
           }
 
           const streamData = await this.consumetService.getEpisodeSources(targetEpisodeId, "hianime").catch(() => null);
@@ -149,13 +160,12 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v7.3",
-        sources: [],
+        provider: "mesh-v7.5-solid",
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v7.3 failure: ${error.message}`);
+      this.logger.error(`Mesh-v7.5 failure: ${error.message}`);
       return null;
     }
   }
@@ -165,13 +175,19 @@ export class StreamingService {
    */
   async proxyStream(url: string, referer: string, res: any, req: any) {
     try {
+      // Auto-detect Referer if not provided or for specific domains
+      let finalReferer = referer;
+      if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
+      if (url.includes('animepahe')) finalReferer = 'https://animepahe.ru/';
+      if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
+
       const response = await axios.get(url, {
         headers: {
-          Referer: referer,
+          Referer: finalReferer,
           "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         },
         responseType: "stream",
-        timeout: 10000,
+        timeout: 15000,
       });
 
       // Forward headers

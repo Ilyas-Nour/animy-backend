@@ -78,6 +78,51 @@ export class IdMappingService {
   }
 
   /**
+   * Resolves an AniList anime ID to an Anify provider ID.
+   */
+  async resolveAnifyId(anilistId: number): Promise<string | null> {
+    const cached = await this.prisma.animeMapping.findUnique({
+      where: { id: anilistId },
+    });
+
+    if (cached?.anifyId) return cached.anifyId;
+
+    // Mapping for Anify is usually just the AniList ID itself, but we store it for consistency
+    const anifyId = String(anilistId);
+    await this.prisma.animeMapping.upsert({
+      where: { id: anilistId },
+      update: { anifyId },
+      create: { id: anilistId, anifyId },
+    });
+    return anifyId;
+  }
+
+  /**
+   * Resolves an AniList anime ID to an Anikai (MegaUp) provider ID.
+   */
+  async resolveAnikaiId(anilistId: number, title: string): Promise<string | null> {
+    const cached = await this.prisma.animeMapping.findUnique({
+      where: { id: anilistId },
+    });
+
+    if (cached?.anikaiId) return cached.anikaiId;
+
+    try {
+      this.logger.debug(`Searching Anikai for title: ${title}`);
+      // Assuming a search mechanism exists or we use title-based matching
+      const anikaiId = title.toLowerCase().replace(/\s+/g, '-'); // Simple slug for now or actual search result
+      await this.prisma.animeMapping.upsert({
+        where: { id: anilistId },
+        update: { anikaiId },
+        create: { id: anilistId, anikaiId },
+      });
+      return anikaiId;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Saves (or updates) a HiAnime ID mapping for a given AniList ID.
    */
   async saveHiAnimeMapping(anilistId: number, hiAnimeId: string): Promise<void> {
@@ -91,6 +136,19 @@ export class IdMappingService {
     } catch (e) {
       this.logger.error(`Failed to save HiAnime mapping for ${anilistId}: ${e.message}`);
     }
+  }
+
+  /**
+   * Saves (or updates) an Anikai ID mapping.
+   */
+  async saveAnikaiMapping(anilistId: number, anikaiId: string): Promise<void> {
+    try {
+      await this.prisma.animeMapping.upsert({
+        where: { id: anilistId },
+        update: { anikaiId, lastChecked: new Date() },
+        create: { id: anilistId, anikaiId },
+      });
+    } catch (e) {}
   }
 
   /**

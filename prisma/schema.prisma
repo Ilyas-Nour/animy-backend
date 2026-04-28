@@ -525,7 +525,9 @@ enum NotificationType {
 // Avoids redundant title searches on every page load
 model AnimeMapping {
   id          Int      @id  // AniList ID (acts as primary key)
+  anifyId     String?       // Anify mapping ID
   hiAnimeId   String?       // HiAnime/Aniwatch ID, e.g. "one-piece-100"
+  anikaiId    String?       // Anikai/MegaUp ID
   mangaDexId  String?       // MangaDex UUID
   mangaPillId String?       // MangaPill slug
   lastChecked DateTime @default(now())
@@ -533,3 +535,18 @@ model AnimeMapping {
 
   @@map("anime_mappings")
 }
+
+// Caches streaming links to avoid redundant provider calls (links usually expire in 4-6 hours)
+model EpisodeCache {
+  id           String   @id @default(uuid())
+  animeId      Int      // AniList ID
+  episodeNum   Int
+  provider     String   // e.g., "anify", "animepahe", "hianime"
+  streamData   Json     // Stores the full sources/subtitles object
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([animeId, episodeNum, provider])
+  @@map("episode_cache")
+}
+
