@@ -54,7 +54,8 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v7.5: "The Solid Solution" (Caching & Mapping Layer)
+   * Resilience Mesh v7.6: "The Deep-Resolve Engine"
+   * Fixes issues where episodeId is virtual (e.g. "1") or Anify is down.
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -66,107 +67,124 @@ export class StreamingService {
     title?: string
   ) {
     try {
-      const aniListId = parseInt(malIdParam || episodeId, 10);
+      const aniListId = parseInt(malIdParam || (episodeId.length > 5 ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
-      const isNumericId = !isNaN(aniListId);
+      const isVirtualId = episodeId.length < 5 || !isNaN(Number(episodeId));
+      const activeAniListId = !isNaN(aniListId) ? aniListId : null;
       
-      this.logger.debug(`Mesh-v7.5 resolving: ID=${episodeId}, Title=${title}, EP=${epNum}`);
+      this.logger.debug(`Mesh-v7.6 deep-resolve: ID=${episodeId}, Title=${title}, EP=${epNum}, isVirtual=${isVirtualId}`);
       
       const servers: any[] = [];
 
       // --- LAYER 1: CACHE CHECK ---
-      if (isNumericId) {
-        const cachedAnify = await this.cacheService.getCachedLinks(aniListId, epNum, 'anify');
+      if (activeAniListId) {
+        const cachedAnify = await this.cacheService.getCachedLinks(activeAniListId, epNum, 'anify');
         if (cachedAnify) {
           servers.push({ name: 'Main (High Speed - Cached)', ...(cachedAnify as any), isNative: true });
-        }
-        
-        const cachedKai = await this.cacheService.getCachedLinks(aniListId, epNum, 'animekai');
-        if (cachedKai) {
-          servers.push({ name: 'Mirror 2 (MegaUp - Cached)', ...(cachedKai as any), isNative: true });
         }
       }
 
       // --- LAYER 2: PRIMARY RESOLVER (ANIFY) ---
-      if (servers.length === 0 && isNumericId) {
+      if (servers.length === 0 && activeAniListId) {
         try {
-          const anifyId = await this.mappingService.resolveAnifyId(aniListId);
+          const anifyId = await this.mappingService.resolveAnifyId(activeAniListId);
           if (anifyId) {
-            const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${episodeId}&episodeNumber=${epNum}&id=${anifyId}&subType=sub`;
-            const anifyRes = await axios.get(anifyUrl, { timeout: 3500 }).catch(() => null);
+            // If virtual ID, we must find the actual watchId from Anify first
+            let watchId = episodeId;
+            if (isVirtualId) {
+              const info = await this.consumetService.getAnimeInfo(anifyId).catch(() => null);
+              const ep = info?.episodes?.find((e: any) => e.number === epNum);
+              if (ep) watchId = ep.id;
+            }
+
+            const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${encodeURIComponent(watchId)}&episodeNumber=${epNum}&id=${anifyId}&subType=sub`;
+            const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
             if (anifyRes?.data?.sources) {
               const streamData = {
                 sources: anifyRes.data.sources.map((s: any) => ({ url: s.url, quality: s.quality || 'auto', isM3U8: true })),
                 provider: "anify"
               };
               servers.push({ name: 'Main (High Speed)', ...streamData, isNative: true });
-              await this.cacheService.cacheLinks(aniListId, epNum, 'anify', streamData);
+              await this.cacheService.cacheLinks(activeAniListId, epNum, 'anify', streamData);
             }
           }
-        } catch (e) {
-          this.logger.warn(`Anify Resolver failed: ${e.message}`);
-        }
+        } catch (e) {}
       }
 
-      // --- LAYER 3: VERIFIED MIRRORS (MAPPINGS) ---
-      if (isNumericId) {
-        // A. VidLink (Native Support for MAL IDs)
+      // --- LAYER 3: VERIFIED MIRRORS (ID-BASED) ---
+      if (activeAniListId) {
+        // A. VidLink (Ultra Reliable)
         servers.push({
           name: 'Mirror 1 (VidLink)',
-          url: `https://vidlink.pro/anime/${aniListId}/${epNum}/sub?fallback=true`,
+          url: `https://vidlink.pro/anime/${activeAniListId}/${epNum}?fallback=true`,
           provider: 'mirror',
           isNative: false
         });
 
-        // B. AnimeKai (MegaUp) - Using Mapping Fallback
-        if (!servers.some(s => s.provider === 'animekai')) {
-          try {
-            const kaiId = title ? await this.mappingService.resolveAnikaiId(aniListId, title) : episodeId;
-            const kaiSources = await this.consumetService.getAnimeKaiSources(kaiId, title).catch(() => null);
-            if (kaiSources?.sources?.length) {
-              const streamData = { sources: kaiSources.sources, provider: "animekai" };
-              servers.push({ name: 'Mirror 2 (MegaUp/Anikai)', ...streamData, isNative: true });
-              await this.cacheService.cacheLinks(aniListId, epNum, 'animekai', streamData);
-            }
-          } catch (e) {}
-        }
-
-        // C. Standard Mirrors
+        // B. VidSrc.me (Classic)
         servers.push({
-          name: 'Mirror 3 (VidSrc.me)',
-          url: `https://vidsrc.me/embed/anime?mal_id=${aniListId}&episode=${epNum}`,
+          name: 'Mirror 2 (VidSrc.me)',
+          url: `https://vidsrc.me/embed/anime?mal_id=${activeAniListId}&episode=${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // C. VidSrc.su (Premium)
+        servers.push({
+          name: 'Mirror 3 (VidSrc.su)',
+          url: `https://vidsrc.su/embed/anime/${activeAniListId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
       }
 
-      // --- LAYER 4: SCRAPER FALLBACK (HI-ANIME) ---
+      // --- LAYER 4: NATIVE MIRROR (ANIKAI/MEGAUP) ---
+      if (servers.length < 5 && activeAniListId && title) {
+        try {
+          const kaiId = await this.mappingService.resolveAnikaiId(activeAniListId, title);
+          if (kaiId) {
+            // Resolve actual episode ID for Anikai
+            const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai');
+            if (watchId) {
+              const kaiSources = await this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
+              if (kaiSources?.sources?.length) {
+                servers.push({ name: 'Mirror 4 (MegaUp/Native)', sources: kaiSources.sources, provider: "animekai", isNative: true });
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      // --- LAYER 5: EMERGENCY SCRAPER (HI-ANIME) ---
       if (servers.length < 3) {
         try {
-          let targetEpisodeId = episodeId;
-          if (isNumericId && title) {
-            targetEpisodeId = await this.mappingService.resolveHiAnimeId(aniListId, title) || episodeId;
+          let targetAnimeId = episodeId;
+          if (activeAniListId && title) {
+            targetAnimeId = await this.mappingService.resolveHiAnimeId(activeAniListId, title) || episodeId;
           }
 
-          const streamData = await this.consumetService.getEpisodeSources(targetEpisodeId, "hianime").catch(() => null);
-          if (streamData?.sources?.length) {
-            servers.push({
-              name: 'Mirror 5 (Legacy)',
-              sources: streamData.sources,
-              provider: "hianime",
-              isNative: true
-            });
+          const watchId = await this.consumetService.resolveEpisodeId(targetAnimeId, epNum, 'hianime');
+          if (watchId) {
+            const streamData = await this.consumetService.getEpisodeSources(watchId, "hianime").catch(() => null);
+            if (streamData?.sources?.length) {
+              servers.push({
+                name: 'Mirror 5 (Direct)',
+                sources: streamData.sources,
+                provider: "hianime",
+                isNative: true
+              });
+            }
           }
         } catch (e) {}
       }
 
       return {
-        provider: "mesh-v7.5-solid",
+        provider: "mesh-v7.6-deep",
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v7.5 failure: ${error.message}`);
+      this.logger.error(`Mesh-v7.6 failure: ${error.message}`);
       return null;
     }
   }

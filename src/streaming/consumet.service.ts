@@ -113,6 +113,38 @@ export class ConsumetService {
   }
 
   /**
+   * Resolves a generic episode number to a provider-specific episode ID
+   */
+  async resolveEpisodeId(animeId: string, episodeNum: number, provider: string = 'hianime'): Promise<string | null> {
+    try {
+      this.logger.debug(`Resolving episode ${episodeNum} for ${animeId} on ${provider}`);
+      
+      const info = await this.getAnimeInfo(animeId).catch(() => null);
+      if (info?.episodes?.length) {
+        const ep = info.episodes.find((e: any) => e.number === episodeNum);
+        return ep ? ep.id : null;
+      }
+
+      // If info fetch failed, try searching if animeId is numeric
+      if (!isNaN(Number(animeId))) {
+        const searchResults = await this.search(animeId);
+        if (searchResults.length > 0) {
+          const firstId = searchResults[0].id;
+          const info = await this.getAnimeInfo(firstId).catch(() => null);
+          if (info?.episodes?.length) {
+            const ep = info.episodes.find((e: any) => e.number === episodeNum);
+            return ep ? ep.id : null;
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * Get Episode Sources with aggressive timeout
    */
   async getEpisodeSources(episodeId: string, provider: string = 'animepahe') {
