@@ -26,35 +26,10 @@ export class ConsumetService {
     try {
       this.logger.debug(`Resilience Search Mesh v6.0: ${query}`);
       
-      // 1. Parallel Search Mesh (v7.7 Performance Update)
+      // 1. High-Speed Search Mesh (v7.8 Surgical Clean)
       const results = await Promise.race([
         Promise.all([
-          // Anify (Primary)
-          (async () => {
-            try {
-              const url = `https://api.anify.tv/search/anime/${encodeURIComponent(query)}`;
-              const res = await axios.get(url, { timeout: 3000 }).catch(() => null);
-              return res?.data?.map((a: any) => ({
-                id: a.id,
-                title: a.title.english || a.title.romaji,
-                image: a.coverImage,
-                provider: 'anify'
-              })) || [];
-            } catch (e) { return []; }
-          })(),
-          // HiAnime (Mirror 1)
-          (async () => {
-            try {
-              const res = await this.hianime.search(query).catch(() => null);
-              return res?.results?.map((r: any) => ({
-                id: r.id,
-                title: r.title,
-                image: r.image,
-                provider: 'hianime'
-              })) || [];
-            } catch (e) { return []; }
-          })(),
-          // AnimePahe (Mirror 2)
+          // AnimePahe (Verified Working Today)
           (async () => {
             try {
               const res = await this.animepahe.search(query).catch(() => null);
@@ -67,8 +42,8 @@ export class ConsumetService {
             } catch (e) { return []; }
           })()
         ]),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 5000))
-      ]).catch(() => [[], [], []]);
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 4000))
+      ]).catch(() => [[]]);
 
       // Flatten and prioritize
       const flattened = results.flat();
