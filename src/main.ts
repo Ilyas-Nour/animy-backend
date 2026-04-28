@@ -37,9 +37,13 @@ async function bootstrap() {
   const avatarsDir = join(uploadsDir, "avatars");
   const bannersDir = join(uploadsDir, "banners");
 
-  if (!existsSync(uploadsDir)) mkdirSync(uploadsDir);
-  if (!existsSync(avatarsDir)) mkdirSync(avatarsDir);
-  if (!existsSync(bannersDir)) mkdirSync(bannersDir);
+  try {
+    if (!existsSync(uploadsDir)) mkdirSync(uploadsDir);
+    if (!existsSync(avatarsDir)) mkdirSync(avatarsDir);
+    if (!existsSync(bannersDir)) mkdirSync(bannersDir);
+  } catch (err) {
+    console.error("Failed to create upload directories:", err);
+  }
 
   // Serve static files from uploads directory
   app.useStaticAssets(uploadsDir, {
