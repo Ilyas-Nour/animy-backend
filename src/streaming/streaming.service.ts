@@ -54,6 +54,37 @@ export class StreamingService {
   }
 
   /**
+   * Resilience Mesh v8.1: "Stable Discovery"
+   * Finds anime info without relying on dead providers.
+   */
+  async findAnime(title: string, titleEnglish: string, anilistId: string) {
+    try {
+      this.logger.debug(`Mesh-v8.1 Discovery: ${title} (AL: ${anilistId})`);
+      
+      // Try to find a working provider ID in parallel
+      const results = await this.consumetService.search(titleEnglish || title);
+      
+      if (results.length > 0) {
+        return {
+          id: results[0].id,
+          title: results[0].title,
+          provider: results[0].provider
+        };
+      }
+
+      // Fallback: Use AniList ID as the physical ID
+      return {
+        id: anilistId,
+        title: titleEnglish || title,
+        provider: "anilist"
+      };
+    } catch (error) {
+      this.logger.error(`Discovery failed: ${error.message}`);
+      return { id: anilistId, title: titleEnglish || title, provider: "anilist" };
+    }
+  }
+
+  /**
    * Resilience Mesh v8.0: "The Zero-Dependency Standard"
    * Instantly generates mirrors without waiting for external API resolution.
    */
@@ -67,17 +98,18 @@ export class StreamingService {
     title?: string
   ) {
     try {
+      // Priority: 1. malIdParam (from frontend) 2. episodeId (if numeric) 3. Search fallback
       const aniListId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       const activeAniListId = !isNaN(aniListId) ? aniListId : null;
       
-      this.logger.debug(`Mesh-v8.0 zero-dep: AL=${activeAniListId}, EP=${epNum}`);
+      this.logger.debug(`Mesh-v8.1 streaming: AL=${activeAniListId}, EP=${epNum}`);
       
       const servers: any[] = [];
 
-      // 1. INSTANT MIRRORS (Zero-Wait Path)
+      // 1. INSTANT MIRRORS (The "Indestructible" Path)
       if (activeAniListId) {
-        // A. VidLink (Professional Embed Route)
+        // A. VidLink (Current #1 Leader)
         servers.push({
           name: 'Mirror 1 (VidLink)',
           url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}?primaryColor=6366f1`,
@@ -85,7 +117,7 @@ export class StreamingService {
           isNative: false
         });
 
-        // B. VidSrc.me (The Global Standard)
+        // B. VidSrc.me (Global Fallback)
         servers.push({
           name: 'Mirror 2 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?mal_id=${activeAniListId}&episode=${epNum}`,
@@ -93,7 +125,7 @@ export class StreamingService {
           isNative: false
         });
 
-        // C. VidSrc.su (High-Availability Mirror)
+        // C. VidSrc.su (Premium Fallback)
         servers.push({
           name: 'Mirror 3 (VidSrc.su)',
           url: `https://vidsrc.su/embed/anime/${activeAniListId}/${epNum}`,
@@ -102,37 +134,38 @@ export class StreamingService {
         });
       }
 
-      // 2. BACKGROUND RESOLUTION (1s Cutoff)
-      // This runs in the background to see if we can find native sources
-      const nativeSources = await Promise.race([
-        (async () => {
-          if (!activeAniListId || !title) return null;
-          const kaiId = await this.mappingService.resolveAnikaiId(activeAniListId, title).catch(() => null);
-          if (!kaiId) return null;
-          const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
-          if (!watchId) return null;
-          return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
-        })(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))
-      ]).catch(() => null);
+      // 2. BACKGROUND NATIVE DISCOVERY (Optional)
+      // This is now purely secondary. If it fails, mirrors still work.
+      if (activeAniListId && title) {
+        const native = await Promise.race([
+          (async () => {
+            const kaiId = await this.mappingService.resolveAnikaiId(activeAniListId, title).catch(() => null);
+            if (!kaiId) return null;
+            const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
+            if (!watchId) return null;
+            return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
+          })(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+        ]).catch(() => null);
 
-      if (nativeSources?.sources?.length) {
-        servers.push({ 
-          name: 'Main Node (Native)', 
-          sources: nativeSources.sources, 
-          provider: "animekai", 
-          isNative: true 
-        });
+        if (native?.sources?.length) {
+          servers.push({ 
+            name: 'Main Node (Native)', 
+            sources: native.sources, 
+            provider: "animekai", 
+            isNative: true 
+          });
+        }
       }
 
       return {
-        provider: "mesh-v8.0-zero-dep",
+        provider: "mesh-v8.1-stable",
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v8.0 critical failure: ${error.message}`);
-      return { provider: "mesh-v8.0-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.1 critical error: ${error.message}`);
+      return { provider: "mesh-v8.1-error", servers: [], headers: {} };
     }
   }
 
