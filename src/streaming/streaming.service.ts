@@ -1,3 +1,4 @@
+import { Injectable, Logger } from "@nestjs/common";
 import { ConsumetService } from "./consumet.service";
 import { IdMappingService } from "./id-mapping.service";
 import { EpisodeCacheService } from "./episode-cache.service";
@@ -77,12 +78,12 @@ export class StreamingService {
       if (isNumericId) {
         const cachedAnify = await this.cacheService.getCachedLinks(aniListId, epNum, 'anify');
         if (cachedAnify) {
-          servers.push({ name: 'Main (High Speed - Cached)', ...cachedAnify, isNative: true });
+          servers.push({ name: 'Main (High Speed - Cached)', ...(cachedAnify as any), isNative: true });
         }
         
         const cachedKai = await this.cacheService.getCachedLinks(aniListId, epNum, 'animekai');
         if (cachedKai) {
-          servers.push({ name: 'Mirror 2 (MegaUp - Cached)', ...cachedKai, isNative: true });
+          servers.push({ name: 'Mirror 2 (MegaUp - Cached)', ...(cachedKai as any), isNative: true });
         }
       }
 
