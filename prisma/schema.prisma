@@ -525,6 +525,7 @@ enum NotificationType {
 // Avoids redundant title searches on every page load
 model AnimeMapping {
   id          Int      @id  // AniList ID (acts as primary key)
+  idMal       Int?          // MyAnimeList ID mapping
   anifyId     String?       // Anify mapping ID
   hiAnimeId   String?       // HiAnime/Aniwatch ID, e.g. "one-piece-100"
   anikaiId    String?       // Anikai/MegaUp ID

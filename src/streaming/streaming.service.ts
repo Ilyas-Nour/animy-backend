@@ -75,6 +75,10 @@ export class StreamingService {
       this.logger.debug(`Mesh-v7.6 deep-resolve: ID=${episodeId}, Title=${title}, EP=${epNum}, isVirtual=${isVirtualId}`);
       
       const servers: any[] = [];
+      const malId = activeAniListId ? await this.mappingService.getMalId(activeAniListId) : null;
+      const targetId = malId || activeAniListId;
+
+      this.logger.debug(`Mesh-v7.7 True-ID: AniList=${activeAniListId} -> MAL=${malId}`);
 
       // --- LAYER 1: CACHE CHECK ---
       if (activeAniListId) {
@@ -84,12 +88,38 @@ export class StreamingService {
         }
       }
 
-      // --- LAYER 2: PRIMARY RESOLVER (ANIFY) ---
-      if (servers.length === 0 && activeAniListId) {
+      // --- LAYER 2: VERIFIED MIRRORS (ID-BASED) - PRIORITIZED FOR STABILITY ---
+      if (targetId) {
+        // A. VidLink (Ultra Reliable)
+        servers.push({
+          name: 'Mirror 1 (VidLink)',
+          url: `https://vidlink.pro/anime/${targetId}/${epNum}?fallback=true`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // B. VidSrc.me (Classic)
+        servers.push({
+          name: 'Mirror 2 (VidSrc.me)',
+          url: `https://vidsrc.me/embed/anime?mal_id=${targetId}&episode=${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // C. VidSrc.su (Premium)
+        servers.push({
+          name: 'Mirror 3 (VidSrc.su)',
+          url: `https://vidsrc.su/embed/anime/${targetId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+      }
+
+      // --- LAYER 3: PRIMARY RESOLVER (ANIFY) ---
+      if (servers.length < 4 && activeAniListId) {
         try {
           const anifyId = await this.mappingService.resolveAnifyId(activeAniListId);
           if (anifyId) {
-            // If virtual ID, we must find the actual watchId from Anify first
             let watchId = episodeId;
             if (isVirtualId) {
               const info: any = await this.consumetService.getAnimeInfo(anifyId).catch(() => null);
@@ -98,7 +128,7 @@ export class StreamingService {
             }
 
             const anifyUrl = `https://api.anify.tv/sources?providerId=gogoanime&watchId=${encodeURIComponent(watchId)}&episodeNumber=${epNum}&id=${anifyId}&subType=sub`;
-            const anifyRes = await axios.get(anifyUrl, { timeout: 4000 }).catch(() => null);
+            const anifyRes = await axios.get(anifyUrl, { timeout: 3500 }).catch(() => null);
             if (anifyRes?.data?.sources) {
               const streamData = {
                 sources: anifyRes.data.sources.map((s: any) => ({ url: s.url, quality: s.quality || 'auto', isM3U8: true })),
@@ -109,33 +139,6 @@ export class StreamingService {
             }
           }
         } catch (e) {}
-      }
-
-      // --- LAYER 3: VERIFIED MIRRORS (ID-BASED) ---
-      if (activeAniListId) {
-        // A. VidLink (Ultra Reliable)
-        servers.push({
-          name: 'Mirror 1 (VidLink)',
-          url: `https://vidlink.pro/anime/${activeAniListId}/${epNum}?fallback=true`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // B. VidSrc.me (Classic)
-        servers.push({
-          name: 'Mirror 2 (VidSrc.me)',
-          url: `https://vidsrc.me/embed/anime?mal_id=${activeAniListId}&episode=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // C. VidSrc.su (Premium)
-        servers.push({
-          name: 'Mirror 3 (VidSrc.su)',
-          url: `https://vidsrc.su/embed/anime/${activeAniListId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
       }
 
       // --- LAYER 4: NATIVE MIRROR (ANIKAI/MEGAUP) ---

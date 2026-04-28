@@ -26,48 +26,53 @@ export class ConsumetService {
     try {
       this.logger.debug(`Resilience Search Mesh v6.0: ${query}`);
       
-      // 1. Anify.tv (Professional 2026 Choice)
-      try {
-        const anifyUrl = `https://api.anify.tv/search/anime/${encodeURIComponent(query)}`;
-        const anifyRes = await axios.get(anifyUrl, { timeout: 3000 }).catch(() => null);
-        if (anifyRes?.data && Array.isArray(anifyRes.data)) {
-          return anifyRes.data.map((a: any) => ({
-            id: a.id,
-            title: a.title.english || a.title.romaji,
-            image: a.coverImage,
-            provider: 'anify'
-          }));
-        }
-      } catch (e) {}
+      // 1. Parallel Search Mesh (v7.7 Performance Update)
+      const results = await Promise.race([
+        Promise.all([
+          // Anify (Primary)
+          (async () => {
+            try {
+              const url = `https://api.anify.tv/search/anime/${encodeURIComponent(query)}`;
+              const res = await axios.get(url, { timeout: 3000 }).catch(() => null);
+              return res?.data?.map((a: any) => ({
+                id: a.id,
+                title: a.title.english || a.title.romaji,
+                image: a.coverImage,
+                provider: 'anify'
+              })) || [];
+            } catch (e) { return []; }
+          })(),
+          // HiAnime (Mirror 1)
+          (async () => {
+            try {
+              const res = await this.hianime.search(query).catch(() => null);
+              return res?.results?.map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                image: r.image,
+                provider: 'hianime'
+              })) || [];
+            } catch (e) { return []; }
+          })(),
+          // AnimePahe (Mirror 2)
+          (async () => {
+            try {
+              const res = await this.animepahe.search(query).catch(() => null);
+              return res?.results?.map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                image: r.image,
+                provider: 'animepahe'
+              })) || [];
+            } catch (e) { return []; }
+          })()
+        ]),
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 5000))
+      ]).catch(() => [[], [], []]);
 
-      // 2. HiAnime Fallback (Direct Scraper)
-      try {
-        this.logger.debug(`Anify failed, falling back to HiAnime search...`);
-        const hianimeRes = await this.hianime.search(query).catch(() => null);
-        if (hianimeRes?.results?.length) {
-          return hianimeRes.results.map((r: any) => ({
-            id: r.id,
-            title: r.title,
-            image: r.image,
-            provider: 'hianime'
-          }));
-        }
-      } catch (e) {}
-
-      // 3. AnimePahe Fallback
-      try {
-        const paheRes = await this.animepahe.search(query).catch(() => null);
-        if (paheRes?.results?.length) {
-          return paheRes.results.map((r: any) => ({
-            id: r.id,
-            title: r.title,
-            image: r.image,
-            provider: 'animepahe'
-          }));
-        }
-      } catch (e) {}
-
-      return [];
+      // Flatten and prioritize
+      const flattened = results.flat();
+      return flattened.length > 0 ? flattened : [];
     } catch (error) {
       this.logger.error(`Search mesh failed: ${error.message}`);
       return [];
