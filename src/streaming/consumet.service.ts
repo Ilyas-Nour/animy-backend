@@ -6,7 +6,6 @@ import axios from "axios";
 export class ConsumetService {
   private readonly logger = new Logger(ConsumetService.name);
   
-  private readonly animekai = new ANIME.AnimeKai();
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly kickass = new ANIME.KickAssAnime();
   private readonly hianime = new ANIME.Hianime();
@@ -137,6 +136,7 @@ export class ConsumetService {
     } catch (error) {
       return null;
     }
+  }
 
   /**
    * Get Episode Sources from AnimeKai (MegaUp)
@@ -165,3 +165,4 @@ export class ConsumetService {
     }
   }
 }
+
