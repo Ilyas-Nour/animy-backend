@@ -57,36 +57,47 @@ export class StreamingService {
    * Resilience Mesh v8.1: "Stable Discovery"
    * Finds anime info without relying on dead providers.
    */
+  /**
+   * Resilience Mesh v8.2: "Instant Discovery"
+   * Immediately returns the AniList ID to keep the UI responsive.
+   */
   async findAnime(title: string, titleEnglish: string, anilistId: string) {
     try {
-      this.logger.debug(`Mesh-v8.1 Discovery: ${title} (AL: ${anilistId})`);
+      this.logger.debug(`Mesh-v8.2 Discovery: ${title} (AL: ${anilistId})`);
       
-      // Try to find a working provider ID in parallel
-      const results = await this.consumetService.search(titleEnglish || title);
-      
-      if (results.length > 0) {
-        return {
-          id: results[0].id,
-          title: results[0].title,
-          provider: results[0].provider
-        };
-      }
-
-      // Fallback: Use AniList ID as the physical ID
-      return {
+      // 1. INSTANT FALLBACK (Primary strategy for stability)
+      const fallback = {
         id: anilistId,
         title: titleEnglish || title,
         provider: "anilist"
       };
+
+      // 2. SILENT SEARCH (2s Cutoff)
+      // We try to find a better provider ID, but we don't wait forever.
+      try {
+        const results = await Promise.race([
+          this.consumetService.search(titleEnglish || title),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2500))
+        ]).catch(() => []);
+
+        if (results.length > 0) {
+          return {
+            id: results[0].id,
+            title: results[0].title,
+            provider: results[0].provider
+          };
+        }
+      } catch (e) {}
+
+      return fallback;
     } catch (error) {
-      this.logger.error(`Discovery failed: ${error.message}`);
       return { id: anilistId, title: titleEnglish || title, provider: "anilist" };
     }
   }
 
   /**
-   * Resilience Mesh v8.0: "The Zero-Dependency Standard"
-   * Instantly generates mirrors without waiting for external API resolution.
+   * Resilience Mesh v8.2: "Final Revival"
+   * Zero-Wait mirror generation.
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -98,18 +109,18 @@ export class StreamingService {
     title?: string
   ) {
     try {
-      // Priority: 1. malIdParam (from frontend) 2. episodeId (if numeric) 3. Search fallback
+      // Priority: malIdParam (AniList ID)
       const aniListId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       const activeAniListId = !isNaN(aniListId) ? aniListId : null;
       
-      this.logger.debug(`Mesh-v8.1 streaming: AL=${activeAniListId}, EP=${epNum}`);
+      this.logger.debug(`Mesh-v8.2 streaming: AL=${activeAniListId}, EP=${epNum}`);
       
       const servers: any[] = [];
 
-      // 1. INSTANT MIRRORS (The "Indestructible" Path)
+      // 1. INDESTRUCTIBLE MIRRORS (Zero-Wait)
       if (activeAniListId) {
-        // A. VidLink (Current #1 Leader)
+        // A. VidLink
         servers.push({
           name: 'Mirror 1 (VidLink)',
           url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}?primaryColor=6366f1`,
@@ -117,7 +128,7 @@ export class StreamingService {
           isNative: false
         });
 
-        // B. VidSrc.me (Global Fallback)
+        // B. VidSrc.me
         servers.push({
           name: 'Mirror 2 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?mal_id=${activeAniListId}&episode=${epNum}`,
@@ -125,7 +136,7 @@ export class StreamingService {
           isNative: false
         });
 
-        // C. VidSrc.su (Premium Fallback)
+        // C. VidSrc.su
         servers.push({
           name: 'Mirror 3 (VidSrc.su)',
           url: `https://vidsrc.su/embed/anime/${activeAniListId}/${epNum}`,
@@ -134,38 +145,39 @@ export class StreamingService {
         });
       }
 
-      // 2. BACKGROUND NATIVE DISCOVERY (Optional)
-      // This is now purely secondary. If it fails, mirrors still work.
+      // 2. NATIVE MIRROR (ANIKAI) - Background resolve
       if (activeAniListId && title) {
-        const native = await Promise.race([
-          (async () => {
-            const kaiId = await this.mappingService.resolveAnikaiId(activeAniListId, title).catch(() => null);
-            if (!kaiId) return null;
-            const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
-            if (!watchId) return null;
-            return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
-          })(),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
-        ]).catch(() => null);
+        try {
+          const kaiSources = await Promise.race([
+            (async () => {
+              const kaiId = await this.mappingService.resolveAnikaiId(activeAniListId, title).catch(() => null);
+              if (!kaiId) return null;
+              const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
+              if (!watchId) return null;
+              return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
+            })(),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+          ]).catch(() => null);
 
-        if (native?.sources?.length) {
-          servers.push({ 
-            name: 'Main Node (Native)', 
-            sources: native.sources, 
-            provider: "animekai", 
-            isNative: true 
-          });
-        }
+          if (kaiSources?.sources?.length) {
+            servers.push({ 
+              name: 'Mirror 4 (MegaUp)', 
+              sources: kaiSources.sources, 
+              provider: "animekai", 
+              isNative: true 
+            });
+          }
+        } catch (e) {}
       }
 
       return {
-        provider: "mesh-v8.1-stable",
+        provider: "mesh-v8.2-final",
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.1 critical error: ${error.message}`);
-      return { provider: "mesh-v8.1-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.2 critical error: ${error.message}`);
+      return { provider: "mesh-v8.2-error", servers: [], headers: {} };
     }
   }
 
