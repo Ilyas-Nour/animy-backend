@@ -8,6 +8,6 @@ export class PeopleController {
   @Get(":id")
   async getPerson(@Param("id", ParseIntPipe) id: number) {
     const data = await this.peopleService.getPerson(id);
-    return { data };
+    return data;
   }
 }
