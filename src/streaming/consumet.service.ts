@@ -10,6 +10,7 @@ export class ConsumetService {
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly kickass = new ANIME.KickAssAnime();
   private readonly hianime = new ANIME.Hianime();
+  private readonly animekai = new ANIME.AnimeKai();
 
   constructor() {
     // Override domains for 2026 stability
@@ -134,6 +135,32 @@ export class ConsumetService {
         }
       };
     } catch (error) {
+      return null;
+    }
+
+  /**
+   * Get Episode Sources from AnimeKai (MegaUp)
+   */
+  async getAnimeKaiSources(episodeId: string) {
+    try {
+      this.logger.debug(`Fetching AnimeKai (MegaUp) sources for: ${episodeId}`);
+      const sources = await this.animekai.fetchEpisodeSources(episodeId).catch(() => null);
+      if (!sources || !sources.sources) return null;
+
+      return {
+        sources: sources.sources.map((s: any) => ({
+          url: s.url,
+          quality: s.quality || 'auto',
+          isM3U8: s.url.includes('.m3u8')
+        })),
+        subtitles: sources.subtitles || [],
+        headers: {
+          Referer: 'https://anikai.to/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        }
+      };
+    } catch (error) {
+      this.logger.error(`AnimeKai source fetch failed: ${error.message}`);
       return null;
     }
   }

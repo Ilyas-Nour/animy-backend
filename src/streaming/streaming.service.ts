@@ -48,7 +48,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v7.2: Final Solid Solution
+   * Resilience Mesh v7.3: MegaUp/Anikai Edition
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -91,14 +91,28 @@ export class StreamingService {
           provider: 'mirror',
           isNative: false
         });
+
+        // 🚀 AnimeKai (MegaUp) - NEW PREMIUM MIRROR
+        try {
+          const kaiSources = await this.consumetService.getAnimeKaiSources(episodeId).catch(() => null);
+          if (kaiSources?.sources?.length) {
+            servers.push({
+              name: 'Mirror 2 (MegaUp/Anikai)',
+              sources: kaiSources.sources,
+              provider: "animekai",
+              isNative: true
+            });
+          }
+        } catch (e) {}
+
         servers.push({
-          name: 'Mirror 2 (VidSrc.me)',
+          name: 'Mirror 3 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?mal_id=${malId}&episode=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
         servers.push({
-          name: 'Mirror 3 (VidSrc.su)',
+          name: 'Mirror 4 (VidSrc.su)',
           url: `https://vidsrc.su/embed/anime/${malId}/${epNum}`,
           provider: 'mirror',
           isNative: false
@@ -121,13 +135,13 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v7.2",
+        provider: "mesh-v7.3",
         sources: [],
         servers: servers,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh-v7.2 failure: ${error.message}`);
+      this.logger.error(`Mesh-v7.3 failure: ${error.message}`);
       return null;
     }
   }
