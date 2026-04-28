@@ -92,7 +92,7 @@ export class StreamingService {
             // If virtual ID, we must find the actual watchId from Anify first
             let watchId = episodeId;
             if (isVirtualId) {
-              const info = await this.consumetService.getAnimeInfo(anifyId).catch(() => null);
+              const info: any = await this.consumetService.getAnimeInfo(anifyId).catch(() => null);
               const ep = info?.episodes?.find((e: any) => e.number === epNum);
               if (ep) watchId = ep.id;
             }

@@ -119,7 +119,7 @@ export class ConsumetService {
     try {
       this.logger.debug(`Resolving episode ${episodeNum} for ${animeId} on ${provider}`);
       
-      const info = await this.getAnimeInfo(animeId).catch(() => null);
+      const info: any = await this.getAnimeInfo(animeId).catch(() => null);
       if (info?.episodes?.length) {
         const ep = info.episodes.find((e: any) => e.number === episodeNum);
         return ep ? ep.id : null;
@@ -130,7 +130,7 @@ export class ConsumetService {
         const searchResults = await this.search(animeId);
         if (searchResults.length > 0) {
           const firstId = searchResults[0].id;
-          const info = await this.getAnimeInfo(firstId).catch(() => null);
+          const info: any = await this.getAnimeInfo(firstId).catch(() => null);
           if (info?.episodes?.length) {
             const ep = info.episodes.find((e: any) => e.number === episodeNum);
             return ep ? ep.id : null;
