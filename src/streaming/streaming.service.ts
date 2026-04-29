@@ -179,40 +179,37 @@ export class StreamingService {
             const res = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
             return res?.sources?.length ? { name: 'Mirror 2 (VidStreaming - KAA)', sources: res.sources, provider: 'kickassanime', isNative: true } : null;
           } catch (e) { return null; }
+        })(),
+        // Mirror 3: Anify (Ultra Stable Meta)
+        (async () => {
+          try {
+            const res = await axios.get(`https://api.anify.tv/sources?id=${anilistId}&episodeNumber=${epNum}&subType=sub`, { timeout: 5000 });
+            const sources = res.data?.sources?.map((s: any) => ({ url: s.url, quality: 'auto' })) || [];
+            return sources.length ? { name: 'Mirror 3 (Anify - Multi)', sources: sources, provider: 'anify', isNative: true } : null;
+          } catch (e) { return null; }
         })()
       ]);
 
       resolutionResults.filter(r => r !== null).forEach(r => servers.push(r));
 
-      // 3. ID-ALIGNED STATIC MIRRORS (With Proper Referrers)
+      // 3. ID-ALIGNED STATIC MIRRORS
       if (!isNaN(anilistId)) {
-        // VidSrc.icu (AniList ID)
         servers.push({
-          name: 'Mirror 3 (VidSrc.icu)',
+          name: 'Mirror 4 (VidSrc.icu)',
           url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
         });
 
-        // VidSrc.cc (AniList ID - Verified 200)
         servers.push({
-          name: 'Mirror 4 (VidSrc.cc)',
-          url: `https://vidsrc.cc/v2/embed/anime/${anilistId}/${epNum}/sub`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // VidLink (MAL ID based - Requires Referer spoofing in frontend if needed)
-        servers.push({
-          name: 'Mirror 5 (VidLink)',
-          url: `https://vidlink.pro/embed/anime/${resolvedMalId}/${epNum}/sub?primaryColor=6366f1&fallback=true`,
+          name: 'Mirror 5 (VidSrc.pm)',
+          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
         });
       }
 
       if (resolvedTmdbId) {
-        // VidSrc.to (TMDB based - Verified 200)
         servers.push({
           name: 'Mirror 6 (VidSrc.to)',
           url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
@@ -222,18 +219,17 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v8.8-omni",
+        provider: "mesh-v8.9-anify",
         servers: servers,
         anilistId,
         resolvedMalId,
         headers: {
-          'Referer': 'https://vidsrc.cc/',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.8 critical error: ${error.message}`);
-      return { provider: "mesh-v8.8-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.9 critical error: ${error.message}`);
+      return { provider: "mesh-v8.9-error", servers: [], headers: {} };
     }
   }
 
