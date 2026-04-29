@@ -8,7 +8,9 @@ export class AnilistService {
   private readonly endpoint = "https://graphql.anilist.co";
 
   constructor() {
-    this.client = new GraphQLClient(this.endpoint);
+    this.client = new GraphQLClient(this.endpoint, {
+      timeout: 5000, // Hard 5s timeout to prevent hanging
+    });
   }
 
   /**

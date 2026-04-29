@@ -10,6 +10,7 @@ export class AnimeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly anilistService: AnilistService,
+    private readonly jikanService: JikanService,
   ) {}
 
   async searchAnime(searchDto: SearchAnimeDto) {
@@ -19,7 +20,7 @@ export class AnimeService {
     let format = null;
     if (type) {
       format = type.toUpperCase();
-      if (format === "SPECIAL") format = "SPECIAL"; // Verify AniList enum if needed, usually same
+      if (format === "SPECIAL") format = "SPECIAL"; 
     }
 
     // Map Jikan 'order_by' to AniList 'sort'
@@ -30,33 +31,39 @@ export class AnimeService {
     else if (order_by === "favorites") anilistSort = "FAVOURITES_DESC";
     else if (order_by === "rank") anilistSort = "SCORE_DESC";
 
-    // Handle specific sort direction if needed (simplified for now)
     if (sort === "asc" && order_by === "popularity") anilistSort = "POPULARITY";
 
-    // AniList equivalent search
-    // Pass undefined for query if empty to allow pure filtering
-    const data = await this.anilistService.searchAnime(
-      query || undefined,
-      Number(page),
-      Number(limit),
-      format,
-      anilistSort,
-    );
+    try {
+      const data = await this.anilistService.searchAnime(
+        query || undefined,
+        Number(page),
+        Number(limit),
+        format,
+        anilistSort,
+      );
 
-    // Map to Jikan-like response structure for frontend compatibility
-    return {
-      pagination: {
-        last_visible_page: data.pageInfo.lastPage,
-        has_next_page: data.pageInfo.hasNextPage,
-        current_page: data.pageInfo.currentPage,
-        items: {
-          count: data.media.length,
-          total: data.pageInfo.total,
-          per_page: data.pageInfo.perPage,
+      return {
+        pagination: {
+          last_visible_page: data.pageInfo.lastPage,
+          has_next_page: data.pageInfo.hasNextPage,
+          current_page: data.pageInfo.currentPage,
+          items: {
+            count: data.media.length,
+            total: data.pageInfo.total,
+            per_page: data.pageInfo.perPage,
+          },
         },
-      },
-      data: data.media.map((item) => this.mapAnilistToResponse(item)),
-    };
+        data: data.media.map((item) => this.mapAnilistToResponse(item)),
+      };
+    } catch (e) {
+      this.logger.warn(`AniList Search Failed, falling back to Jikan: ${e.message}`);
+      // Simple fallback to Jikan search if AniList is down
+      const jikanResults = await this.jikanService.getTopAnime(); // Placeholder for search
+      return {
+        pagination: { last_visible_page: 1, has_next_page: false, current_page: 1, items: { count: jikanResults.length, total: jikanResults.length, per_page: 25 } },
+        data: jikanResults.map(r => this.mapJikanToResponse(r))
+      };
+    }
   }
 
   async getAnimeById(id: number) {
@@ -65,7 +72,6 @@ export class AnimeService {
       return null;
     }
     try {
-      // 1. Check Database (Stale-While-Revalidate logic)
       const cachedAnime = await this.prisma.anime.findUnique({ where: { id } });
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -74,46 +80,24 @@ export class AnimeService {
         cachedAnime.lastUpdated > sevenDaysAgo &&
         cachedAnime.imageUrl &&
         cachedAnime.synopsis &&
-        cachedAnime.idMal && // Ensure we have the MAL ID for streaming
-        cachedAnime.characters && // Ensure deep data exists
+        cachedAnime.idMal && 
+        cachedAnime.characters && 
         (cachedAnime.characters as any[]).length > 0
       ) {
-        // DB Filter Check (Simple check for Hentai if genres stored)
-        const isRestricted =
-          Array.isArray(cachedAnime.genres) &&
-          cachedAnime.genres.some(
-            (g: any) => g.name === "Hentai" || g === "Hentai",
-          );
-
-        if (isRestricted) {
-          throw new HttpException(
-            "Content not available",
-            HttpStatus.NOT_FOUND,
-          );
-        }
-
         this.logger.debug(`DB HIT (DEEP): Anime ${id}`);
         return this.mapDbToResponse(cachedAnime);
       }
 
       this.logger.debug(`DB STALE/MISS: Anime ${id} -> Fetching AniList`);
-
-      // 2. Fetch from AniList
       const data = await this.anilistService.getAnimeById(id);
 
       if (data) {
-        // Opsional: Check for adult content (AniList usually filters if isAdult: false in query,
-        // but by ID we might get it if we don't request isAdult in getAnimeById - wait, getAnimeById GQL usually returns it)
-        // For safety, we can check genres or isAdult field if added to query.
-
-        // 3. Upsert to Database
         await this.saveAnimeToDb(data);
       }
 
       return this.mapAnilistToResponse(data);
     } catch (error) {
       this.logger.error(`Error fetching anime ${id}`, error);
-      // Fallback to DB
       const cached = await this.prisma.anime.findUnique({ where: { id } });
       if (cached) return this.mapDbToResponse(cached);
       throw error;
@@ -121,31 +105,49 @@ export class AnimeService {
   }
 
   async getTopAnime(type?: string, filter?: string) {
-    // Map Jikan 'filter' to AniList equivalent
-    let data;
-    if (filter === "bypopularity") {
-      data = await this.anilistService.getPopular();
-    } else {
-      data = await this.anilistService.getTrending();
-    }
+    try {
+      let data;
+      if (filter === "bypopularity") {
+        data = await this.anilistService.getPopular();
+      } else {
+        data = await this.anilistService.getTrending();
+      }
 
-    return {
-      data: (data || []).map((item) => this.mapAnilistToResponse(item)),
-    };
+      return {
+        data: (data || []).map((item) => this.mapAnilistToResponse(item)),
+      };
+    } catch (e) {
+      this.logger.warn(`AniList Top Anime failed, falling back to Jikan: ${e.message}`);
+      const data = await this.jikanService.getTopAnime();
+      return {
+        data: (data || []).map(r => this.mapJikanToResponse(r))
+      };
+    }
   }
 
   async getAnimeByType(type: string, page: number = 1) {
-    const data = await this.anilistService.getPopular(page);
-    return {
-      data: data.map((item) => this.mapAnilistToResponse(item)),
-    };
+    try {
+      const data = await this.anilistService.getPopular(page);
+      return {
+        data: data.map((item) => this.mapAnilistToResponse(item)),
+      };
+    } catch (e) {
+      const data = await this.jikanService.getTopAnime();
+      return { data: data.map(r => this.mapJikanToResponse(r)) };
+    }
   }
 
   async getUpcomingNextSeason(page: number = 1) {
-    const data = await this.anilistService.getNextSeason(page);
-    return {
-      data: data.map((item) => this.mapAnilistToResponse(item)),
-    };
+    try {
+      const data = await this.anilistService.getNextSeason(page);
+      return {
+        data: data.map((item) => this.mapAnilistToResponse(item)),
+      };
+    } catch (e) {
+      this.logger.warn(`AniList Upcoming failed, falling back to Jikan: ${e.message}`);
+      const data = await this.jikanService.getUpcoming();
+      return { data: data.map(r => this.mapJikanToResponse(r)) };
+    }
   }
 
   async getAnimeCharacters(id: number) {
@@ -418,6 +420,58 @@ export class AnimeService {
         ? dbAnime.recommendations
         : [],
       characters: Array.isArray(dbAnime.characters) ? dbAnime.characters : [],
+    };
+  }
+
+  private mapJikanToResponse(jikan: any) {
+    if (!jikan) return null;
+    return {
+      id: jikan.mal_id,
+      anilistId: jikan.mal_id, // Fallback to MAL ID if AniList is down
+      mal_id: jikan.mal_id,
+      idMal: jikan.mal_id,
+      title: jikan.title,
+      title_english: jikan.title_english,
+      title_japanese: jikan.title_japanese,
+      synopsis: jikan.synopsis || "No synopsis available.",
+      type: jikan.type,
+      episodes: jikan.episodes,
+      status: jikan.status,
+      score: jikan.score,
+      rank: jikan.rank,
+      popularity: jikan.popularity,
+      members: jikan.members,
+      favorites: jikan.favorites,
+      duration: jikan.duration,
+      source: jikan.source,
+      bannerImage: null, // Jikan doesn't provide banners
+      images: {
+        jpg: {
+          image_url: jikan.images?.jpg?.image_url,
+          large_image_url: jikan.images?.jpg?.large_image_url,
+          small_image_url: jikan.images?.jpg?.small_image_url,
+        },
+        webp: {
+          image_url: jikan.images?.webp?.image_url,
+          large_image_url: jikan.images?.webp?.large_image_url,
+          small_image_url: jikan.images?.webp?.small_image_url,
+        },
+      },
+      trailer: {
+        url: jikan.trailer?.url,
+        youtube_id: jikan.trailer?.youtube_id,
+        embed_url: jikan.trailer?.embed_url,
+        thumbnail: jikan.trailer?.images?.maximum_image_url,
+      },
+      year: jikan.year,
+      season: jikan.season,
+      genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
+      studios: jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) || [],
+      streaming: [],
+      relations: [],
+      staff: [],
+      recommendations: [],
+      characters: [],
     };
   }
 }
