@@ -1,3 +1,4 @@
+import { Injectable, Logger } from "@nestjs/common";
 import { AnilistService } from "../common/services/anilist.service";
 import { JikanService } from "../common/services/jikan.service";
 
