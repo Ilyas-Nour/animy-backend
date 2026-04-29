@@ -5,7 +5,7 @@ import axios from "axios";
 @Injectable()
 export class ConsumetService {
   private readonly logger = new Logger(ConsumetService.name);
-  
+
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly kickass = new ANIME.KickAssAnime();
   private readonly gogoanime = new ANIME.Gogoanime();
@@ -24,7 +24,7 @@ export class ConsumetService {
   async search(query: string) {
     try {
       this.logger.debug(`Resilience Search Mesh v8.3: ${query}`);
-      
+
       const results = await Promise.race([
         Promise.all([
           // GogoAnime (Very Stable)
@@ -94,7 +94,7 @@ export class ConsumetService {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]).catch(() => null);
         if (info) return info;
-      } catch (e) {}
+      } catch (e) { }
 
       return null;
     } catch (error) {
@@ -108,7 +108,7 @@ export class ConsumetService {
   async resolveEpisodeId(animeId: string, episodeNum: number, provider: string = 'hianime'): Promise<string | null> {
     try {
       this.logger.debug(`Resolving episode ${episodeNum} for ${animeId} on ${provider}`);
-      
+
       const info: any = await this.getAnimeInfo(animeId).catch(() => null);
       if (info?.episodes?.length) {
         const ep = info.episodes.find((e: any) => e.number === episodeNum);
@@ -193,7 +193,7 @@ export class ConsumetService {
   async getAnimeKaiSources(episodeId: string, title?: string) {
     try {
       this.logger.debug(`Fetching AnimeKai (MegaUp) sources for: ${episodeId}`);
-      
+
       let targetId = episodeId;
 
       // If ID is numeric (AniList) and search is needed
