@@ -1,6 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
 import { AnilistService } from "../common/services/anilist.service";
+import { JikanService } from "../common/services/jikan.service";
 import { SearchAnimeDto } from "./dto/search-anime.dto";
 
 @Injectable()

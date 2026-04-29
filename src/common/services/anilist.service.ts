@@ -8,9 +8,7 @@ export class AnilistService {
   private readonly endpoint = "https://graphql.anilist.co";
 
   constructor() {
-    this.client = new GraphQLClient(this.endpoint, {
-      timeout: 5000, // Hard 5s timeout to prevent hanging
-    });
+    this.client = new GraphQLClient(this.endpoint);
   }
 
   /**
@@ -77,10 +75,13 @@ export class AnilistService {
         `;
 
     try {
-      const data: any = await this.client.request(queryGql, variables);
+      const data: any = await Promise.race([
+        this.client.request(queryGql, variables),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+      ]);
       return data.Page;
     } catch (error) {
-      this.logger.error(`Error searching anime "${query}":`, error);
+      this.logger.error(`Error searching anime "${query}":`, error.message);
       throw new HttpException(
         "Failed to fetch data from AniList",
         HttpStatus.BAD_GATEWAY,
@@ -277,10 +278,13 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.client.request(queryGql, { page, perPage });
+      const data: any = await Promise.race([
+        this.client.request(queryGql, { page, perPage }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+      ]);
       return data.Page.media;
     } catch (error) {
-      this.logger.error(`Error fetching trending anime:`, error);
+      this.logger.error(`Error fetching trending anime:`, error.message);
       return [];
     }
   }
@@ -323,10 +327,13 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.client.request(queryGql, { page, perPage });
+      const data: any = await Promise.race([
+        this.client.request(queryGql, { page, perPage }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+      ]);
       return data.Page.media;
     } catch (error) {
-      this.logger.error(`Error fetching popular anime:`, error);
+      this.logger.error(`Error fetching popular anime:`, error.message);
       return [];
     }
   }
@@ -375,15 +382,18 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.client.request(queryGql, {
-        season,
-        year,
-        page,
-        perPage,
-      });
+      const data: any = await Promise.race([
+        this.client.request(queryGql, {
+          season,
+          year,
+          page,
+          perPage,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+      ]);
       return data.Page.media;
     } catch (error) {
-      this.logger.error(`Error fetching seasonal anime:`, error);
+      this.logger.error(`Error fetching seasonal anime:`, error.message);
       return [];
     }
   }
@@ -802,15 +812,18 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.client.request(queryGql, {
-        season,
-        year,
-        page,
-        perPage,
-      });
+      const data: any = await Promise.race([
+        this.client.request(queryGql, {
+          season,
+          year,
+          page,
+          perPage,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+      ]);
       return data.Page.media;
     } catch (error) {
-      this.logger.error(`Error fetching upcoming anime:`, error);
+      this.logger.error(`Error fetching upcoming anime:`, error.message);
       return [];
     }
   }
