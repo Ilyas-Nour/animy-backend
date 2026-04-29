@@ -192,6 +192,33 @@ export class StreamingService {
 
       resolutionResults.filter(r => r !== null).forEach(r => servers.push(r));
 
+      // 3. STATIC EMBED MIRRORS (High Stability 2026)
+      if (!isNaN(anilistId)) {
+        // Mirror 4: VidSrc.xyz (Most stable 2026)
+        servers.push({
+          name: 'Mirror 4 (VidSrc.xyz)',
+          url: `https://vidsrc.xyz/embed/anime/${anilistId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // Mirror 5: VidSrc.in (Verified)
+        servers.push({
+          name: 'Mirror 5 (VidSrc.in)',
+          url: `https://vidsrc.in/embed/anime/${anilistId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // Mirror 6: VidSrc.pro (Verified)
+        servers.push({
+          name: 'Mirror 6 (VidSrc.pro)',
+          url: `https://vidsrc.pro/embed/anime/${anilistId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+      }
+
       // 4. GUARANTEED EXTERNAL MIRROR (Anify - User Verified)
       if (!isNaN(anilistId)) {
         servers.push({
@@ -202,19 +229,8 @@ export class StreamingService {
         });
       }
 
-      // 5. INDESTRUCTIBLE MIRRORS (Static Backup)
-
-      if (resolvedTmdbId) {
-        servers.push({
-          name: 'Mirror 6 (VidSrc.to)',
-          url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-      }
-
       return {
-        provider: "mesh-v8.9-anify",
+        provider: "mesh-v9.1-stable",
         servers: servers,
         anilistId,
         resolvedMalId,
@@ -223,8 +239,8 @@ export class StreamingService {
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.9 critical error: ${error.message}`);
-      return { provider: "mesh-v8.9-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v9.1 critical error: ${error.message}`);
+      return { provider: "mesh-v9.1-error", servers: [], headers: {} };
     }
   }
 
