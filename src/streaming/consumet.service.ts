@@ -8,13 +8,11 @@ export class ConsumetService {
 
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly kickass = new ANIME.KickAssAnime();
-  private readonly gogoanime = new ANIME.Gogoanime();
   private readonly animekai = new ANIME.AnimeKai();
 
   constructor() {
     // Override domains for 2026 stability
     (this.animepahe as any).baseUrl = 'https://animepahe.ru';
-    (this.gogoanime as any).baseUrl = 'https://gogoanime3.co';
     (this.animekai as any).baseUrl = 'https://animekai.to';
   }
 
@@ -27,15 +25,15 @@ export class ConsumetService {
 
       const results = await Promise.race([
         Promise.all([
-          // GogoAnime (Very Stable)
+          // Anify (Meta-Search - Ultra Stable)
           (async () => {
             try {
-              const res = await this.gogoanime.search(query).catch(() => null);
-              return res?.results?.map((r: any) => ({
+              const res = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 4000 });
+              return res.data?.results?.map((r: any) => ({
                 id: r.id,
-                title: r.title,
-                image: r.image,
-                provider: 'gogoanime'
+                title: r.title.english || r.title.romaji || r.title.native,
+                image: r.coverImage,
+                provider: 'anify'
               })) || [];
             } catch (e) { return []; }
           })(),
@@ -87,10 +85,10 @@ export class ConsumetService {
         }
       }
 
-      // 2. Traditional Fallback (GogoAnime)
+      // 2. Traditional Fallback (KickAssAnime)
       try {
         const info = await Promise.race([
-          this.gogoanime.fetchAnimeInfo(id),
+          this.kickass.fetchAnimeInfo(id),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]).catch(() => null);
         if (info) return info;
@@ -156,9 +154,9 @@ export class ConsumetService {
       } else if (provider === 'animekai') {
         targetProvider = this.animekai;
         referer = 'https://animekai.to/';
-      } else if (provider === 'hianime' || provider === 'zoro' || provider === 'gogoanime') {
-        targetProvider = this.gogoanime;
-        referer = 'https://gogoanime3.co/';
+      } else if (provider === 'hianime' || provider === 'zoro' || provider === 'kickass') {
+        targetProvider = this.kickass;
+        referer = 'https://kickassanime.am/';
       }
 
       try {
