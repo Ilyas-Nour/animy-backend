@@ -140,7 +140,7 @@ export class StreamingService {
         // A. VidLink (Ultra Stable - MAL based)
         servers.push({
           name: 'Mirror 1 (VidLink)',
-          url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}?primaryColor=6366f1&fallback=true`,
+          url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'mirror',
           isNative: false
         });
