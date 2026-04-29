@@ -192,22 +192,17 @@ export class StreamingService {
 
       resolutionResults.filter(r => r !== null).forEach(r => servers.push(r));
 
-      // 3. ID-ALIGNED STATIC MIRRORS
+      // 4. GUARANTEED EXTERNAL MIRROR (Anify - User Verified)
       if (!isNaN(anilistId)) {
         servers.push({
-          name: 'Mirror 4 (VidSrc.icu)',
-          url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        servers.push({
-          name: 'Mirror 5 (VidSrc.pm)',
-          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
-          provider: 'mirror',
+          name: 'Mirror 3 (Anify - Direct)',
+          url: `https://anify.to/watch/${anilistId}/${epNum}`,
+          provider: 'external',
           isNative: false
         });
       }
+
+      // 5. INDESTRUCTIBLE MIRRORS (Static Backup)
 
       if (resolvedTmdbId) {
         servers.push({
