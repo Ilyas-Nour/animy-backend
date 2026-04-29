@@ -184,14 +184,17 @@ export class StreamingService {
         try {
           const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
           if (kaaId) {
-            const kaaSources = await this.consumetService.getEpisodeSources(kaaId, epNum, 'kickassanime').catch(() => null);
-            if (kaaSources?.sources?.length) {
-              servers.push({ 
-                name: 'Mirror 2 (VidStreaming - KAA)', 
-                sources: kaaSources.sources, 
-                provider: "kickassanime", 
-                isNative: true 
-              });
+            const kaaEpId = await this.consumetService.resolveEpisodeId(kaaId, epNum, 'kickassanime').catch(() => null);
+            if (kaaEpId) {
+              const kaaSources = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
+              if (kaaSources?.sources?.length) {
+                servers.push({ 
+                  name: 'Mirror 2 (VidStreaming - KAA)', 
+                  sources: kaaSources.sources, 
+                  provider: "kickassanime", 
+                  isNative: true 
+                });
+              }
             }
           }
         } catch (e) {}
