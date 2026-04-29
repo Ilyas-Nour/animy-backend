@@ -156,61 +156,65 @@ export class StreamingService {
         resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
       }
 
-      // 2. HIGH-PRIORITY NATIVE MIRRORS (AnimeKai / Anikai - Verified Working)
+      // 2. PARALLEL NATIVE MESH (Anikai, KAA, AnimePahe)
       if (!isNaN(anilistId) && title) {
         try {
-          const kaiSources = await Promise.race([
+          const nativeSources = await Promise.all([
+            // Mirror 1: Anikai (Anikai.to)
             (async () => {
-              const kaiId = await this.mappingService.resolveAnikaiId(anilistId, title).catch(() => null);
-              if (!kaiId) return null;
-              const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
-              if (!watchId) return null;
-              return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
+              try {
+                const kaiId = await this.mappingService.resolveAnikaiId(anilistId, title).catch(() => null);
+                if (!kaiId) return null;
+                const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
+                if (!watchId) return null;
+                const res = await this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
+                return res?.sources?.length ? { name: 'Mirror 1 (MegaUp - Anikai)', sources: res.sources, provider: 'animekai' } : null;
+              } catch (e) { return null; }
             })(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
-          ]).catch(() => null);
+            // Mirror 2: KickAss (KAA.lt)
+            (async () => {
+              try {
+                const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
+                if (!kaaId) return null;
+                const kaaEpId = await this.consumetService.resolveEpisodeId(kaaId, epNum, 'kickassanime').catch(() => null);
+                if (!kaaEpId) return null;
+                const res = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
+                return res?.sources?.length ? { name: 'Mirror 2 (VidStreaming - KAA)', sources: res.sources, provider: 'kickassanime' } : null;
+              } catch (e) { return null; }
+            })(),
+            // Mirror 3: AnimePahe (AnimePahe.pw)
+            (async () => {
+              try {
+                const paheId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'animepahe')?.id).catch(() => null);
+                if (!paheId) return null;
+                const paheEpId = await this.consumetService.resolveEpisodeId(paheId, epNum, 'animepahe').catch(() => null);
+                if (!paheEpId) return null;
+                const res = await this.consumetService.getEpisodeSources(paheEpId, 'animepahe').catch(() => null);
+                return res?.sources?.length ? { name: 'Mirror 3 (Kwik - AnimePahe)', sources: res.sources, provider: 'animepahe' } : null;
+              } catch (e) { return null; }
+            })()
+          ]);
 
-          if (kaiSources?.sources?.length) {
-            servers.push({ 
-              name: 'Mirror 1 (MegaUp - Anikai)', 
-              sources: kaiSources.sources, 
-              provider: "animekai", 
-              isNative: true 
-            });
-          }
-        } catch (e) {}
-
-        // 3. SECONDARY NATIVE MIRROR (KickAss - Verified Working)
-        try {
-          const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
-          if (kaaId) {
-            const kaaEpId = await this.consumetService.resolveEpisodeId(kaaId, epNum, 'kickassanime').catch(() => null);
-            if (kaaEpId) {
-              const kaaSources = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
-              if (kaaSources?.sources?.length) {
-                servers.push({ 
-                  name: 'Mirror 2 (VidStreaming - KAA)', 
-                  sources: kaaSources.sources, 
-                  provider: "kickassanime", 
-                  isNative: true 
-                });
-              }
-            }
-          }
-        } catch (e) {}
+          // Add working native mirrors
+          nativeSources.filter(s => s !== null).forEach(s => {
+            servers.push({ ...s, isNative: true });
+          });
+        } catch (e) {
+          this.logger.error(`Parallel Mesh failed: ${e.message}`);
+        }
       }
 
-      // 4. INDESTRUCTIBLE MIRRORS (Static Backup)
+      // 3. INDESTRUCTIBLE MIRRORS (Static Backup)
       if (!isNaN(anilistId)) {
         servers.push({
-          name: 'Mirror 3 (VidSrc.icu)',
+          name: 'Mirror 4 (VidSrc.icu)',
           url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
         });
 
         servers.push({
-          name: 'Mirror 4 (VidSrc.pm)',
+          name: 'Mirror 5 (VidSrc.pm)',
           url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
@@ -219,7 +223,7 @@ export class StreamingService {
 
       if (resolvedTmdbId) {
         servers.push({
-          name: 'Mirror 5 (VidSrc.to)',
+          name: 'Mirror 6 (VidSrc.to)',
           url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
@@ -227,15 +231,15 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v8.6-smart",
+        provider: "mesh-v8.7-parallel",
         servers: servers,
         anilistId,
         resolvedMalId,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.6 critical error: ${error.message}`);
-      return { provider: "mesh-v8.6-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.7 critical error: ${error.message}`);
+      return { provider: "mesh-v8.7-error", servers: [], headers: {} };
     }
   }
 
