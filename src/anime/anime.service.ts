@@ -305,10 +305,17 @@ export class AnimeService {
         },
       },
       trailer: {
-        url: data.trailer
+        url: data.trailer?.site === "youtube"
           ? `https://www.youtube.com/watch?v=${data.trailer.id}`
-          : null,
-        youtube_id: data.trailer?.id,
+          : data.trailer?.site === "dailymotion"
+            ? `https://www.dailymotion.com/video/${data.trailer.id}`
+            : data.trailer?.id ? `https://www.youtube.com/watch?v=${data.trailer.id}` : null,
+        youtube_id: data.trailer?.site === "youtube" ? data.trailer.id : null,
+        embed_url: data.trailer?.site === "youtube"
+          ? `https://www.youtube.com/embed/${data.trailer.id}`
+          : data.trailer?.site === "dailymotion"
+            ? `https://www.dailymotion.com/embed/video/${data.trailer.id}`
+            : data.trailer?.id ? `https://www.youtube.com/embed/${data.trailer.id}` : null,
         thumbnail: data.trailer?.thumbnail,
       },
       year: data.seasonYear,
@@ -385,9 +392,18 @@ export class AnimeService {
       },
       trailer: {
         url: dbAnime.trailerUrl,
-        youtube_id: dbAnime.trailerUrl?.includes("v=")
+        youtube_id: dbAnime.trailerUrl?.includes("youtube.com/watch?v=")
           ? dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]
-          : dbAnime.trailerUrl?.split("/").pop(),
+          : dbAnime.trailerUrl?.includes("youtu.be/")
+            ? dbAnime.trailerUrl.split("/").pop()
+            : null,
+        embed_url: dbAnime.trailerUrl?.includes("youtube.com/watch?v=")
+          ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]}`
+          : dbAnime.trailerUrl?.includes("youtu.be/")
+            ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split("/").pop()}`
+            : dbAnime.trailerUrl?.includes("dailymotion.com/video/")
+              ? `https://www.dailymotion.com/embed/video/${dbAnime.trailerUrl.split("/").pop()}`
+              : null,
       },
       year: dbAnime.year,
       season: dbAnime.season,
