@@ -17,7 +17,7 @@ export class ConsumetService {
   }
 
   /**
-   * Resilience Search Mesh v8.3: "Surgical Clean"
+   * Resilience Search Mesh v8.4: "True Discovery"
    */
   async search(query: string) {
     try {
@@ -25,19 +25,7 @@ export class ConsumetService {
 
       const results = await Promise.race([
         Promise.all([
-          // Anify (Meta-Search - Ultra Stable)
-          (async () => {
-            try {
-              const res = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 4000 });
-              return res.data?.results?.map((r: any) => ({
-                id: r.id,
-                title: r.title.english || r.title.romaji || r.title.native,
-                image: r.coverImage,
-                provider: 'anify'
-              })) || [];
-            } catch (e) { return []; }
-          })(),
-          // AnimePahe (Verified Working)
+          // 1. AnimePahe (Ultra Fast - Verified)
           (async () => {
             try {
               const res = await this.animepahe.search(query).catch(() => null);
@@ -48,9 +36,33 @@ export class ConsumetService {
                 provider: 'animepahe'
               })) || [];
             } catch (e) { return []; }
+          })(),
+          // 2. Anify (Meta-Search - Comprehensive but Slow)
+          (async () => {
+            try {
+              const res = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 8000 });
+              return res.data?.results?.map((r: any) => ({
+                id: r.id,
+                title: r.title.english || r.title.romaji || r.title.native,
+                image: r.coverImage,
+                provider: 'anify'
+              })) || [];
+            } catch (e) { return []; }
+          })(),
+          // 3. KickAssAnime (Fallback)
+          (async () => {
+            try {
+              const res = await this.kickass.search(query).catch(() => null);
+              return res?.results?.map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                image: r.image,
+                provider: 'kickassanime'
+              })) || [];
+            } catch (e) { return []; }
           })()
         ]),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 5000))
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 10000))
       ]).catch(() => [[]]);
 
       // Flatten and prioritize

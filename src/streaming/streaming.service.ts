@@ -111,6 +111,22 @@ export class StreamingService {
    * Resilience Mesh v8.2: "Final Revival"
    * Zero-Wait mirror generation.
    */
+  /**
+   * Resilience ID Mapper: AniList -> MAL
+   */
+  async resolveMalId(anilistId: number): Promise<number | null> {
+    try {
+      this.logger.debug(`Resolving MAL ID for AniList: ${anilistId}`);
+      const res = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 });
+      return res.data?.id || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Resilience Mesh v8.4: "True Alignment"
+   */
   async getEpisodeLinks(
     episodeId: string,
     provider: string = "hianime",
@@ -121,56 +137,63 @@ export class StreamingService {
     title?: string
   ) {
     try {
-      const aniListId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
+      const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
-      const activeAniListId = !isNaN(aniListId) ? aniListId : null;
       
-      this.logger.debug(`Resilience Mesh v8.3 streaming: AL=${activeAniListId}, EP=${epNum}, Title=${title}`);
+      this.logger.debug(`Resilience Mesh v8.4 streaming: AL=${anilistId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
-      // 1. RESOLVE TMDB ID (For VidSrc.to fallback)
+      // 1. RESOLVE STABLE IDs
+      // A. MAL ID (Crucial for VidLink/VidSrc.me)
+      let resolvedMalId = anilistId; // Fallback to anilistId if mapping fails (sometimes they are the same)
+      if (!isNaN(anilistId)) {
+        const mapping = await this.resolveMalId(anilistId).catch(() => null);
+        if (mapping) resolvedMalId = mapping;
+      }
+
+      // B. TMDB ID (For VidSrc.to)
       let resolvedTmdbId = tmdbIdParam;
       if (!resolvedTmdbId && title) {
         resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
       }
 
-      // 2. INDESTRUCTIBLE MIRRORS (Zero-Wait)
-      if (activeAniListId) {
-        // A. VidLink (Ultra Stable - MAL based)
+      // 2. INDESTRUCTIBLE MIRRORS (ID-Based)
+      if (!isNaN(anilistId)) {
+        // A. VidSrc.icu (Ultra Stable - NATIVE ANILIST ID)
         servers.push({
-          name: 'Mirror 1 (VidLink)',
-          url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}/sub?primaryColor=6366f1&fallback=true`,
+          name: 'Mirror 1 (VidSrc.icu)',
+          url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
         });
 
-        // B. VidSrc.icu (New Stable - MAL based)
+        // B. VidLink (Stable - MAL ID)
         servers.push({
-          name: 'Mirror 2 (VidSrc.icu)',
-          url: `https://vidsrc.icu/embed/anime/${activeAniListId}/${epNum}`,
+          name: 'Mirror 2 (VidLink)',
+          url: `https://vidlink.pro/embed/anime/${resolvedMalId}/${epNum}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'mirror',
           isNative: false
         });
 
-        // C. VidSrc.cc (Stable - MAL based)
+        // C. VidSrc.cc (Stable - NATIVE ANILIST ID)
         servers.push({
           name: 'Mirror 3 (VidSrc.cc)',
-          url: `https://vidsrc.cc/v2/embed/anime/${activeAniListId}/${epNum}/sub`,
+          url: `https://vidsrc.cc/v2/embed/anime/${anilistId}/${epNum}/sub`,
           provider: 'mirror',
           isNative: false
         });
 
-        // D. VidSrc.me (Classic Fallback)
+        // D. VidSrc.me (Classic - MAL ID)
         servers.push({
           name: 'Mirror 4 (VidSrc.me)',
-          url: `https://vidsrc.me/embed/anime?mal_id=${activeAniListId}&episode=${epNum}`,
+          url: `https://vidsrc.me/embed/anime?mal_id=${resolvedMalId}&episode=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
       }
 
-      // 3. TMDB MIRROR (VidSrc.to - Highest Quality)
+      // 3. TMDB MIRROR (VidSrc.to)
       if (resolvedTmdbId) {
         servers.push({
           name: 'Mirror 5 (VidSrc.to)',
@@ -180,12 +203,12 @@ export class StreamingService {
         });
       }
 
-      // 4. NATIVE MIRROR (ANIKAI) - Background resolve
-      if (activeAniListId && title) {
+      // 4. NATIVE MIRROR (ANIKAI)
+      if (!isNaN(anilistId) && title) {
         try {
           const kaiSources = await Promise.race([
             (async () => {
-              const kaiId = await this.mappingService.resolveAnikaiId(activeAniListId, title).catch(() => null);
+              const kaiId = await this.mappingService.resolveAnikaiId(anilistId, title).catch(() => null);
               if (!kaiId) return null;
               const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
               if (!watchId) return null;
@@ -206,14 +229,16 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v8.3-revived",
+        provider: "mesh-v8.4-aligned",
         servers: servers,
+        anilistId,
+        resolvedMalId,
         resolvedTmdbId,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.3 critical error: ${error.message}`);
-      return { provider: "mesh-v8.3-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.4 critical error: ${error.message}`);
+      return { provider: "mesh-v8.4-error", servers: [], headers: {} };
     }
   }
 
