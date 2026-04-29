@@ -11,7 +11,7 @@ export class ConsumetService {
   private readonly animekai = new ANIME.AnimeKai();
 
   constructor() {
-    // Override domains for 2026 stability
+    // Override domains for 2026 stability (Verifed Working)
     (this.animepahe as any).baseUrl = 'https://animepahe.pw';
     (this.kickass as any).baseUrl = 'https://kaa.lt';
     (this.animekai as any).baseUrl = 'https://anikai.to';

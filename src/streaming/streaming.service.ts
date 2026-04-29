@@ -125,7 +125,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v8.8: "Omni-Mirror"
+   * Resilience Mesh v9.3: "Nuclear Revival"
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -140,107 +140,92 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       
-      this.logger.debug(`Resilience Mesh v8.8: AL=${anilistId}, EP=${epNum}, Title=${title}`);
+      this.logger.debug(`Nuclear Mesh v9.3: AL=${anilistId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
-      // 1. RESOLVE MAPPINGS
+      // 1. RESOLVE IDs
       let resolvedMalId = anilistId;
       if (!isNaN(anilistId)) {
         const mapping = await this.resolveMalId(anilistId).catch(() => null);
         if (mapping) resolvedMalId = mapping;
       }
 
-      let resolvedTmdbId = tmdbIdParam;
-      if (!resolvedTmdbId && title) {
-        resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
-      }
-
-      // 2. PARALLEL RESOLUTION (Native + High-Stability Mirrors)
-      const resolutionResults = await Promise.all([
-        // Mirror 1: Anikai (Verified)
-        (async () => {
-          try {
-            const kaiId = await this.mappingService.resolveAnikaiId(anilistId, title).catch(() => null);
-            if (!kaiId) return null;
-            const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
-            if (!watchId) return null;
-            const res = await this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
-            return res?.sources?.length ? { name: 'Mirror 1 (MegaUp - Anikai)', sources: res.sources, provider: 'animekai', isNative: true } : null;
-          } catch (e) { return null; }
-        })(),
-        // Mirror 2: KAA (Verified)
-        (async () => {
-          try {
-            const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
-            if (!kaaId) return null;
-            const kaaEpId = await this.consumetService.resolveEpisodeId(kaaId, epNum, 'kickassanime').catch(() => null);
-            if (!kaaEpId) return null;
-            const res = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
-            return res?.sources?.length ? { name: 'Mirror 2 (VidStreaming - KAA)', sources: res.sources, provider: 'kickassanime', isNative: true } : null;
-          } catch (e) { return null; }
-        })(),
-        // Mirror 3: Anify (Ultra Stable Meta)
-        (async () => {
-          try {
-            const res = await axios.get(`https://api.anify.tv/sources?id=${anilistId}&episodeNumber=${epNum}&subType=sub`, { timeout: 5000 });
-            const sources = res.data?.sources?.map((s: any) => ({ url: s.url, quality: 'auto' })) || [];
-            return sources.length ? { name: 'Mirror 3 (Anify - Multi)', sources: sources, provider: 'anify', isNative: true } : null;
-          } catch (e) { return null; }
-        })()
-      ]);
-
-      resolutionResults.filter(r => r !== null).forEach(r => servers.push(r));
-
-      // 3. STATIC EMBED MIRRORS (High Stability 2026)
+      // 2. PRIMARY MIRRORS (High Stability 2026)
       if (!isNaN(anilistId)) {
-        // Mirror 4: VidSrc.xyz (Most stable 2026)
+        // Mirror 1: VidSrc.to (Ultra Stable)
         servers.push({
-          name: 'Mirror 4 (VidSrc.xyz)',
+          name: 'Mirror 1 (VidSrc.to)',
+          url: `https://vidsrc.to/embed/anime/${anilistId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // Mirror 2: VidSrc.xyz
+        servers.push({
+          name: 'Mirror 2 (VidSrc.xyz)',
           url: `https://vidsrc.xyz/embed/anime/${anilistId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // Mirror 5: VidSrc.in (Verified)
+        // Mirror 3: VidLink.pro
         servers.push({
-          name: 'Mirror 5 (VidSrc.in)',
-          url: `https://vidsrc.in/embed/anime/${anilistId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // Mirror 6: VidSrc.pro (Verified)
-        servers.push({
-          name: 'Mirror 6 (VidSrc.pro)',
-          url: `https://vidsrc.pro/embed/anime/${anilistId}/${epNum}`,
+          name: 'Mirror 3 (VidLink.pro)',
+          url: `https://vidlink.pro/embed/anime/${anilistId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
       }
 
-      // 4. GUARANTEED EXTERNAL MIRROR (Anify - User Verified)
+      // 3. DIRECT PORTALS (Guaranteed Fallbacks)
       if (!isNaN(anilistId)) {
+        // Mirror 4: Anify Direct
         servers.push({
-          name: 'Mirror 3 (Anify - Direct)',
+          name: 'Mirror 4 (Anify - Portal)',
           url: `https://anify.to/watch/${anilistId}/${epNum}`,
+          provider: 'external',
+          isNative: false
+        });
+
+        // Mirror 5: AnimeKai Direct
+        servers.push({
+          name: 'Mirror 5 (Anikai - Portal)',
+          url: `https://anikai.to/search?keyword=${encodeURIComponent(title || '')}`,
           provider: 'external',
           isNative: false
         });
       }
 
+      // 4. BACKUP MIRRORS
+      if (!isNaN(anilistId)) {
+        servers.push({
+          name: 'Mirror 6 (VidSrc.me)',
+          url: `https://vidsrc.me/embed/anime?anilist=${anilistId}&episode=${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+        servers.push({
+          name: 'Mirror 7 (VidSrc.pm)',
+          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+      }
+
       return {
-        provider: "mesh-v9.1-stable",
+        provider: "mesh-v9.3-nuclear",
         servers: servers,
         anilistId,
         resolvedMalId,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Referer': 'https://animepahe.pw/'
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v9.1 critical error: ${error.message}`);
-      return { provider: "mesh-v9.1-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v9.3 CRITICAL: ${error.message}`);
+      return { provider: "mesh-v9.3-error", servers: [], headers: {} };
     }
   }
 
