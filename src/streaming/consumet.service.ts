@@ -18,59 +18,56 @@ export class ConsumetService {
   }
 
   /**
-   * Resilience Search Mesh v8.4: "True Discovery"
+   * Resilience Search Mesh v9.2: "Meta-Discovery"
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Resilience Search Mesh v8.3: ${query}`);
+      this.logger.debug(`Searching Mesh v9.2: ${query}`);
 
-      const results = await Promise.race([
-        Promise.all([
-          // 1. AnimePahe (Ultra Fast - Verified)
-          (async () => {
-            try {
-              const res = await this.animepahe.search(query).catch(() => null);
-              return res?.results?.map((r: any) => ({
-                id: r.id,
-                title: r.title,
-                image: r.image,
-                provider: 'animepahe'
-              })) || [];
-            } catch (e) { return []; }
-          })(),
-          // 2. Anify (Meta-Search - Comprehensive but Slow)
-          (async () => {
-            try {
-              const res = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 8000 });
-              return res.data?.results?.map((r: any) => ({
-                id: r.id,
-                title: r.title.english || r.title.romaji || r.title.native,
-                image: r.coverImage,
-                provider: 'anify'
-              })) || [];
-            } catch (e) { return []; }
-          })(),
-          // 3. KickAssAnime (Fallback)
-          (async () => {
-            try {
-              const res = await this.kickass.search(query).catch(() => null);
-              return res?.results?.map((r: any) => ({
-                id: r.id,
-                title: r.title,
-                image: r.image,
-                provider: 'kickassanime'
-              })) || [];
-            } catch (e) { return []; }
-          })()
-        ]),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 10000))
-      ]).catch(() => [[]]);
+      const results = await Promise.all([
+        // 1. Anify (Meta-Search - Prioritized 2026)
+        (async () => {
+          try {
+            const res = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 12000 });
+            return res.data?.results?.map((r: any) => ({
+              id: r.id,
+              title: r.title.english || r.title.romaji || r.title.native,
+              image: r.coverImage,
+              provider: 'anify'
+            })) || [];
+          } catch (e) { return []; }
+        })(),
+        // 2. AnimePahe
+        (async () => {
+          try {
+            const res = await this.animepahe.search(query).catch(() => null);
+            return res?.results?.map((r: any) => ({
+              id: r.id,
+              title: r.title,
+              image: r.image,
+              provider: 'animepahe'
+            })) || [];
+          } catch (e) { return []; }
+        })(),
+        // 3. KickAss
+        (async () => {
+          try {
+            const res = await this.kickass.search(query).catch(() => null);
+            return res?.results?.map((r: any) => ({
+              id: r.id,
+              title: r.title,
+              image: r.image,
+              provider: 'kickassanime'
+            })) || [];
+          } catch (e) { return []; }
+        })()
+      ]);
 
-      // Flatten and prioritize
       const flattened = results.flat();
-      return flattened.length > 0 ? flattened : [];
+      this.logger.debug(`Search Mesh v9.2 found ${flattened.length} units`);
+      return flattened;
     } catch (error) {
-      this.logger.error(`Search mesh failed: ${error.message}`);
+      this.logger.error(`Search Mesh Failed: ${error.message}`);
       return [];
     }
   }
