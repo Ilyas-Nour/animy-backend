@@ -125,7 +125,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v8.6: "Smart Priority"
+   * Resilience Mesh v8.8: "Omni-Mirror"
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -140,11 +140,11 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       
-      this.logger.debug(`Resilience Mesh v8.6 streaming: AL=${anilistId}, EP=${epNum}, Title=${title}`);
+      this.logger.debug(`Resilience Mesh v8.8: AL=${anilistId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
-      // 1. RESOLVE STABLE IDs
+      // 1. RESOLVE MAPPINGS
       let resolvedMalId = anilistId;
       if (!isNaN(anilistId)) {
         const mapping = await this.resolveMalId(anilistId).catch(() => null);
@@ -156,72 +156,63 @@ export class StreamingService {
         resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
       }
 
-      // 2. PARALLEL NATIVE MESH (Anikai, KAA, AnimePahe)
-      if (!isNaN(anilistId) && title) {
-        try {
-          const nativeSources = await Promise.all([
-            // Mirror 1: Anikai (Anikai.to)
-            (async () => {
-              try {
-                const kaiId = await this.mappingService.resolveAnikaiId(anilistId, title).catch(() => null);
-                if (!kaiId) return null;
-                const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
-                if (!watchId) return null;
-                const res = await this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
-                return res?.sources?.length ? { name: 'Mirror 1 (MegaUp - Anikai)', sources: res.sources, provider: 'animekai' } : null;
-              } catch (e) { return null; }
-            })(),
-            // Mirror 2: KickAss (KAA.lt)
-            (async () => {
-              try {
-                const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
-                if (!kaaId) return null;
-                const kaaEpId = await this.consumetService.resolveEpisodeId(kaaId, epNum, 'kickassanime').catch(() => null);
-                if (!kaaEpId) return null;
-                const res = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
-                return res?.sources?.length ? { name: 'Mirror 2 (VidStreaming - KAA)', sources: res.sources, provider: 'kickassanime' } : null;
-              } catch (e) { return null; }
-            })(),
-            // Mirror 3: AnimePahe (AnimePahe.pw)
-            (async () => {
-              try {
-                const paheId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'animepahe')?.id).catch(() => null);
-                if (!paheId) return null;
-                const paheEpId = await this.consumetService.resolveEpisodeId(paheId, epNum, 'animepahe').catch(() => null);
-                if (!paheEpId) return null;
-                const res = await this.consumetService.getEpisodeSources(paheEpId, 'animepahe').catch(() => null);
-                return res?.sources?.length ? { name: 'Mirror 3 (Kwik - AnimePahe)', sources: res.sources, provider: 'animepahe' } : null;
-              } catch (e) { return null; }
-            })()
-          ]);
+      // 2. PARALLEL RESOLUTION (Native + High-Stability Mirrors)
+      const resolutionResults = await Promise.all([
+        // Mirror 1: Anikai (Verified)
+        (async () => {
+          try {
+            const kaiId = await this.mappingService.resolveAnikaiId(anilistId, title).catch(() => null);
+            if (!kaiId) return null;
+            const watchId = await this.consumetService.resolveEpisodeId(kaiId, epNum, 'animekai').catch(() => null);
+            if (!watchId) return null;
+            const res = await this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
+            return res?.sources?.length ? { name: 'Mirror 1 (MegaUp - Anikai)', sources: res.sources, provider: 'animekai', isNative: true } : null;
+          } catch (e) { return null; }
+        })(),
+        // Mirror 2: KAA (Verified)
+        (async () => {
+          try {
+            const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
+            if (!kaaId) return null;
+            const kaaEpId = await this.consumetService.resolveEpisodeId(kaaId, epNum, 'kickassanime').catch(() => null);
+            if (!kaaEpId) return null;
+            const res = await this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime').catch(() => null);
+            return res?.sources?.length ? { name: 'Mirror 2 (VidStreaming - KAA)', sources: res.sources, provider: 'kickassanime', isNative: true } : null;
+          } catch (e) { return null; }
+        })()
+      ]);
 
-          // Add working native mirrors
-          nativeSources.filter(s => s !== null).forEach(s => {
-            servers.push({ ...s, isNative: true });
-          });
-        } catch (e) {
-          this.logger.error(`Parallel Mesh failed: ${e.message}`);
-        }
-      }
+      resolutionResults.filter(r => r !== null).forEach(r => servers.push(r));
 
-      // 3. INDESTRUCTIBLE MIRRORS (Static Backup)
+      // 3. ID-ALIGNED STATIC MIRRORS (With Proper Referrers)
       if (!isNaN(anilistId)) {
+        // VidSrc.icu (AniList ID)
         servers.push({
-          name: 'Mirror 4 (VidSrc.icu)',
+          name: 'Mirror 3 (VidSrc.icu)',
           url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
         });
 
+        // VidSrc.cc (AniList ID - Verified 200)
         servers.push({
-          name: 'Mirror 5 (VidSrc.pm)',
-          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
+          name: 'Mirror 4 (VidSrc.cc)',
+          url: `https://vidsrc.cc/v2/embed/anime/${anilistId}/${epNum}/sub`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // VidLink (MAL ID based - Requires Referer spoofing in frontend if needed)
+        servers.push({
+          name: 'Mirror 5 (VidLink)',
+          url: `https://vidlink.pro/embed/anime/${resolvedMalId}/${epNum}/sub?primaryColor=6366f1&fallback=true`,
           provider: 'mirror',
           isNative: false
         });
       }
 
       if (resolvedTmdbId) {
+        // VidSrc.to (TMDB based - Verified 200)
         servers.push({
           name: 'Mirror 6 (VidSrc.to)',
           url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
@@ -231,15 +222,18 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v8.7-parallel",
+        provider: "mesh-v8.8-omni",
         servers: servers,
         anilistId,
         resolvedMalId,
-        headers: {}
+        headers: {
+          'Referer': 'https://vidsrc.cc/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        }
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.7 critical error: ${error.message}`);
-      return { provider: "mesh-v8.7-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.8 critical error: ${error.message}`);
+      return { provider: "mesh-v8.8-error", servers: [], headers: {} };
     }
   }
 
