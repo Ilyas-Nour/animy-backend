@@ -1,11 +1,14 @@
-import { Injectable, Logger } from "@nestjs/common";
 import { AnilistService } from "../common/services/anilist.service";
+import { JikanService } from "../common/services/jikan.service";
 
 @Injectable()
 export class SeasonsService {
   private readonly logger = new Logger(SeasonsService.name);
 
-  constructor(private readonly anilistService: AnilistService) {}
+  constructor(
+    private readonly anilistService: AnilistService,
+    private readonly jikanService: JikanService,
+  ) {}
 
   async getCurrentSeason() {
     const now = new Date();
@@ -18,21 +21,39 @@ export class SeasonsService {
     else if (month >= 6 && month <= 8) season = "SUMMER";
     else season = "FALL";
 
-    this.logger.log(`Fetching current season: ${season} ${year}`);
-    const data = await this.anilistService.getThisSeason(season, year);
+    try {
+      this.logger.log(`Fetching current season: ${season} ${year}`);
+      const data = await this.anilistService.getThisSeason(season, year);
 
-    return {
-      data: data.map(this.mapAnilistToResponse),
-      season,
-      year,
-    };
+      return {
+        data: data.map(this.mapAnilistToResponse),
+        season,
+        year,
+      };
+    } catch (e) {
+      this.logger.warn(`AniList Current Season failed: ${e.message}`);
+      const data = await this.jikanService.getSeason(year, season);
+      return {
+        data: data.map(r => this.mapJikanToResponse(r)),
+        season,
+        year,
+      };
+    }
   }
 
   async getUpcomingSeason() {
-    const data = await this.anilistService.getNextSeason();
-    return {
-      data: data.map(this.mapAnilistToResponse),
-    };
+    try {
+      const data = await this.anilistService.getNextSeason();
+      return {
+        data: data.map(this.mapAnilistToResponse),
+      };
+    } catch (e) {
+      this.logger.warn(`AniList Upcoming Season failed: ${e.message}`);
+      const data = await this.jikanService.getUpcoming();
+      return {
+        data: data.map(r => this.mapJikanToResponse(r)),
+      };
+    }
   }
 
   async getSeasonAnime(year: number, season: string, page: number = 1) {
@@ -47,18 +68,24 @@ export class SeasonsService {
       throw new Error("Invalid season");
     }
 
-    const data = await this.anilistService.getThisSeason(
-      seasonUpper,
-      year,
-      page,
-    );
-    return {
-      console: {
-        last_visible_page: 100, // Partial pagination support mock
-        has_next_page: true,
-      },
-      data: data.map(this.mapAnilistToResponse),
-    };
+    try {
+      const data = await this.anilistService.getThisSeason(
+        seasonUpper,
+        year,
+        page,
+      );
+      return {
+        pagination: { last_visible_page: 100, has_next_page: true },
+        data: data.map(this.mapAnilistToResponse),
+      };
+    } catch (e) {
+      this.logger.warn(`AniList Season ${year} ${season} failed: ${e.message}`);
+      const data = await this.jikanService.getSeason(year, seasonUpper);
+      return {
+        pagination: { last_visible_page: 1, has_next_page: false },
+        data: data.map(r => this.mapJikanToResponse(r)),
+      };
+    }
   }
 
   async getSeasonsList() {
@@ -110,6 +137,40 @@ export class SeasonsService {
       studios:
         data.studios?.nodes?.map((s: any) => ({ name: s.name, mal_id: 0 })) ||
         [],
+    };
+  }
+
+  private mapJikanToResponse(jikan: any) {
+    if (!jikan) return null;
+    return {
+      mal_id: jikan.mal_id,
+      title: jikan.title,
+      title_english: jikan.title_english,
+      title_japanese: jikan.title_japanese,
+      synopsis: jikan.synopsis || "No synopsis available.",
+      type: jikan.type,
+      episodes: jikan.episodes,
+      status: jikan.status,
+      score: jikan.score,
+      popularity: jikan.popularity,
+      duration: jikan.duration,
+      source: jikan.source || "Original",
+      images: {
+        jpg: {
+          image_url: jikan.images?.jpg?.image_url,
+          large_image_url: jikan.images?.jpg?.large_image_url,
+          small_image_url: jikan.images?.jpg?.small_image_url,
+        },
+        webp: {
+          image_url: jikan.images?.webp?.image_url,
+          large_image_url: jikan.images?.webp?.large_image_url,
+          small_image_url: jikan.images?.webp?.small_image_url,
+        },
+      },
+      year: jikan.year,
+      season: jikan.season,
+      genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
+      studios: jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) || [],
     };
   }
 }
