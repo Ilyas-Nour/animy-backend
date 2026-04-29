@@ -158,9 +158,9 @@ export class StreamingService {
         resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
       }
 
-      // 2. INDESTRUCTIBLE MIRRORS (ID-Based)
+      // 2. INDESTRUCTIBLE MIRRORS (ID-Based) - VERIFIED 2026-04-29
       if (!isNaN(anilistId)) {
-        // A. VidSrc.icu (Ultra Stable - NATIVE ANILIST ID)
+        // A. VidSrc.icu (Verified 200 - Native AniList)
         servers.push({
           name: 'Mirror 1 (VidSrc.icu)',
           url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
@@ -168,35 +168,27 @@ export class StreamingService {
           isNative: false
         });
 
-        // B. VidLink (Stable - MAL ID)
+        // B. VidSrc.pm (Verified 200 - Native AniList)
         servers.push({
-          name: 'Mirror 2 (VidLink)',
-          url: `https://vidlink.pro/embed/anime/${resolvedMalId}/${epNum}/sub?primaryColor=6366f1&fallback=true`,
+          name: 'Mirror 2 (VidSrc.pm)',
+          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
           provider: 'mirror',
           isNative: false
         });
 
-        // C. VidSrc.cc (Stable - NATIVE ANILIST ID)
+        // C. VidSrc.cc (Fallback)
         servers.push({
           name: 'Mirror 3 (VidSrc.cc)',
           url: `https://vidsrc.cc/v2/embed/anime/${anilistId}/${epNum}/sub`,
           provider: 'mirror',
           isNative: false
         });
-
-        // D. VidSrc.me (Classic - MAL ID)
-        servers.push({
-          name: 'Mirror 4 (VidSrc.me)',
-          url: `https://vidsrc.me/embed/anime?mal_id=${resolvedMalId}&episode=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
       }
 
-      // 3. TMDB MIRROR (VidSrc.to)
+      // 3. TMDB MIRROR (VidSrc.to - Verified 200)
       if (resolvedTmdbId) {
         servers.push({
-          name: 'Mirror 5 (VidSrc.to)',
+          name: 'Mirror 4 (VidSrc.to)',
           url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
