@@ -41,12 +41,24 @@ export class StreamingService {
   async getTmdbId(title: string): Promise<string | null> {
     try {
       this.logger.debug(`Resolving TMDB ID for: ${title}`);
-      // Use a more robust search endpoint
+      
+      // 1. Try Anify Mapping First (Fast & Keyless)
+      try {
+        const anifyUrl = `https://api.anify.tv/search/anime/${encodeURIComponent(title)}`;
+        const anifyRes = await axios.get(anifyUrl, { timeout: 3000 }).catch(() => null);
+        const match = anifyRes?.data?.results?.find((r: any) => r.mappings?.tmdb);
+        if (match) return match.mappings.tmdb.toString();
+      } catch (e) {}
+
+      // 2. TMDB Search API (Fallback)
       const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
-      const res = await axios.get(searchUrl);
-      const results = res.data.results || [];
-      const bestMatch = results.find((r: any) => r.media_type === 'tv' || r.media_type === 'movie');
-      return bestMatch ? bestMatch.id.toString() : null;
+      const res = await axios.get(searchUrl).catch(() => null);
+      if (res?.data?.results?.length) {
+        const bestMatch = res.data.results.find((r: any) => r.media_type === 'tv' || r.media_type === 'movie');
+        if (bestMatch) return bestMatch.id.toString();
+      }
+      
+      return null;
     } catch (e) {
       this.logger.warn(`TMDB Resolve Failed: ${e.message}`);
       return null;
@@ -105,47 +117,70 @@ export class StreamingService {
     proxyBaseUrl?: string,
     malIdParam?: string,
     episodeNumber?: string,
-    tmdbId?: string,
+    tmdbIdParam?: string,
     title?: string
   ) {
     try {
-      // Priority: malIdParam (AniList ID)
       const aniListId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       const activeAniListId = !isNaN(aniListId) ? aniListId : null;
       
-      this.logger.debug(`Mesh-v8.2 streaming: AL=${activeAniListId}, EP=${epNum}`);
+      this.logger.debug(`Resilience Mesh v8.3 streaming: AL=${activeAniListId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
-      // 1. INDESTRUCTIBLE MIRRORS (Zero-Wait)
+      // 1. RESOLVE TMDB ID (For VidSrc.to fallback)
+      let resolvedTmdbId = tmdbIdParam;
+      if (!resolvedTmdbId && title) {
+        resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
+      }
+
+      // 2. INDESTRUCTIBLE MIRRORS (Zero-Wait)
       if (activeAniListId) {
-        // A. VidLink
+        // A. VidLink (Ultra Stable - MAL based)
         servers.push({
           name: 'Mirror 1 (VidLink)',
-          url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}?primaryColor=6366f1`,
+          url: `https://vidlink.pro/embed/anime/${activeAniListId}/${epNum}?primaryColor=6366f1&fallback=true`,
           provider: 'mirror',
           isNative: false
         });
 
-        // B. VidSrc.me
+        // B. VidSrc.icu (New Stable - MAL based)
         servers.push({
-          name: 'Mirror 2 (VidSrc.me)',
+          name: 'Mirror 2 (VidSrc.icu)',
+          url: `https://vidsrc.icu/embed/anime/${activeAniListId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // C. VidSrc.cc (Stable - MAL based)
+        servers.push({
+          name: 'Mirror 3 (VidSrc.cc)',
+          url: `https://vidsrc.cc/v2/embed/anime/${activeAniListId}/${epNum}/sub`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // D. VidSrc.me (Classic Fallback)
+        servers.push({
+          name: 'Mirror 4 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?mal_id=${activeAniListId}&episode=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // C. VidSrc.su
-        servers.push({
-          name: 'Mirror 3 (VidSrc.su)',
-          url: `https://vidsrc.su/embed/anime/${activeAniListId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
       }
 
-      // 2. NATIVE MIRROR (ANIKAI) - Background resolve
+      // 3. TMDB MIRROR (VidSrc.to - Highest Quality)
+      if (resolvedTmdbId) {
+        servers.push({
+          name: 'Mirror 5 (VidSrc.to)',
+          url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+      }
+
+      // 4. NATIVE MIRROR (ANIKAI) - Background resolve
       if (activeAniListId && title) {
         try {
           const kaiSources = await Promise.race([
@@ -156,12 +191,12 @@ export class StreamingService {
               if (!watchId) return null;
               return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
             })(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000))
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
           ]).catch(() => null);
 
           if (kaiSources?.sources?.length) {
             servers.push({ 
-              name: 'Mirror 4 (MegaUp)', 
+              name: 'Mirror 6 (MegaUp)', 
               sources: kaiSources.sources, 
               provider: "animekai", 
               isNative: true 
@@ -171,13 +206,14 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v8.2-final",
+        provider: "mesh-v8.3-revived",
         servers: servers,
+        resolvedTmdbId,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.2 critical error: ${error.message}`);
-      return { provider: "mesh-v8.2-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.3 critical error: ${error.message}`);
+      return { provider: "mesh-v8.3-error", servers: [], headers: {} };
     }
   }
 

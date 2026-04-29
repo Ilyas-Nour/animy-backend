@@ -8,28 +8,38 @@ export class ConsumetService {
   
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly kickass = new ANIME.KickAssAnime();
-  private readonly hianime = new ANIME.Hianime();
+  private readonly gogoanime = new ANIME.Gogoanime();
   private readonly animekai = new ANIME.AnimeKai();
 
   constructor() {
     // Override domains for 2026 stability
     (this.animepahe as any).baseUrl = 'https://animepahe.ru';
-    (this.kickass as any).baseUrl = 'https://kickassanime.am';
-    (this.hianime as any).baseUrl = 'https://hianime.to';
+    (this.gogoanime as any).baseUrl = 'https://gogoanime3.co';
     (this.animekai as any).baseUrl = 'https://animekai.to';
   }
 
   /**
-   * Resilience Search Mesh v6.0: "Solid Solution"
+   * Resilience Search Mesh v8.3: "Surgical Clean"
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Resilience Search Mesh v6.0: ${query}`);
+      this.logger.debug(`Resilience Search Mesh v8.3: ${query}`);
       
-      // 1. High-Speed Search Mesh (v7.8 Surgical Clean)
       const results = await Promise.race([
         Promise.all([
-          // AnimePahe (Verified Working Today)
+          // GogoAnime (Very Stable)
+          (async () => {
+            try {
+              const res = await this.gogoanime.search(query).catch(() => null);
+              return res?.results?.map((r: any) => ({
+                id: r.id,
+                title: r.title,
+                image: r.image,
+                provider: 'gogoanime'
+              })) || [];
+            } catch (e) { return []; }
+          })(),
+          // AnimePahe (Verified Working)
           (async () => {
             try {
               const res = await this.animepahe.search(query).catch(() => null);
@@ -42,7 +52,7 @@ export class ConsumetService {
             } catch (e) { return []; }
           })()
         ]),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 4000))
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Mesh Timeout')), 5000))
       ]).catch(() => [[]]);
 
       // Flatten and prioritize
@@ -77,10 +87,10 @@ export class ConsumetService {
         }
       }
 
-      // 2. Traditional Fallback
+      // 2. Traditional Fallback (GogoAnime)
       try {
         const info = await Promise.race([
-          this.hianime.fetchAnimeInfo(id),
+          this.gogoanime.fetchAnimeInfo(id),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]).catch(() => null);
         if (info) return info;
@@ -146,9 +156,9 @@ export class ConsumetService {
       } else if (provider === 'animekai') {
         targetProvider = this.animekai;
         referer = 'https://animekai.to/';
-      } else if (provider === 'hianime' || provider === 'zoro') {
-        targetProvider = this.hianime;
-        referer = 'https://hianime.to/';
+      } else if (provider === 'hianime' || provider === 'zoro' || provider === 'gogoanime') {
+        targetProvider = this.gogoanime;
+        referer = 'https://gogoanime3.co/';
       }
 
       try {
