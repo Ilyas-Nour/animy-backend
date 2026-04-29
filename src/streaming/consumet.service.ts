@@ -18,56 +18,35 @@ export class ConsumetService {
   }
 
   /**
-   * Resilience Search Mesh v9.2: "Meta-Discovery"
+   * Resilience Search Mesh v9.4: "True Discovery"
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Searching Mesh v9.2: ${query}`);
+      this.logger.debug(`Searching Mesh v9.4: ${query}`);
 
-      const results = await Promise.all([
-        // 1. Anify (Meta-Search - Prioritized 2026)
-        (async () => {
-          try {
-            const res = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 12000 });
-            return res.data?.results?.map((r: any) => ({
-              id: r.id,
-              title: r.title.english || r.title.romaji || r.title.native,
-              image: r.coverImage,
-              provider: 'anify'
-            })) || [];
-          } catch (e) { return []; }
-        })(),
-        // 2. AnimePahe
-        (async () => {
-          try {
-            const res = await this.animepahe.search(query).catch(() => null);
-            return res?.results?.map((r: any) => ({
-              id: r.id,
-              title: r.title,
-              image: r.image,
-              provider: 'animepahe'
-            })) || [];
-          } catch (e) { return []; }
-        })(),
+      const results = await Promise.allSettled([
+        // 1. AnimePahe (Ultra Stable)
+        this.animepahe.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animepahe' }))),
+        // 2. Anify (Meta)
+        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 8000 })
+          .then(res => (res.data?.results || []).map((r: any) => ({
+            id: r.id,
+            title: r.title.english || r.title.romaji || r.title.native,
+            image: r.coverImage,
+            provider: 'anify'
+          }))),
         // 3. KickAss
-        (async () => {
-          try {
-            const res = await this.kickass.search(query).catch(() => null);
-            return res?.results?.map((r: any) => ({
-              id: r.id,
-              title: r.title,
-              image: r.image,
-              provider: 'kickassanime'
-            })) || [];
-          } catch (e) { return []; }
-        })()
+        this.kickass.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'kickassanime' })))
       ]);
 
-      const flattened = results.flat();
-      this.logger.debug(`Search Mesh v9.2 found ${flattened.length} units`);
+      const flattened = results
+        .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
+        .flatMap(r => r.value);
+
+      this.logger.debug(`Search Mesh v9.4 found ${flattened.length} units`);
       return flattened;
     } catch (error) {
-      this.logger.error(`Search Mesh Failed: ${error.message}`);
+      this.logger.error(`Search Mesh v9.4 failed: ${error.message}`);
       return [];
     }
   }

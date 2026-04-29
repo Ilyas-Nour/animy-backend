@@ -125,7 +125,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v9.3: "Nuclear Revival"
+   * Resilience Mesh v9.4: "The Final Revival"
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -140,18 +140,11 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       
-      this.logger.debug(`Nuclear Mesh v9.3: AL=${anilistId}, EP=${epNum}, Title=${title}`);
+      this.logger.debug(`Nuclear Mesh v9.4: AL=${anilistId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
-      // 1. RESOLVE IDs
-      let resolvedMalId = anilistId;
-      if (!isNaN(anilistId)) {
-        const mapping = await this.resolveMalId(anilistId).catch(() => null);
-        if (mapping) resolvedMalId = mapping;
-      }
-
-      // 2. PRIMARY MIRRORS (High Stability 2026)
+      // 1. PRIMARY MIRRORS (High Stability 2026)
       if (!isNaN(anilistId)) {
         // Mirror 1: VidSrc.to (Ultra Stable)
         servers.push({
@@ -168,64 +161,69 @@ export class StreamingService {
           provider: 'mirror',
           isNative: false
         });
-
-        // Mirror 3: VidLink.pro
-        servers.push({
-          name: 'Mirror 3 (VidLink.pro)',
-          url: `https://vidlink.pro/embed/anime/${anilistId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
       }
 
-      // 3. DIRECT PORTALS (Guaranteed Fallbacks)
-      if (!isNaN(anilistId)) {
-        // Mirror 4: Anify Direct
-        servers.push({
-          name: 'Mirror 4 (Anify - Portal)',
-          url: `https://anify.to/watch/${anilistId}/${epNum}`,
-          provider: 'external',
-          isNative: false
-        });
+      // 2. NATIVE PROVIDERS (Direct Iframes where possible)
+      try {
+        const results = await this.consumetService.search(title).catch(() => []);
+        
+        // AnimePahe Iframe
+        const pahe = results.find(r => r.provider === 'animepahe');
+        if (pahe) {
+          servers.push({
+            name: 'Mirror 3 (AnimePahe - Kwik)',
+            url: `https://animepahe.pw/play/${pahe.id}/${epNum}`, // AnimePahe direct player
+            provider: 'external',
+            isNative: false
+          });
+        }
 
-        // Mirror 5: AnimeKai Direct
-        servers.push({
-          name: 'Mirror 5 (Anikai - Portal)',
-          url: `https://anikai.to/search?keyword=${encodeURIComponent(title || '')}`,
-          provider: 'external',
-          isNative: false
-        });
-      }
+        // KAA Iframe
+        const kaa = results.find(r => r.provider === 'kickassanime');
+        if (kaa) {
+          servers.push({
+            name: 'Mirror 4 (KAA - Native)',
+            url: `https://kaa.lt/search?keyword=${encodeURIComponent(title || '')}`,
+            provider: 'external',
+            isNative: false
+          });
+        }
+      } catch (e) {}
 
-      // 4. BACKUP MIRRORS
+      // 3. BACKUP MIRRORS (The 'Big Five')
       if (!isNaN(anilistId)) {
         servers.push({
-          name: 'Mirror 6 (VidSrc.me)',
+          name: 'Mirror 5 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?anilist=${anilistId}&episode=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
         servers.push({
-          name: 'Mirror 7 (VidSrc.pm)',
-          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}`,
+          name: 'Mirror 6 (VidLink.pro)',
+          url: `https://vidlink.pro/embed/anime/${anilistId}/${epNum}`,
           provider: 'mirror',
+          isNative: false
+        });
+        servers.push({
+          name: 'Mirror 7 (Anify - Portal)',
+          url: `https://anify.to/watch/${anilistId}/${epNum}`,
+          provider: 'external',
           isNative: false
         });
       }
 
       return {
-        provider: "mesh-v9.3-nuclear",
+        provider: "mesh-v9.4-nuclear",
         servers: servers,
         anilistId,
-        resolvedMalId,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Referer': 'https://animepahe.pw/'
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v9.3 CRITICAL: ${error.message}`);
-      return { provider: "mesh-v9.3-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v9.4 CRITICAL: ${error.message}`);
+      return { provider: "mesh-v9.4-error", servers: [], headers: {} };
     }
   }
 
