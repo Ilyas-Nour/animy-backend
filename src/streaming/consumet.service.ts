@@ -14,7 +14,7 @@ export class ConsumetService {
     // Override domains for 2026 stability
     (this.animepahe as any).baseUrl = 'https://animepahe.com';
     (this.kickass as any).baseUrl = 'https://kaa.lt';
-    (this.animekai as any).baseUrl = 'https://animekai.to';
+    (this.animekai as any).baseUrl = 'https://anikai.to';
   }
 
   /**

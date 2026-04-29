@@ -125,7 +125,7 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v8.4: "True Alignment"
+   * Resilience Mesh v8.6: "Smart Priority"
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -140,62 +140,23 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       
-      this.logger.debug(`Resilience Mesh v8.4 streaming: AL=${anilistId}, EP=${epNum}, Title=${title}`);
+      this.logger.debug(`Resilience Mesh v8.6 streaming: AL=${anilistId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
       // 1. RESOLVE STABLE IDs
-      // A. MAL ID (Crucial for VidLink/VidSrc.me)
-      let resolvedMalId = anilistId; // Fallback to anilistId if mapping fails (sometimes they are the same)
+      let resolvedMalId = anilistId;
       if (!isNaN(anilistId)) {
         const mapping = await this.resolveMalId(anilistId).catch(() => null);
         if (mapping) resolvedMalId = mapping;
       }
 
-      // B. TMDB ID (For VidSrc.to)
       let resolvedTmdbId = tmdbIdParam;
       if (!resolvedTmdbId && title) {
         resolvedTmdbId = await this.getTmdbId(title).catch(() => null);
       }
 
-      // 2. INDESTRUCTIBLE MIRRORS (ID-Based) - VERIFIED 2026-04-29
-      if (!isNaN(anilistId)) {
-        // A. VidSrc.icu (Verified 200 - Native AniList)
-        servers.push({
-          name: 'Mirror 1 (VidSrc.icu)',
-          url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // B. VidSrc.pm (Verified 200 - Native AniList)
-        servers.push({
-          name: 'Mirror 2 (VidSrc.pm)',
-          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // C. VidSrc.cc (Fallback)
-        servers.push({
-          name: 'Mirror 3 (VidSrc.cc)',
-          url: `https://vidsrc.cc/v2/embed/anime/${anilistId}/${epNum}/sub`,
-          provider: 'mirror',
-          isNative: false
-        });
-      }
-
-      // 3. TMDB MIRROR (VidSrc.to - Verified 200)
-      if (resolvedTmdbId) {
-        servers.push({
-          name: 'Mirror 4 (VidSrc.to)',
-          url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-      }
-
-      // 4. NATIVE MIRROR (ANIKAI)
+      // 2. HIGH-PRIORITY NATIVE MIRRORS (AnimeKai / Anikai - Verified Working)
       if (!isNaN(anilistId) && title) {
         try {
           const kaiSources = await Promise.race([
@@ -206,31 +167,72 @@ export class StreamingService {
               if (!watchId) return null;
               return this.consumetService.getAnimeKaiSources(watchId).catch(() => null);
             })(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
           ]).catch(() => null);
 
           if (kaiSources?.sources?.length) {
             servers.push({ 
-              name: 'Mirror 6 (MegaUp)', 
+              name: 'Mirror 1 (MegaUp - Anikai)', 
               sources: kaiSources.sources, 
               provider: "animekai", 
               isNative: true 
             });
           }
         } catch (e) {}
+
+        // 3. SECONDARY NATIVE MIRROR (KickAss - Verified Working)
+        try {
+          const kaaId = await this.consumetService.search(title).then(results => results.find(r => r.provider === 'kickassanime')?.id).catch(() => null);
+          if (kaaId) {
+            const kaaSources = await this.consumetService.getEpisodeSources(kaaId, epNum, 'kickassanime').catch(() => null);
+            if (kaaSources?.sources?.length) {
+              servers.push({ 
+                name: 'Mirror 2 (VidStreaming - KAA)', 
+                sources: kaaSources.sources, 
+                provider: "kickassanime", 
+                isNative: true 
+              });
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 4. INDESTRUCTIBLE MIRRORS (Static Backup)
+      if (!isNaN(anilistId)) {
+        servers.push({
+          name: 'Mirror 3 (VidSrc.icu)',
+          url: `https://vidsrc.icu/embed/anime/${anilistId}/${epNum}/0`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        servers.push({
+          name: 'Mirror 4 (VidSrc.pm)',
+          url: `https://vidsrc.pm/embed/anime/${anilistId}/${epNum}/0`,
+          provider: 'mirror',
+          isNative: false
+        });
+      }
+
+      if (resolvedTmdbId) {
+        servers.push({
+          name: 'Mirror 5 (VidSrc.to)',
+          url: `https://vidsrc.to/embed/tv/${resolvedTmdbId}/1/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
       }
 
       return {
-        provider: "mesh-v8.4-aligned",
+        provider: "mesh-v8.6-smart",
         servers: servers,
         anilistId,
         resolvedMalId,
-        resolvedTmdbId,
         headers: {}
       };
     } catch (error) {
-      this.logger.error(`Mesh v8.4 critical error: ${error.message}`);
-      return { provider: "mesh-v8.4-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v8.6 critical error: ${error.message}`);
+      return { provider: "mesh-v8.6-error", servers: [], headers: {} };
     }
   }
 
