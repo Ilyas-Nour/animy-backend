@@ -1,4 +1,6 @@
-import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
+import { Injectable, Logger, HttpException, HttpStatus, Inject } from "@nestjs/common";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Cache } from "cache-manager";
 import { PrismaService } from "../database/prisma.service";
 import { AnilistService } from "../common/services/anilist.service";
 import { JikanService } from "../common/services/jikan.service";
@@ -12,6 +14,7 @@ export class AnimeService {
     private readonly prisma: PrismaService,
     private readonly anilistService: AnilistService,
     private readonly jikanService: JikanService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async searchAnime(searchDto: SearchAnimeDto) {
@@ -34,6 +37,11 @@ export class AnimeService {
 
     if (sort === "asc" && order_by === "popularity") anilistSort = "POPULARITY";
 
+    // Cache key
+    const cacheKey = `search:${JSON.stringify(searchDto)}`;
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
+
     try {
       const data = await this.anilistService.searchAnime(
         query || undefined,
@@ -43,7 +51,7 @@ export class AnimeService {
         anilistSort,
       );
 
-      return {
+      const response = {
         pagination: {
           last_visible_page: data.pageInfo.lastPage,
           has_next_page: data.pageInfo.hasNextPage,
@@ -56,14 +64,18 @@ export class AnimeService {
         },
         data: data.media.map((item) => this.mapAnilistToResponse(item)),
       };
+      
+      await this.cacheManager.set(cacheKey, response, 1800000); // 30 mins
+      return response;
     } catch (e) {
       this.logger.warn(`AniList Search Failed, falling back to Jikan: ${e.message}`);
-      // Simple fallback to Jikan search if AniList is down
-      const jikanResults = await this.jikanService.getTopAnime(); // Placeholder for search
-      return {
-        pagination: { last_visible_page: 1, has_next_page: false, current_page: 1, items: { count: jikanResults.length, total: jikanResults.length, per_page: 25 } },
+      // Actual search fallback to Jikan
+      const jikanResults = await this.jikanService.searchAnime(query || "", Number(page), Number(limit), type);
+      const response = {
+        pagination: { last_visible_page: 1, has_next_page: jikanResults.length === limit, current_page: Number(page), items: { count: jikanResults.length, total: jikanResults.length, per_page: Number(limit) } },
         data: jikanResults.map(r => this.mapJikanToResponse(r))
       };
+      return response;
     }
   }
 
@@ -72,6 +84,10 @@ export class AnimeService {
       this.logger.warn(`Invalid anime ID received: ${id}`);
       return null;
     }
+    const cacheKey = `anime:${id}`;
+    const cachedResponse = await this.cacheManager.get(cacheKey);
+    if (cachedResponse) return cachedResponse;
+
     try {
       const cachedAnime = await this.prisma.anime.findUnique({ where: { id } });
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -86,7 +102,9 @@ export class AnimeService {
         (cachedAnime.characters as any[]).length > 0
       ) {
         this.logger.debug(`DB HIT (DEEP): Anime ${id}`);
-        return this.mapDbToResponse(cachedAnime);
+        const resp = this.mapDbToResponse(cachedAnime);
+        await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
+        return resp;
       }
 
       this.logger.debug(`DB STALE/MISS: Anime ${id} -> Fetching AniList`);
@@ -96,16 +114,33 @@ export class AnimeService {
         await this.saveAnimeToDb(data);
       }
 
-      return this.mapAnilistToResponse(data);
+      const resp = this.mapAnilistToResponse(data);
+      await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
+      return resp;
     } catch (error) {
-      this.logger.error(`Error fetching anime ${id}`, error);
+      this.logger.error(`Error fetching anime ${id}`, error.message);
+      
+      // Fallback to DB if possible
       const cached = await this.prisma.anime.findUnique({ where: { id } });
       if (cached) return this.mapDbToResponse(cached);
+
+      // Fallback to Jikan if we have MAL ID or if we can search
+      this.logger.warn(`AniList Failed for ${id}, trying Jikan fallback`);
+      const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+      if (mapping?.idMal) {
+        const jikanData = await this.jikanService.getAnimeById(mapping.idMal);
+        if (jikanData) return this.mapJikanToResponse(jikanData);
+      }
+
       throw error;
     }
   }
 
   async getTopAnime(type?: string, filter?: string) {
+    const cacheKey = `top:${filter}:${type}`;
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
+
     try {
       let data;
       if (filter === "bypopularity") {
@@ -114,9 +149,11 @@ export class AnimeService {
         data = await this.anilistService.getTrending();
       }
 
-      return {
+      const response = {
         data: (data || []).map((item) => this.mapAnilistToResponse(item)),
       };
+      await this.cacheManager.set(cacheKey, response, 3600000); // 1 hour
+      return response;
     } catch (e) {
       this.logger.warn(`AniList Top Anime failed, falling back to Jikan: ${e.message}`);
       const data = await this.jikanService.getTopAnime();
@@ -152,21 +189,45 @@ export class AnimeService {
   }
 
   async getAnimeCharacters(id: number) {
+    const cacheKey = `chars:${id}`;
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
+
     try {
       const data = await this.anilistService.getAnimeById(id);
-      return { data: data.characters?.edges || [] };
+      const response = { data: data.characters?.edges || [] };
+      await this.cacheManager.set(cacheKey, response, 3600000);
+      return response;
     } catch (e) {
+      this.logger.warn(`AniList Characters failed for ${id}, trying Jikan fallback`);
+      const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+      if (mapping?.idMal) {
+        const jikanChars = await this.jikanService.getAnimeCharacters(mapping.idMal);
+        return { data: jikanChars.map(c => ({ role: c.role, node: { id: c.character.mal_id, name: { full: c.character.name }, image: { large: c.character.images?.jpg?.image_url } } })) };
+      }
       return { data: [] };
     }
   }
 
   async getAnimeRecommendations(id: number) {
+    const cacheKey = `recs:${id}`;
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
+
     try {
       const data = await this.anilistService.getAnimeById(id);
-      return {
+      const response = {
         data: data.recommendations?.nodes || [],
       };
+      await this.cacheManager.set(cacheKey, response, 3600000);
+      return response;
     } catch (e) {
+      this.logger.warn(`AniList Recommendations failed for ${id}, trying Jikan fallback`);
+      const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+      if (mapping?.idMal) {
+        const jikanRecs = await this.jikanService.getAnimeRecommendations(mapping.idMal);
+        return { data: jikanRecs.map(r => ({ mediaRecommendation: { id: r.entry.mal_id, title: { romaji: r.entry.title }, coverImage: { large: r.entry.images?.jpg?.image_url } } })) };
+      }
       return { data: [] };
     }
   }

@@ -77,7 +77,7 @@ export class AnilistService {
     try {
       const data: any = await Promise.race([
         this.client.request(queryGql, variables),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
       return data.Page;
     } catch (error) {
@@ -226,7 +226,10 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.client.request(queryGql, { id });
+      const data: any = await Promise.race([
+        this.client.request(queryGql, { id }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
+      ]);
       const media = data.Media;
 
       return media;
@@ -280,12 +283,15 @@ export class AnilistService {
     try {
       const data: any = await Promise.race([
         this.client.request(queryGql, { page, perPage }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
       return data.Page.media;
     } catch (error) {
       this.logger.error(`Error fetching trending anime:`, error.message);
-      return [];
+      throw new HttpException(
+        "Failed to fetch trending from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
     }
   }
 
@@ -329,12 +335,15 @@ export class AnilistService {
     try {
       const data: any = await Promise.race([
         this.client.request(queryGql, { page, perPage }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
       return data.Page.media;
     } catch (error) {
       this.logger.error(`Error fetching popular anime:`, error.message);
-      return [];
+      throw new HttpException(
+        "Failed to fetch popular from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
     }
   }
 
@@ -389,12 +398,15 @@ export class AnilistService {
           page,
           perPage,
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
       return data.Page.media;
     } catch (error) {
       this.logger.error(`Error fetching seasonal anime:`, error.message);
-      return [];
+      throw new HttpException(
+        "Failed to fetch seasonal from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
     }
   }
 
@@ -819,12 +831,15 @@ export class AnilistService {
           page,
           perPage,
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
       return data.Page.media;
     } catch (error) {
       this.logger.error(`Error fetching upcoming anime:`, error.message);
-      return [];
+      throw new HttpException(
+        "Failed to fetch upcoming from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
     }
   }
 }
