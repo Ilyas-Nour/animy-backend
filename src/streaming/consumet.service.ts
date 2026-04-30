@@ -83,6 +83,15 @@ export class ConsumetService {
         if (info) return info;
       } catch (e) { }
 
+      // 3. Fallback for AnimePahe
+      try {
+        const info = await Promise.race([
+          this.animepahe.fetchAnimeInfo(id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]).catch(() => null);
+        if (info) return info;
+      } catch (e) { }
+
       return null;
     } catch (error) {
       return null;

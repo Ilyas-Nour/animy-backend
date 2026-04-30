@@ -101,10 +101,10 @@ export class StreamingController {
       );
     }
 
-    return this.streamingService.findAnimeByTitle(
+    return this.streamingService.findAnime(
       title,
-      titleEnglish,
-      anilistId ? parseInt(anilistId, 10) : undefined,
+      titleEnglish || "",
+      anilistId || "",
     );
   }
 

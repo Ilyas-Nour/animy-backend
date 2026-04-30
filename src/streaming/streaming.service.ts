@@ -140,72 +140,69 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
       
-      this.logger.debug(`Nuclear Mesh v9.4: AL=${anilistId}, EP=${epNum}, Title=${title}`);
+      this.logger.debug(`Nuclear Mesh v9.5: AL=${anilistId}, EP=${epNum}, Title=${title}`);
       
       const servers: any[] = [];
 
-      // 1. PRIMARY MIRRORS (High Stability 2026)
-      if (!isNaN(anilistId)) {
-        // Mirror 1: VidSrc.to (Ultra Stable)
+      // 1. NATIVE EXTRACTORS (Priority 1: Direct .m3u8 Streams without CORS Iframes)
+      try {
+        if (title) {
+          const searchResults = await this.consumetService.search(title).catch(() => []);
+          const pahe = searchResults.find(r => r.provider === 'animepahe');
+          if (pahe) {
+            const paheEpId = await this.consumetService.resolveEpisodeId(pahe.id, epNum, 'animepahe');
+            if (paheEpId) {
+              const sources = await this.consumetService.getEpisodeSources(paheEpId, 'animepahe');
+              if (sources && sources.sources && sources.sources.length > 0) {
+                servers.push({
+                  name: 'Mirror 1 (AnimePahe - Native)',
+                  url: sources.sources[0].url,
+                  sources: sources.sources,
+                  provider: 'animepahe',
+                  isNative: true, // Frontend uses ArtPlayer for this!
+                  headers: sources.headers
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        this.logger.error(`Native Extraction Failed: ${e.message}`);
+      }
+
+      // 2. TMDB MIRRORS (Priority 2: High Stability Mirrors requiring TMDB ID)
+      const tmdbId = tmdbIdParam || (title ? await this.getTmdbId(title) : null);
+      if (tmdbId) {
+        // VidSrc.to supports TMDB
         servers.push({
-          name: 'Mirror 1 (VidSrc.to)',
-          url: `https://vidsrc.to/embed/anime/${anilistId}/${epNum}`,
+          name: 'Mirror 2 (VidSrc.to)',
+          url: `https://vidsrc.to/embed/tv/${tmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // Mirror 2: VidSrc.xyz
+        // VidLink.pro supports TMDB
         servers.push({
-          name: 'Mirror 2 (VidSrc.xyz)',
-          url: `https://vidsrc.xyz/embed/anime/${anilistId}/${epNum}`,
+          name: 'Mirror 3 (VidLink.pro)',
+          url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
       }
 
-      // 2. NATIVE PROVIDERS (Direct Iframes where possible)
-      try {
-        const results = await this.consumetService.search(title).catch(() => []);
-        
-        // AnimePahe Iframe
-        const pahe = results.find(r => r.provider === 'animepahe');
-        if (pahe) {
-          servers.push({
-            name: 'Mirror 3 (AnimePahe - Kwik)',
-            url: `https://animepahe.pw/play/${pahe.id}/${epNum}`, // AnimePahe direct player
-            provider: 'external',
-            isNative: false
-          });
-        }
-
-        // KAA Iframe
-        const kaa = results.find(r => r.provider === 'kickassanime');
-        if (kaa) {
-          servers.push({
-            name: 'Mirror 4 (KAA - Native)',
-            url: `https://kaa.lt/search?keyword=${encodeURIComponent(title || '')}`,
-            provider: 'external',
-            isNative: false
-          });
-        }
-      } catch (e) {}
-
-      // 3. BACKUP MIRRORS (The 'Big Five')
+      // 3. ANILIST MIRRORS (Priority 3: Fallback Mirrors)
       if (!isNaN(anilistId)) {
+        // VidSrc.me actually supports AniList via query parameter
         servers.push({
-          name: 'Mirror 5 (VidSrc.me)',
+          name: 'Mirror 4 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?anilist=${anilistId}&episode=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
+
+        // Anify Portal
         servers.push({
-          name: 'Mirror 6 (VidLink.pro)',
-          url: `https://vidlink.pro/embed/anime/${anilistId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-        servers.push({
-          name: 'Mirror 7 (Anify - Portal)',
+          name: 'Mirror 5 (Anify - Portal)',
           url: `https://anify.to/watch/${anilistId}/${epNum}`,
           provider: 'external',
           isNative: false
@@ -213,7 +210,7 @@ export class StreamingService {
       }
 
       return {
-        provider: "mesh-v9.4-nuclear",
+        provider: "mesh-v9.5-nuclear",
         servers: servers,
         anilistId,
         headers: {
@@ -222,8 +219,8 @@ export class StreamingService {
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v9.4 CRITICAL: ${error.message}`);
-      return { provider: "mesh-v9.4-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v9.5 CRITICAL: ${error.message}`);
+      return { provider: "mesh-v9.5-error", servers: [], headers: {} };
     }
   }
 
