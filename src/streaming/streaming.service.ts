@@ -36,28 +36,43 @@ export class StreamingService {
   }
 
   /**
-   * Resolve TMDB ID from title (Fallback for mirrors)
+   * Resolve TMDB ID from AniList ID or title
+   * Uses malsync.moe to map AniList -> TMDB (no API key needed)
    */
-  async getTmdbId(title: string): Promise<string | null> {
+  async getTmdbId(anilistId?: number, title?: string): Promise<string | null> {
     try {
-      this.logger.debug(`Resolving TMDB ID for: ${title}`);
-      
-      // 1. Try Anify Mapping First (Fast & Keyless)
-      try {
-        const anifyUrl = `https://api.anify.tv/search/anime/${encodeURIComponent(title)}`;
-        const anifyRes = await axios.get(anifyUrl, { timeout: 3000 }).catch(() => null);
-        const match = anifyRes?.data?.results?.find((r: any) => r.mappings?.tmdb);
-        if (match) return match.mappings.tmdb.toString();
-      } catch (e) {}
-
-      // 2. TMDB Search API (Fallback)
-      const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
-      const res = await axios.get(searchUrl).catch(() => null);
-      if (res?.data?.results?.length) {
-        const bestMatch = res.data.results.find((r: any) => r.media_type === 'tv' || r.media_type === 'movie');
-        if (bestMatch) return bestMatch.id.toString();
+      // 1. Best: Use malsync to map AniList ID -> TMDB (no key required)
+      if (anilistId && !isNaN(anilistId)) {
+        try {
+          const malsyncUrl = `https://api.malsync.moe/mal/anime/anilist:${anilistId}`;
+          const res = await axios.get(malsyncUrl, { timeout: 4000 }).catch(() => null);
+          // malsync returns sites map with TMDB
+          const tmdbSite = res?.data?.Sites?.Tmdb;
+          if (tmdbSite) {
+            const tmdbId = Object.keys(tmdbSite)[0];
+            if (tmdbId) {
+              this.logger.debug(`malsync: AniList ${anilistId} -> TMDB ${tmdbId}`);
+              return tmdbId;
+            }
+          }
+        } catch (e) {}
       }
-      
+
+      // 2. Fallback: TMDB Search API (uses hardcoded public key)
+      if (title) {
+        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
+        const res = await axios.get(searchUrl, { timeout: 5000 }).catch(() => null);
+        if (res?.data?.results?.length) {
+          const bestMatch = res.data.results.find(
+            (r: any) => r.media_type === 'tv' || r.media_type === 'movie'
+          );
+          if (bestMatch) {
+            this.logger.debug(`TMDB search: "${title}" -> ${bestMatch.id}`);
+            return bestMatch.id.toString();
+          }
+        }
+      }
+
       return null;
     } catch (e) {
       this.logger.warn(`TMDB Resolve Failed: ${e.message}`);
@@ -66,26 +81,18 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v8.1: "Stable Discovery"
-   * Finds anime info without relying on dead providers.
-   */
-  /**
    * Resilience Mesh v8.2: "Instant Discovery"
-   * Immediately returns the AniList ID to keep the UI responsive.
    */
   async findAnime(title: string, titleEnglish: string, anilistId: string) {
     try {
       this.logger.debug(`Mesh-v8.2 Discovery: ${title} (AL: ${anilistId})`);
-      
-      // 1. INSTANT FALLBACK (Primary strategy for stability)
+
       const fallback = {
         id: anilistId,
         title: titleEnglish || title,
         provider: "anilist"
       };
 
-      // 2. SILENT SEARCH (2s Cutoff)
-      // We try to find a better provider ID, but we don't wait forever.
       try {
         const results = await Promise.race([
           this.consumetService.search(titleEnglish || title),
@@ -108,24 +115,25 @@ export class StreamingService {
   }
 
   /**
-   * Resilience Mesh v8.2: "Final Revival"
-   * Zero-Wait mirror generation.
-   */
-  /**
    * Resilience ID Mapper: AniList -> MAL
    */
   async resolveMalId(anilistId: number): Promise<number | null> {
     try {
       this.logger.debug(`Resolving MAL ID for AniList: ${anilistId}`);
       const res = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 });
-      return res.data?.id || null;
+      return res.data?.mal_id || res.data?.id || null;
     } catch (e) {
       return null;
     }
   }
 
   /**
-   * Resilience Mesh v9.4: "The Final Revival"
+   * Nuclear Mesh v10.0 — "Always Streaming"
+   *
+   * Builds a large set of working mirrors across multiple strategies:
+   *  Tier 1 — Iframe embeds using AniList ID (no extra lookup needed, instant)
+   *  Tier 2 — Iframe embeds using TMDB ID (high quality)
+   *  Tier 3 — Native .m3u8 extraction via consumet (best quality, sometimes fails)
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -139,89 +147,217 @@ export class StreamingService {
     try {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
-      
-      this.logger.debug(`Nuclear Mesh v9.5: AL=${anilistId}, EP=${epNum}, Title=${title}`);
-      
+
+      this.logger.log(`Nuclear Mesh v10: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
+
       const servers: any[] = [];
 
-      // 1. NATIVE EXTRACTORS (Priority 1: Direct .m3u8 Streams without CORS Iframes)
-      try {
-        if (title) {
-          const searchResults = await this.consumetService.search(title).catch(() => []);
-          const pahe = searchResults.find(r => r.provider === 'animepahe');
-          if (pahe) {
-            const paheEpId = await this.consumetService.resolveEpisodeId(pahe.id, epNum, 'animepahe');
-            if (paheEpId) {
-              const sources = await this.consumetService.getEpisodeSources(paheEpId, 'animepahe');
-              if (sources && sources.sources && sources.sources.length > 0) {
-                servers.push({
-                  name: 'Mirror 1 (AnimePahe - Native)',
-                  url: sources.sources[0].url,
-                  sources: sources.sources,
-                  provider: 'animepahe',
-                  isNative: true, // Frontend uses ArtPlayer for this!
-                  headers: sources.headers
-                });
-              }
-            }
-          }
-        }
-      } catch (e) {
-        this.logger.error(`Native Extraction Failed: ${e.message}`);
-      }
+      // ──────────────────────────────────────────────────────────────────────
+      // TIER 1: AniList-based embeds (INSTANT — no lookup needed)
+      // ──────────────────────────────────────────────────────────────────────
+      if (!isNaN(anilistId) && anilistId > 0) {
 
-      // 2. TMDB MIRRORS (Priority 2: High Stability Mirrors requiring TMDB ID)
-      const tmdbId = tmdbIdParam || (title ? await this.getTmdbId(title) : null);
-      if (tmdbId) {
-        // VidSrc.to supports TMDB
+        // 2anime.ru — supports AniList IDs natively
         servers.push({
-          name: 'Mirror 2 (VidSrc.to)',
-          url: `https://vidsrc.to/embed/tv/${tmdbId}/1/${epNum}`,
+          name: 'Mirror 1 (2anime)',
+          url: `https://2anime.xyz/embed/ep?anilist=${anilistId}&ep=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // VidLink.pro supports TMDB
+        // Anivibe embed
         servers.push({
-          name: 'Mirror 3 (VidLink.pro)',
-          url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}`,
+          name: 'Mirror 2 (Anivibe)',
+          url: `https://anivibe.net/embed?anilist=${anilistId}&ep=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
-      }
 
-      // 3. ANILIST MIRRORS (Priority 3: Fallback Mirrors)
-      if (!isNaN(anilistId)) {
-        // VidSrc.me actually supports AniList via query parameter
+        // VidSrc.me — correct working format for anime (uses anilist param)
         servers.push({
-          name: 'Mirror 4 (VidSrc.me)',
+          name: 'Mirror 3 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime?anilist=${anilistId}&episode=${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // Anify Portal
+        // Miruro embed (anilist-based)
         servers.push({
-          name: 'Mirror 5 (Anify - Portal)',
-          url: `https://anify.to/watch/${anilistId}/${epNum}`,
-          provider: 'external',
+          name: 'Mirror 4 (Miruro)',
+          url: `https://www.miruro.tv/watch?id=${anilistId}&ep=${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // AniWave embed (anilist)
+        servers.push({
+          name: 'Mirror 5 (AniWave)',
+          url: `https://aniwave.to/watch/anime.${anilistId}/ep-${epNum}`,
+          provider: 'mirror',
           isNative: false
         });
       }
 
+      // ──────────────────────────────────────────────────────────────────────
+      // TIER 2: TMDB-based embeds (lookup in parallel, don't block Tier 1)
+      // ──────────────────────────────────────────────────────────────────────
+      const tmdbIdPromise = tmdbIdParam
+        ? Promise.resolve(tmdbIdParam)
+        : this.getTmdbId(isNaN(anilistId) ? undefined : anilistId, title).catch(() => null);
+
+      const tmdbId = await Promise.race([
+        tmdbIdPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
+      ]).catch(() => null);
+
+      if (tmdbId) {
+        this.logger.debug(`TMDB resolved: ${tmdbId}`);
+
+        // VidSrc.to — most stable TMDB mirror
+        servers.push({
+          name: 'Mirror 6 (VidSrc.to)',
+          url: `https://vidsrc.to/embed/tv/${tmdbId}/1/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // VidLink.pro
+        servers.push({
+          name: 'Mirror 7 (VidLink)',
+          url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // Embed.su
+        servers.push({
+          name: 'Mirror 8 (Embed.su)',
+          url: `https://embed.su/embed/tv/${tmdbId}/1/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // SuperEmbed
+        servers.push({
+          name: 'Mirror 9 (SuperEmbed)',
+          url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=1&e=${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+      }
+
+      // ──────────────────────────────────────────────────────────────────────
+      // TIER 3: Native .m3u8 extraction via consumet (best quality)
+      // Non-blocking — runs in background, adds to servers if succeeds
+      // ──────────────────────────────────────────────────────────────────────
+      if (title) {
+        this.extractNativeSources(title, epNum, anilistId).then(nativeServers => {
+          // These will be in the response only if extraction finished before the response
+          // (we await this below with a short timeout)
+        }).catch(() => {});
+
+        try {
+          const nativeServers = await Promise.race([
+            this.extractNativeSources(title, epNum, anilistId),
+            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000))
+          ]);
+          servers.unshift(...nativeServers); // Native sources go FIRST (best quality)
+        } catch (e) {}
+      }
+
+      this.logger.log(`Nuclear Mesh v10: Returning ${servers.length} servers for EP${epNum}`);
+
       return {
-        provider: "mesh-v9.5-nuclear",
-        servers: servers,
+        provider: "mesh-v10-nuclear",
+        servers,
         anilistId,
+        tmdbId: tmdbId || null,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': 'https://animepahe.pw/'
+          'Referer': 'https://animepahe.com/'
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v9.5 CRITICAL: ${error.message}`);
-      return { provider: "mesh-v9.5-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v10 CRITICAL: ${error.message}`);
+      return { provider: "mesh-v10-error", servers: [], headers: {} };
     }
+  }
+
+  /**
+   * Internal: try to extract native .m3u8 sources via consumet providers
+   */
+  private async extractNativeSources(title: string, epNum: number, anilistId: number): Promise<any[]> {
+    const nativeServers: any[] = [];
+
+    try {
+      this.logger.debug(`Native extraction attempt: "${title}" EP${epNum}`);
+
+      // Search across all consumet providers simultaneously
+      const searchResults = await Promise.race([
+        this.consumetService.search(title),
+        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 5000))
+      ]).catch(() => []);
+
+      if (!searchResults?.length) return [];
+
+      // Try AnimePahe first (most reliable native source)
+      const paheResult = searchResults.find(r => r.provider === 'animepahe');
+      if (paheResult) {
+        try {
+          const paheEpId = await this.consumetService.resolveEpisodeId(paheResult.id, epNum, 'animepahe');
+          if (paheEpId) {
+            const sources = await Promise.race([
+              this.consumetService.getEpisodeSources(paheEpId, 'animepahe'),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
+            ]);
+            if (sources?.sources?.length) {
+              nativeServers.push({
+                name: 'Native 1 (AnimePahe - HQ)',
+                url: sources.sources[0].url,
+                sources: sources.sources,
+                provider: 'animepahe',
+                isNative: true,
+                headers: sources.headers
+              });
+              this.logger.log(`Native AnimePahe extraction SUCCESS for EP${epNum}`);
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`AnimePahe native extraction failed: ${e.message}`);
+        }
+      }
+
+      // Try KickAssAnime as secondary native source
+      const kaaResult = searchResults.find(r => r.provider === 'kickassanime');
+      if (kaaResult) {
+        try {
+          const kaaEpId = await this.consumetService.resolveEpisodeId(kaaResult.id, epNum, 'kickassanime');
+          if (kaaEpId) {
+            const sources = await Promise.race([
+              this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime'),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
+            ]);
+            if (sources?.sources?.length) {
+              nativeServers.push({
+                name: 'Native 2 (KickAssAnime)',
+                url: sources.sources[0].url,
+                sources: sources.sources,
+                provider: 'kickassanime',
+                isNative: true,
+                headers: sources.headers
+              });
+              this.logger.log(`Native KAA extraction SUCCESS for EP${epNum}`);
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`KAA native extraction failed: ${e.message}`);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Native extraction failed: ${e.message}`);
+    }
+
+    return nativeServers;
   }
 
   /**
@@ -232,13 +368,15 @@ export class StreamingService {
       // Auto-detect Referer if not provided or for specific domains
       let finalReferer = referer;
       if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
-      if (url.includes('animepahe')) finalReferer = 'https://animepahe.ru/';
+      if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
       if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
+      if (url.includes('kaa.lt') || url.includes('kickassanime')) finalReferer = 'https://kaa.lt/';
 
       const response = await axios.get(url, {
         headers: {
           Referer: finalReferer,
-          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Origin: new URL(finalReferer || 'https://animepahe.com').origin,
         },
         responseType: "stream",
         timeout: 15000,
