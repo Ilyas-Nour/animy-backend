@@ -382,7 +382,8 @@ export class StreamingService {
      */
     const toProxiedUrl = (rawUrl: string, referer: string): string => {
       if (!proxyBaseUrl || !rawUrl) return rawUrl;
-      return `${proxyBaseUrl}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent(referer)}`;
+      // Use wildcard path routing to natively support relative paths in HLS manifests
+      return `${proxyBaseUrl}/${rawUrl}`;
     };
 
     try {

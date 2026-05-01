@@ -110,22 +110,29 @@ export class StreamingController {
 
   /**
    * Proxy video streams to bypass CORS and 403s
-   * GET /api/v1/streaming/proxy?url=...&referer=...
+   * Uses a wildcard path so HLS relative URLs resolve natively in the browser.
+   * GET /api/v1/streaming/proxy/https://cdn...
    */
-  @Get("proxy")
-  async proxyStream(
-    @Query("url") url: string,
-    @Query("referer") referer: string,
-    @Req() req: any,
-  ) {
-    if (!url) {
+  @Get("proxy/*")
+  async proxyStream(@Req() req: any) {
+    // Extract the full target URL from the request URL
+    // e.g., /api/v1/streaming/proxy/https://cdn.com/video.m3u8?token=123
+    let url = req.url.substring(req.url.indexOf('/proxy/') + 7);
+    
+    // Support the legacy ?url= format if it's still being used somewhere
+    if (req.query.url) {
+      url = req.query.url as string;
+    }
+
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
       throw new HttpException(
-        "URL parameter is required",
+        "Valid absolute URL path parameter is required",
         HttpStatus.BAD_REQUEST,
       );
     }
 
     const res = req.res;
-    return this.streamingService.proxyStream(url, referer, res, req);
+    // Referer is auto-detected inside proxyStream based on domain
+    return this.streamingService.proxyStream(url, "", res, req);
   }
 }
