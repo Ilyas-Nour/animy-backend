@@ -36,6 +36,85 @@ export class StreamingService {
   }
 
   /**
+   * Proxy Stream to bypass CORS and 403s
+   */
+  async proxyStream(url: string, referer: string, res: any, req: any) {
+    try {
+      // Auto-detect Referer based on the target domain
+      let finalReferer = referer;
+      if (!finalReferer) {
+        if (url.includes('krussdomi.com') || url.includes('kaa.lt') || url.includes('kickassanime')) finalReferer = 'https://kaa.lt/';
+        else if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
+        else if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
+        else if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
+        else finalReferer = 'https://animy.xyz/';
+      } else {
+        if (url.includes('krussdomi.com') || url.includes('kaa.lt')) finalReferer = 'https://kaa.lt/';
+        if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
+        if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
+        if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
+      }
+
+      const response = await axios.get(url, {
+        headers: {
+          Referer: finalReferer,
+          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Origin: new URL(finalReferer || 'https://animepahe.com').origin,
+        },
+        responseType: "stream",
+        timeout: 15000,
+      });
+
+      // Guard: if client already disconnected before we got the upstream response, abort immediately.
+      if (res.writableEnded || res.destroyed) {
+        response.data.destroy();
+        return;
+      }
+
+      // Forward headers
+      res.set("Content-Type", response.headers["content-type"] || "application/octet-stream");
+      if (response.headers["content-length"]) {
+        res.set("Content-Length", response.headers["content-length"]);
+      }
+      res.set("Access-Control-Allow-Origin", "*");
+
+      // When the client disconnects early, destroy the upstream stream.
+      // This prevents ERR_STREAM_WRITE_AFTER_END from crashing the process.
+      const onClientClose = () => {
+        response.data.destroy();
+      };
+      req.on('close', onClientClose);
+
+      // Handle errors on the upstream stream (prevents unhandled 'error' events)
+      response.data.on('error', (err: Error) => {
+        req.off('close', onClientClose);
+        this.logger.warn(`Proxy upstream error for ${url}: ${err.message}`);
+        if (!res.writableEnded && !res.destroyed) {
+          res.status(502).end();
+        }
+      });
+
+      // Cleanup listener when piping ends normally
+      response.data.on('end', () => {
+        req.off('close', onClientClose);
+      });
+
+      // Pipe the stream to the response
+      response.data.pipe(res);
+
+    } catch (error) {
+      this.logger.error(`Proxy failed for ${url}: ${error.message}`);
+      if (!res.writableEnded && !res.destroyed) {
+        try {
+          res.status(502).json({ error: "Proxy error", message: error.message });
+        } catch (e) {
+          // Response already closed — ignore
+        }
+      }
+    }
+  }
+
+  /**
    * Resolve TMDB ID from AniList ID or title
    * Uses malsync.moe to map AniList -> TMDB (no API key needed)
    */
@@ -379,49 +458,5 @@ export class StreamingService {
     }
 
     return nativeServers;
-  }
-
-  /**
-   * Proxy Stream to bypass CORS and 403s
-   */
-  async proxyStream(url: string, referer: string, res: any, req: any) {
-    try {
-      // Auto-detect Referer based on the target domain
-      let finalReferer = referer;
-      if (!finalReferer) {
-        if (url.includes('krussdomi.com') || url.includes('kaa.lt') || url.includes('kickassanime')) finalReferer = 'https://kaa.lt/';
-        else if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
-        else if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
-        else if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
-        else finalReferer = 'https://animy.xyz/';
-      } else {
-        if (url.includes('krussdomi.com') || url.includes('kaa.lt')) finalReferer = 'https://kaa.lt/';
-        if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
-        if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
-        if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
-      }
-
-      const response = await axios.get(url, {
-        headers: {
-          Referer: finalReferer,
-          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          Origin: new URL(finalReferer || 'https://animepahe.com').origin,
-        },
-        responseType: "stream",
-        timeout: 15000,
-      });
-
-      // Forward headers
-      res.set("Content-Type", response.headers["content-type"]);
-      if (response.headers["content-length"]) {
-        res.set("Content-Length", response.headers["content-length"]);
-      }
-      res.set("Access-Control-Allow-Origin", "*");
-
-      response.data.pipe(res);
-    } catch (error) {
-      this.logger.error(`Proxy failed for ${url}: ${error.message}`);
-      res.status(500).send("Proxy error");
-    }
   }
 }
