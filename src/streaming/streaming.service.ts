@@ -78,9 +78,17 @@ export class StreamingService {
       }
       res.set("Access-Control-Allow-Origin", "*");
 
-      // When the client disconnects early, destroy the upstream stream.
-      // This prevents ERR_STREAM_WRITE_AFTER_END from crashing the process.
+      // Catch any errors on the response stream itself to prevent Unhandled 'error' events
+      res.on('error', (err: any) => {
+        this.logger.warn(`Response stream error for ${url}: ${err.message}`);
+        response.data.unpipe(res);
+        response.data.destroy();
+      });
+
+      // When the client disconnects early, unpipe and destroy the upstream stream.
+      // This definitively prevents ERR_STREAM_WRITE_AFTER_END from crashing the process.
       const onClientClose = () => {
+        response.data.unpipe(res);
         response.data.destroy();
       };
       req.on('close', onClientClose);
