@@ -248,20 +248,17 @@ export class StreamingService {
 
       // ──────────────────────────────────────────────────────────────────────
       // TIER 3: Native .m3u8 extraction via consumet (best quality)
-      // Non-blocking — runs in background, adds to servers if succeeds
+      // All raw CDN URLs are rewritten through our backend proxy to bypass CORS
       // ──────────────────────────────────────────────────────────────────────
       if (title) {
-        this.extractNativeSources(title, epNum, anilistId).then(nativeServers => {
-          // These will be in the response only if extraction finished before the response
-          // (we await this below with a short timeout)
-        }).catch(() => {});
-
         try {
           const nativeServers = await Promise.race([
-            this.extractNativeSources(title, epNum, anilistId),
+            this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),
             new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000))
           ]);
-          servers.unshift(...nativeServers); // Native sources go FIRST (best quality)
+          if (nativeServers.length > 0) {
+            servers.unshift(...nativeServers); // Native sources go FIRST (best quality)
+          }
         } catch (e) {}
       }
 
@@ -284,10 +281,22 @@ export class StreamingService {
   }
 
   /**
-   * Internal: try to extract native .m3u8 sources via consumet providers
+   * Internal: try to extract native .m3u8 sources via consumet providers.
+   * All CDN URLs are rewritten through the backend proxy to bypass browser CORS restrictions.
    */
-  private async extractNativeSources(title: string, epNum: number, anilistId: number): Promise<any[]> {
+  private async extractNativeSources(title: string, epNum: number, anilistId: number, proxyBaseUrl?: string): Promise<any[]> {
     const nativeServers: any[] = [];
+
+    /**
+     * Rewrites a raw CDN URL to go through the backend proxy.
+     * This is the key fix for CORS errors: instead of the browser fetching
+     * hls.krussdomi.com or kwik.cx directly (which they block), all
+     * requests go through our server which can set the correct Referer.
+     */
+    const toProxiedUrl = (rawUrl: string, referer: string): string => {
+      if (!proxyBaseUrl || !rawUrl) return rawUrl;
+      return `${proxyBaseUrl}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent(referer)}`;
+    };
 
     try {
       this.logger.debug(`Native extraction attempt: "${title}" EP${epNum}`);
@@ -311,13 +320,19 @@ export class StreamingService {
               new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
             ]);
             if (sources?.sources?.length) {
+              const paheReferer = 'https://animepahe.com/';
+              // Rewrite all source URLs through the backend proxy to bypass CORS
+              const proxiedSources = sources.sources.map((s: any) => ({
+                ...s,
+                url: toProxiedUrl(s.url, paheReferer)
+              }));
               nativeServers.push({
                 name: 'Native 1 (AnimePahe - HQ)',
-                url: sources.sources[0].url,
-                sources: sources.sources,
+                url: proxiedSources[0].url,
+                sources: proxiedSources,
                 provider: 'animepahe',
                 isNative: true,
-                headers: sources.headers
+                headers: {} // Headers no longer needed — proxy handles them
               });
               this.logger.log(`Native AnimePahe extraction SUCCESS for EP${epNum}`);
             }
@@ -338,13 +353,19 @@ export class StreamingService {
               new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
             ]);
             if (sources?.sources?.length) {
+              const kaaReferer = 'https://kaa.lt/';
+              // Rewrite all source URLs through the backend proxy to bypass CORS
+              const proxiedSources = sources.sources.map((s: any) => ({
+                ...s,
+                url: toProxiedUrl(s.url, kaaReferer)
+              }));
               nativeServers.push({
                 name: 'Native 2 (KickAssAnime)',
-                url: sources.sources[0].url,
-                sources: sources.sources,
+                url: proxiedSources[0].url,
+                sources: proxiedSources,
                 provider: 'kickassanime',
                 isNative: true,
-                headers: sources.headers
+                headers: {} // Headers no longer needed — proxy handles them
               });
               this.logger.log(`Native KAA extraction SUCCESS for EP${epNum}`);
             }
@@ -365,12 +386,20 @@ export class StreamingService {
    */
   async proxyStream(url: string, referer: string, res: any, req: any) {
     try {
-      // Auto-detect Referer if not provided or for specific domains
+      // Auto-detect Referer based on the target domain
       let finalReferer = referer;
-      if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
-      if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
-      if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
-      if (url.includes('kaa.lt') || url.includes('kickassanime')) finalReferer = 'https://kaa.lt/';
+      if (!finalReferer) {
+        if (url.includes('krussdomi.com') || url.includes('kaa.lt') || url.includes('kickassanime')) finalReferer = 'https://kaa.lt/';
+        else if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
+        else if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
+        else if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
+        else finalReferer = 'https://animy.xyz/';
+      } else {
+        if (url.includes('krussdomi.com') || url.includes('kaa.lt')) finalReferer = 'https://kaa.lt/';
+        if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
+        if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
+        if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
+      }
 
       const response = await axios.get(url, {
         headers: {
