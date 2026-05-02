@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
   Req,
+  Res,
   Logger,
 } from "@nestjs/common";
 import { StreamingService } from "./streaming.service";
@@ -118,8 +119,8 @@ export class StreamingController {
    * Uses a wildcard path so HLS relative URLs resolve natively in the browser.
    * GET /api/v1/streaming/proxy/https://cdn...
    */
-  @Get("proxy/*")
-  async proxyStream(@Req() req: any) {
+  @Get(["proxy", "proxy/*"])
+  async proxyStream(@Req() req: any, @Res() res: any) {
     // Extract the full target URL from the request URL
     // e.g., /api/v1/streaming/proxy/https://cdn.com/video.m3u8?token=123
     let url = req.url.substring(req.url.indexOf('/proxy/') + 7);
@@ -136,8 +137,6 @@ export class StreamingController {
       );
     }
 
-    const res = req.res;
-    
     // Build absolute proxy base URL dynamically from the request host
     const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
     const host = req.headers.host;
@@ -152,6 +151,6 @@ export class StreamingController {
       else if (url.includes('megaup')) referer = 'https://megaup.nl/';
     }
 
-    return this.streamingProxyService.proxy(url, referer, res, req, proxyBaseUrl);
+    await this.streamingProxyService.proxy(url, referer, res, req, proxyBaseUrl);
   }
 }
