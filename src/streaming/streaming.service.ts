@@ -328,6 +328,33 @@ export class StreamingService {
           this.logger.warn(`KAA native extraction failed: ${e.message}`);
         }
       }
+
+      // Try Anify as tertiary native source (fastest .m3u8 provider)
+      const anifyResult = searchResults.find(r => r.provider === 'anify');
+      if (anifyResult) {
+        try {
+          this.logger.debug(`Trying Anify native for: ${anifyResult.id}`);
+          const res = await axios.get(`https://api.anify.tv/sources?id=${anifyResult.id}&episodeNumber=${epNum}&providerId=gogoanime&watchId=${anifyResult.id}&subType=sub`, { timeout: 6000 });
+          if (res.data?.sources?.length) {
+            const sources = res.data.sources.map((s: any) => ({
+              url: toProxiedUrl(s.url, 'https://anify.tv/'),
+              quality: s.quality,
+              isM3U8: s.url.includes('.m3u8')
+            }));
+            nativeServers.push({
+              name: 'Native 3 (Anify - Fast)',
+              url: sources[0].url,
+              sources,
+              provider: 'anify',
+              isNative: true,
+              headers: { Referer: 'https://anify.tv/' }
+            });
+            this.logger.log(`Native Anify extraction SUCCESS for EP${epNum}`);
+          }
+        } catch (e) {
+          this.logger.warn(`Anify native extraction failed: ${e.message}`);
+        }
+      }
     } catch (e) {
       this.logger.warn(`Native extraction failed: ${e.message}`);
     }

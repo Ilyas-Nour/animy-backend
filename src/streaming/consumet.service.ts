@@ -9,16 +9,18 @@ export class ConsumetService {
   private readonly animepahe = new ANIME.AnimePahe();
   private readonly kickass = new ANIME.KickAssAnime();
   private readonly animekai = new ANIME.AnimeKai();
+  private readonly hianime = new ANIME.Hianime();
 
   constructor() {
     // Override base URLs to working 2025/2026 domains
-    (this.animepahe as any).baseUrl = 'https://animepahe.com';
-    (this.kickass as any).baseUrl = 'https://kaa.lt';
+    (this.animepahe as any).baseUrl = 'https://animepahe.ru';
+    (this.kickass as any).baseUrl = 'https://kaas.am';
     (this.animekai as any).baseUrl = 'https://animekai.to';
+    (this.hianime as any).baseUrl = 'https://hianime.to';
 
     // Override internal cookie domains used by AnimePahe scraper
     try {
-      (this.animepahe as any).domainName = 'https://animepahe.com';
+      (this.animepahe as any).domainName = 'https://animepahe.ru';
     } catch (e) {}
   }
 
@@ -43,6 +45,21 @@ export class ConsumetService {
         // 3. AnimeKai
         this.animekai.search(query)
           .then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animekai' })))
+          .catch(() => [] as any[]),
+
+        // 4. HiAnime (via Consumet)
+        this.hianime.search(query)
+          .then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'hianime' })))
+          .catch(() => [] as any[]),
+
+        // 5. Anify (Fast & Stable)
+        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 5000 })
+          .then(res => (res.data || []).map((r: any) => ({ 
+              id: r.id, 
+              title: r.title.english || r.title.romaji, 
+              image: r.coverImage, 
+              provider: 'anify' 
+          })))
           .catch(() => [] as any[]),
       ]);
 
@@ -90,6 +107,15 @@ export class ConsumetService {
         if (info) return info;
       } catch (e) {}
 
+      // Fallback to HiAnime
+      try {
+        const info = await Promise.race([
+          this.hianime.fetchAnimeInfo(id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+        ]).catch(() => null);
+        if (info) return info;
+      } catch (e) {}
+
       return null;
     } catch (error) {
       return null;
@@ -129,6 +155,9 @@ export class ConsumetService {
       } else if (provider === 'animekai') {
         targetProvider = this.animekai;
         referer = 'https://animekai.to/';
+      } else if (provider === 'hianime') {
+        targetProvider = this.hianime;
+        referer = 'https://hianime.to/';
       }
 
       let sources: any = null;

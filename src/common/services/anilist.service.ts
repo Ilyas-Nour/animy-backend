@@ -77,7 +77,7 @@ export class AnilistService {
     try {
       const data: any = await Promise.race([
         this.client.request(queryGql, variables),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 15000))
       ]);
       return data.Page;
     } catch (error) {
@@ -228,7 +228,7 @@ export class AnilistService {
     try {
       const data: any = await Promise.race([
         this.client.request(queryGql, { id }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 15000))
       ]);
       const media = data.Media;
 

@@ -54,6 +54,18 @@ export class AnimeController {
   }
 
   @Public()
+  @Get("trending")
+  async getTrending(@Query("page") page: number = 1) {
+    return this.animeService.getTopAnime(undefined, "trending");
+  }
+
+  @Public()
+  @Get("popular")
+  async getPopular(@Query("page") page: number = 1) {
+    return this.animeService.getTopAnime(undefined, "bypopularity");
+  }
+
+  @Public()
   @Get(":id/full")
   async getAnimeFullById(@Param("id") id: string) {
     return this.animeService.getAnimeById(parseInt(id, 10));
