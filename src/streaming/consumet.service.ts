@@ -67,7 +67,7 @@ export class ConsumetService {
       try {
         const info = await Promise.race([
           this.kickass.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 6000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
         ]).catch(() => null);
         if (info) return info;
       } catch (e) {}
@@ -76,7 +76,7 @@ export class ConsumetService {
       try {
         const info = await Promise.race([
           this.animepahe.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 6000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
         ]).catch(() => null);
         if (info) return info;
       } catch (e) {}
@@ -85,7 +85,7 @@ export class ConsumetService {
       try {
         const info = await Promise.race([
           this.animekai.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 6000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
         ]).catch(() => null);
         if (info) return info;
       } catch (e) {}
@@ -136,7 +136,7 @@ export class ConsumetService {
       try {
         sources = await Promise.race([
           targetProvider.fetchEpisodeSources(episodeId),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
         ]);
       } catch (e) {
         this.logger.warn(`Source extraction timeout on ${provider} for ${episodeId}`);
@@ -146,7 +146,7 @@ export class ConsumetService {
           try {
             sources = await Promise.race([
               this.kickass.fetchEpisodeSources(episodeId),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 12000))
             ]);
             referer = 'https://kaa.lt/';
           } catch (e2) {}

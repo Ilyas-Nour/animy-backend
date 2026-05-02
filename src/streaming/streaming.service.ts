@@ -154,53 +154,7 @@ export class StreamingService {
       const servers: any[] = [];
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 1: AniList-based embeds (INSTANT — no lookup needed)
-      // ──────────────────────────────────────────────────────────────────────
-      if (!isNaN(anilistId) && anilistId > 0) {
-
-        // 2anime.ru — supports AniList IDs natively
-        servers.push({
-          name: 'Mirror 1 (2anime)',
-          url: `https://2anime.xyz/embed/ep?anilist=${anilistId}&ep=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // Anivibe embed
-        servers.push({
-          name: 'Mirror 2 (Anivibe)',
-          url: `https://anivibe.net/embed?anilist=${anilistId}&ep=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // VidSrc.me — correct working format for anime (uses anilist param)
-        servers.push({
-          name: 'Mirror 3 (VidSrc.me)',
-          url: `https://vidsrc.me/embed/anime?anilist=${anilistId}&episode=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // Miruro embed (anilist-based)
-        servers.push({
-          name: 'Mirror 4 (Miruro)',
-          url: `https://www.miruro.tv/watch?id=${anilistId}&ep=${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // AniWave embed (anilist)
-        servers.push({
-          name: 'Mirror 5 (AniWave)',
-          url: `https://aniwave.to/watch/anime.${anilistId}/ep-${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-      }
-
-      // ──────────────────────────────────────────────────────────────────────
-      // TIER 2: TMDB-based embeds (lookup in parallel, don't block Tier 1)
+      // TIER 1: TMDB-based embeds (lookup in parallel)
       // ──────────────────────────────────────────────────────────────────────
       const tmdbIdPromise = tmdbIdParam
         ? Promise.resolve(tmdbIdParam)
@@ -208,7 +162,7 @@ export class StreamingService {
 
       const tmdbId = await Promise.race([
         tmdbIdPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000))
       ]).catch(() => null);
 
       if (tmdbId) {
@@ -255,7 +209,7 @@ export class StreamingService {
         try {
           const nativeServers = await Promise.race([
             this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000))
+            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 15000))
           ]);
           if (nativeServers.length > 0) {
             servers.unshift(...nativeServers); // Native sources go FIRST (best quality)
@@ -306,7 +260,7 @@ export class StreamingService {
       // Search across all consumet providers simultaneously
       const searchResults = await Promise.race([
         this.consumetService.search(title),
-        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 5000))
+        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000))
       ]).catch(() => []);
 
       if (!searchResults?.length) return [];
@@ -319,7 +273,7 @@ export class StreamingService {
           if (paheEpId) {
             const sources = await Promise.race([
               this.consumetService.getEpisodeSources(paheEpId, 'animepahe'),
-              new Promise<any>((resolve) => setTimeout(() => resolve(null), 6000))
+              new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
             ]);
             if (sources?.sources?.length) {
               const paheReferer = sources.headers?.Referer || 'https://animepahe.com/';
@@ -351,7 +305,7 @@ export class StreamingService {
           if (kaaEpId) {
             const sources = await Promise.race([
               this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime'),
-              new Promise<any>((resolve) => setTimeout(() => resolve(null), 6000))
+              new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
             ]);
             if (sources?.sources?.length) {
               const kaaReferer = sources.headers?.Referer || 'https://kaa.lt/';
