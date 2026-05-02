@@ -11,11 +11,16 @@ import {
 import { StreamingService } from "./streaming.service";
 import { Request } from "express";
 
+import { StreamingProxyService } from "./streaming.proxy.service";
+
 @Controller("streaming")
 export class StreamingController {
   private readonly logger = new Logger(StreamingController.name);
 
-  constructor(private readonly streamingService: StreamingService) {}
+  constructor(
+    private readonly streamingService: StreamingService,
+    private readonly streamingProxyService: StreamingProxyService,
+  ) {}
 
   /**
    * Search for anime on HiAnime
@@ -132,7 +137,21 @@ export class StreamingController {
     }
 
     const res = req.res;
-    // Referer is auto-detected inside proxyStream based on domain
-    return this.streamingService.proxyStream(url, "", res, req);
+    
+    // Build absolute proxy base URL dynamically from the request host
+    const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    const host = req.headers.host;
+    const proxyBaseUrl = `${protocol}://${host}/api/v1/streaming/proxy`;
+
+    // Extract referer from query if provided, otherwise auto-detect based on URL
+    let referer = (req.query.referer as string) || "";
+    if (!referer) {
+      if (url.includes('krussdomi.com') || url.includes('kaa.lt') || url.includes('kickassanime')) referer = 'https://kaa.lt/';
+      else if (url.includes('kwik.cx')) referer = 'https://animepahe.com/';
+      else if (url.includes('animepahe')) referer = 'https://animepahe.com/';
+      else if (url.includes('megaup')) referer = 'https://megaup.nl/';
+    }
+
+    return this.streamingProxyService.proxy(url, referer, res, req, proxyBaseUrl);
   }
 }

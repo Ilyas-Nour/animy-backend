@@ -8,8 +8,9 @@ export class HiAnimeService {
 
   // Working HiAnime API (unofficial community-hosted APIs — no Cloudflare)
   private readonly hiAnimeApiHosts = [
-    'https://aniwatch-api-net.vercel.app/api/v2/hianime',
     'https://hianime-api.vercel.app/anime',
+    'https://aniwatch-api-net.vercel.app/api/v2/hianime',
+    'https://aniwatch-api-v1.vercel.app/api/v2/hianime',
     'https://aniwatch.ameyg.me/api/v2/hianime',
   ];
 

@@ -10,30 +10,44 @@ export class StreamingProxyService {
    * Proxies a request to a remote video source and pipes result to response
    * Rewrites manifest files to proxy chunks as well
    */
-  async proxy(url: string, referer: string, res: Response, req?: any) {
+  /**
+   * Proxies a request to a remote video source and pipes result to response
+   * Rewrites manifest files to proxy chunks as well
+   * @param url The target URL to proxy
+   * @param referer The referer to use for the upstream request
+   * @param res The Express response object
+   * @param req The Express request object
+   * @param proxyBaseUrl The base URL of this proxy endpoint (for manifest rewriting)
+   */
+  async proxy(url: string, referer: string, res: Response, req?: any, proxyBaseUrl?: string) {
     try {
       const urlObj = new URL(url);
       const origin = `${urlObj.protocol}//${urlObj.host}`;
 
+      // Default to hianime referer if none provided
+      const finalReferer = referer || "https://hianime.to/";
+
       const headers: any = {
-        Referer: referer || "https://hianime.to/",
+        Referer: finalReferer,
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+          req?.headers?.["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         Accept: "*/*",
         "Accept-Language": "en-US,en;q=0.9",
-        Origin: referer ? new URL(referer).origin : origin,
+        Origin: new URL(finalReferer).origin,
       };
 
-      // Forward Range header if present
+      // Forward Range header if present (crucial for some players/CDNs)
       if (req?.headers?.range) {
         headers.Range = req.headers.range;
       }
 
+      this.logger.debug(`Proxying: ${url} (Referer: ${finalReferer})`);
+
       const response = await axios.get(url, {
         headers,
         responseType: "stream",
-        timeout: 15000,
-        validateStatus: (status) => status >= 200 && status < 300 || status === 206,
+        timeout: 20000,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 206,
       });
 
       // Forward relevant headers
@@ -46,18 +60,20 @@ export class StreamingProxyService {
 
       res.setHeader("Content-Type", contentType);
       res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
       res.setHeader("Cache-Control", "public, max-age=3600");
 
       if (response.headers["content-range"]) {
-          res.setHeader("Content-Range", String(response.headers["content-range"]));
-          res.status(HttpStatus.PARTIAL_CONTENT);
+        res.setHeader("Content-Range", String(response.headers["content-range"]));
+        res.status(HttpStatus.PARTIAL_CONTENT);
       }
       
-      if (response.headers["content-length"]) {
-          res.setHeader("Content-Length", String(response.headers["content-length"]));
+      if (response.headers["content-length"] && !contentType.includes("mpegurl")) {
+        res.setHeader("Content-Length", String(response.headers["content-length"]));
       }
 
-      // If it's a manifest file, we might need to rewrite it
+      // If it's a manifest file, we MUST rewrite it to ensure segments are also proxied
       if (
         contentType.includes("mpegurl") ||
         contentType.includes("application/vnd.apple.mpegurl") ||
@@ -65,87 +81,114 @@ export class StreamingProxyService {
       ) {
         let manifestData = "";
 
-        // We need to collect the data to rewrite it
-        // Note: For very large manifests this could be heavy, but usually it's fine
         return new Promise((resolve, reject) => {
           response.data.on("data", (chunk: any) => {
             manifestData += chunk.toString();
           });
 
           response.data.on("end", () => {
-            const rewrittenManifest = this.rewriteManifest(
-              manifestData,
-              url,
-              referer,
-            );
-            res.send(rewrittenManifest);
-            resolve(true);
+            try {
+              const rewrittenManifest = this.rewriteManifest(
+                manifestData,
+                url,
+                finalReferer,
+                proxyBaseUrl,
+              );
+              res.send(rewrittenManifest);
+              resolve(true);
+            } catch (err) {
+              this.logger.error(`Manifest rewrite error: ${err.message}`);
+              res.status(HttpStatus.INTERNAL_SERVER_ERROR).send(manifestData);
+              resolve(false);
+            }
           });
 
           response.data.on("error", (err: any) => {
-            this.logger.error(`Stream error for ${url}: ${err.message}`);
+            this.logger.error(`Manifest stream error for ${url}: ${err.message}`);
+            if (!res.headersSent) res.status(HttpStatus.BAD_GATEWAY).end();
             reject(err);
           });
         });
       }
 
-      // For segments or other files, just pipe directly
+      // For segments or other files, pipe directly
+      // Cleanup logic to prevent memory leaks and "write after end" errors
+      const cleanup = () => {
+        response.data.unpipe(res);
+        response.data.destroy();
+      };
+
+      req?.on("close", cleanup);
+      
       response.data.pipe(res);
 
       return new Promise((resolve, reject) => {
-        response.data.on("end", () => resolve(true));
-        response.data.on("error", (err: any) => reject(err));
+        response.data.on("end", () => {
+          req?.off("close", cleanup);
+          resolve(true);
+        });
+        response.data.on("error", (err: any) => {
+          this.logger.error(`Pipe error for ${url}: ${err.message}`);
+          req?.off("close", cleanup);
+          if (!res.headersSent) res.status(HttpStatus.BAD_GATEWAY).end();
+          reject(err);
+        });
       });
     } catch (error: any) {
       this.logger.error(`Proxy failure for ${url}: ${error.message}`);
 
-      if (error.response) {
-        throw new HttpException(
-          `Remote server returned ${error.response.status}`,
-          error.response.status,
-        );
+      if (!res.headersSent) {
+        const status = error.response?.status || HttpStatus.BAD_GATEWAY;
+        res.status(status).json({
+          error: "Proxy error",
+          message: error.message,
+          url: url
+        });
       }
-
-      throw new HttpException(
-        "Failed to proxy video source",
-        HttpStatus.BAD_GATEWAY,
-      );
     }
   }
 
   /**
-   * Rewrites URLs in M3U8 manifest to point back to our proxy
+   * Rewrites URLs in M3U8 manifest to point back to our proxy.
+   * This ensures that every segment (.ts) or sub-playlist requested by the player
+   * also carries the correct Referer and bypasses CORS.
    */
   private rewriteManifest(
     content: string,
     originalUrl: string,
     referer: string,
+    proxyBaseUrl?: string,
   ): string {
     const urlObj = new URL(originalUrl);
+    // Base URL of the manifest itself, used to resolve relative paths
     const baseUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname.substring(0, urlObj.pathname.lastIndexOf("/") + 1)}`;
     const origin = `${urlObj.protocol}//${urlObj.host}`;
 
-    // Get our own proxy base URL (relative to where the request came from)
-    // Hardcoding the relative structure for now or we can pass it
-    const proxyPrefix = `/api/v1/streaming/proxy?referer=${encodeURIComponent(referer)}&url=`;
+    // Use provided proxyBaseUrl or fallback to relative path
+    const effectiveProxyBase = proxyBaseUrl || "/api/v1/streaming/proxy";
+    const proxyPrefix = `${effectiveProxyBase}?referer=${encodeURIComponent(referer)}&url=`;
 
     return content
       .split("\n")
       .map((line) => {
         const trimmed = line.trim();
 
-        // Skip comments except URI attributes in tags
+        if (!trimmed) return line;
+
+        // 1. Rewrite Tags with URI attributes (e.g. #EXT-X-KEY, #EXT-X-MEDIA)
         if (trimmed.startsWith("#")) {
-          // Rewrite URI="url" pattern in tags
-          return line.replace(/URI="([^"]+)"/g, (match, p1) => {
+          return line.replace(/URI=(['"])([^'"]+)(['"])/g, (match, quote, p2, endQuote) => {
+            const absoluteUrl = this.resolveUrl(p2, baseUrl, origin);
+            return `URI=${quote}${proxyPrefix}${encodeURIComponent(absoluteUrl)}${endQuote}`;
+          }).replace(/URI=([^'",\s]+)/g, (match, p1) => {
+            // Handle unquoted URIs (rare but possible)
+            if (match.includes("URI=\"") || match.includes("URI='")) return match;
             const absoluteUrl = this.resolveUrl(p1, baseUrl, origin);
             return `URI="${proxyPrefix}${encodeURIComponent(absoluteUrl)}"`;
           });
         }
 
-        if (trimmed === "") return line;
-
-        // It's a URL
+        // 2. Rewrite Segment URLs or Sub-playlist URLs
         const absoluteUrl = this.resolveUrl(trimmed, baseUrl, origin);
         return `${proxyPrefix}${encodeURIComponent(absoluteUrl)}`;
       })
@@ -158,4 +201,5 @@ export class StreamingProxyService {
     if (url.startsWith("/")) return `${origin}${url}`;
     return `${baseUrl}${url}`;
   }
+
 }

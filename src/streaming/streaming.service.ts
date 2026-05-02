@@ -35,92 +35,6 @@ export class StreamingService {
     return this.consumetService.search(title);
   }
 
-  /**
-   * Proxy Stream to bypass CORS and 403s
-   */
-  async proxyStream(url: string, referer: string, res: any, req: any) {
-    try {
-      // Auto-detect Referer based on the target domain
-      let finalReferer = referer;
-      if (!finalReferer) {
-        if (url.includes('krussdomi.com') || url.includes('kaa.lt') || url.includes('kickassanime')) finalReferer = 'https://kaa.lt/';
-        else if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
-        else if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
-        else if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
-        else finalReferer = 'https://animy.xyz/';
-      } else {
-        if (url.includes('krussdomi.com') || url.includes('kaa.lt')) finalReferer = 'https://kaa.lt/';
-        if (url.includes('kwik.cx')) finalReferer = 'https://kwik.cx/';
-        if (url.includes('animepahe')) finalReferer = 'https://animepahe.com/';
-        if (url.includes('megaup')) finalReferer = 'https://megaup.nl/';
-      }
-
-      const response = await axios.get(url, {
-        headers: {
-          Referer: finalReferer,
-          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          Origin: new URL(finalReferer || 'https://animepahe.com').origin,
-        },
-        responseType: "stream",
-        timeout: 15000,
-      });
-
-      // Guard: if client already disconnected before we got the upstream response, abort immediately.
-      if (res.writableEnded || res.destroyed) {
-        response.data.destroy();
-        return;
-      }
-
-      // Forward headers
-      res.set("Content-Type", response.headers["content-type"] || "application/octet-stream");
-      if (response.headers["content-length"]) {
-        res.set("Content-Length", response.headers["content-length"]);
-      }
-      res.set("Access-Control-Allow-Origin", "*");
-
-      // Catch any errors on the response stream itself to prevent Unhandled 'error' events
-      res.on('error', (err: any) => {
-        this.logger.warn(`Response stream error for ${url}: ${err.message}`);
-        response.data.unpipe(res);
-        response.data.destroy();
-      });
-
-      // When the client disconnects early, unpipe and destroy the upstream stream.
-      // This definitively prevents ERR_STREAM_WRITE_AFTER_END from crashing the process.
-      const onClientClose = () => {
-        response.data.unpipe(res);
-        response.data.destroy();
-      };
-      req.on('close', onClientClose);
-
-      // Handle errors on the upstream stream (prevents unhandled 'error' events)
-      response.data.on('error', (err: Error) => {
-        req.off('close', onClientClose);
-        this.logger.warn(`Proxy upstream error for ${url}: ${err.message}`);
-        if (!res.writableEnded && !res.destroyed) {
-          res.status(502).end();
-        }
-      });
-
-      // Cleanup listener when piping ends normally
-      response.data.on('end', () => {
-        req.off('close', onClientClose);
-      });
-
-      // Pipe the stream to the response
-      response.data.pipe(res);
-
-    } catch (error) {
-      this.logger.error(`Proxy failed for ${url}: ${error.message}`);
-      if (!res.writableEnded && !res.destroyed) {
-        try {
-          res.status(502).json({ error: "Proxy error", message: error.message });
-        } catch (e) {
-          // Response already closed — ignore
-        }
-      }
-    }
-  }
 
   /**
    * Resolve TMDB ID from AniList ID or title
@@ -382,8 +296,8 @@ export class StreamingService {
      */
     const toProxiedUrl = (rawUrl: string, referer: string): string => {
       if (!proxyBaseUrl || !rawUrl) return rawUrl;
-      // Use wildcard path routing to natively support relative paths in HLS manifests
-      return `${proxyBaseUrl}/${rawUrl}`;
+      // Pass referer as query param so the proxy knows which headers to use
+      return `${proxyBaseUrl}/${rawUrl}?referer=${encodeURIComponent(referer)}`;
     };
 
     try {
@@ -405,11 +319,10 @@ export class StreamingService {
           if (paheEpId) {
             const sources = await Promise.race([
               this.consumetService.getEpisodeSources(paheEpId, 'animepahe'),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
+              new Promise<any>((resolve) => setTimeout(() => resolve(null), 6000))
             ]);
             if (sources?.sources?.length) {
-              const paheReferer = 'https://animepahe.com/';
-              // Rewrite all source URLs through the backend proxy to bypass CORS
+              const paheReferer = sources.headers?.Referer || 'https://animepahe.com/';
               const proxiedSources = sources.sources.map((s: any) => ({
                 ...s,
                 url: toProxiedUrl(s.url, paheReferer)
@@ -420,7 +333,7 @@ export class StreamingService {
                 sources: proxiedSources,
                 provider: 'animepahe',
                 isNative: true,
-                headers: {} // Headers no longer needed — proxy handles them
+                headers: sources.headers
               });
               this.logger.log(`Native AnimePahe extraction SUCCESS for EP${epNum}`);
             }
@@ -438,11 +351,10 @@ export class StreamingService {
           if (kaaEpId) {
             const sources = await Promise.race([
               this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime'),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000))
+              new Promise<any>((resolve) => setTimeout(() => resolve(null), 6000))
             ]);
             if (sources?.sources?.length) {
-              const kaaReferer = 'https://kaa.lt/';
-              // Rewrite all source URLs through the backend proxy to bypass CORS
+              const kaaReferer = sources.headers?.Referer || 'https://kaa.lt/';
               const proxiedSources = sources.sources.map((s: any) => ({
                 ...s,
                 url: toProxiedUrl(s.url, kaaReferer)
@@ -453,7 +365,7 @@ export class StreamingService {
                 sources: proxiedSources,
                 provider: 'kickassanime',
                 isNative: true,
-                headers: {} // Headers no longer needed — proxy handles them
+                headers: sources.headers
               });
               this.logger.log(`Native KAA extraction SUCCESS for EP${epNum}`);
             }
