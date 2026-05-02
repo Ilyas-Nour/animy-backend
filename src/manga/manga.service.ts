@@ -56,7 +56,7 @@ export class MangaService {
           per_page: data.pageInfo.perPage,
         },
       },
-      data: data.media.map(this.mapAnilistToResponse),
+      data: data.media.map(this.mapAnilistToResponse).filter(m => m !== null),
     };
   }
 
@@ -107,7 +107,8 @@ export class MangaService {
     }
 
     return {
-      data: data.map(this.mapAnilistToResponse),
+      data: (data.media || []).map(this.mapAnilistToResponse).filter(m => m !== null),
+      pageInfo: data.pageInfo
     };
   }
 

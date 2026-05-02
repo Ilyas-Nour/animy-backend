@@ -289,7 +289,7 @@ export class AnilistService {
         this.client.request(queryGql, { page, perPage }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
-      return data.Page.media;
+      return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching trending anime:`, error.message);
       throw new HttpException(
@@ -341,7 +341,7 @@ export class AnilistService {
         this.client.request(queryGql, { page, perPage }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
-      return data.Page.media;
+      return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching popular anime:`, error.message);
       throw new HttpException(
@@ -404,7 +404,7 @@ export class AnilistService {
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
-      return data.Page.media;
+      return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching seasonal anime:`, error.message);
       throw new HttpException(
@@ -618,7 +618,7 @@ export class AnilistService {
 
     try {
       const data: any = await this.client.request(queryGql, { page, perPage });
-      return data.Page.media;
+      return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching trending manga:`, error);
       return [];
@@ -661,7 +661,7 @@ export class AnilistService {
 
     try {
       const data: any = await this.client.request(queryGql, { page, perPage });
-      return data.Page.media;
+      return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching popular manga:`, error);
       return [];
@@ -837,7 +837,7 @@ export class AnilistService {
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), 10000))
       ]);
-      return data.Page.media;
+      return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching upcoming anime:`, error.message);
       throw new HttpException(

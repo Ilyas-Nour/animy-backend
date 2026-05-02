@@ -154,7 +154,7 @@ export class AnimeService {
       ]);
       
       const resp = {
-        data: (data.media || []).map((m: any) => this.mapAnilistToResponse(m)),
+        data: (data.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter(a => a !== null),
         pageInfo: data.pageInfo
       };
       await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
@@ -172,7 +172,8 @@ export class AnimeService {
     try {
       const data = await this.anilistService.getPopular(page);
       return {
-        data: data.map((item) => this.mapAnilistToResponse(item)),
+        data: (data.media || []).map((item) => this.mapAnilistToResponse(item)).filter(a => a !== null),
+        pageInfo: data.pageInfo
       };
     } catch (e) {
       const data = await this.jikanService.getTopAnime();
@@ -184,7 +185,8 @@ export class AnimeService {
     try {
       const data = await this.anilistService.getNextSeason(page);
       return {
-        data: data.map((item) => this.mapAnilistToResponse(item)),
+        data: (data.media || []).map((item) => this.mapAnilistToResponse(item)).filter(a => a !== null),
+        pageInfo: data.pageInfo
       };
     } catch (e) {
       this.logger.warn(`AniList Upcoming failed, falling back to Jikan: ${e.message}`);
