@@ -66,25 +66,25 @@ export class AnimeController {
   }
 
   @Public()
-  @Get(":id(\\d+)/full")
+  @Get(":id/full")
   async getAnimeFullById(@Param("id") id: string) {
     return this.animeService.getAnimeById(parseInt(id, 10));
   }
 
   @Public()
-  @Get(":id(\\d+)/characters")
+  @Get(":id/characters")
   async getAnimeCharacters(@Param("id") id: string) {
     return this.animeService.getAnimeCharacters(parseInt(id, 10));
   }
 
   @Public()
-  @Get(":id(\\d+)/recommendations")
+  @Get(":id/recommendations")
   async getAnimeRecommendations(@Param("id") id: string) {
     return this.animeService.getAnimeRecommendations(parseInt(id, 10));
   }
 
   @Public()
-  @Get(":id(\\d+)")
+  @Get(":id")
   async getAnimeById(@Param("id") id: string) {
     return this.animeService.getAnimeById(parseInt(id, 10));
   }
