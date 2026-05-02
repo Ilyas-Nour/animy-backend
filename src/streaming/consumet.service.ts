@@ -53,7 +53,7 @@ export class ConsumetService {
           .catch(() => [] as any[]),
 
         // 5. Anify (Fast & Stable)
-        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 5000 })
+        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 3000 })
           .then(res => (res.data || []).map((r: any) => ({ 
               id: r.id, 
               title: r.title.english || r.title.romaji, 
@@ -76,48 +76,27 @@ export class ConsumetService {
   }
 
   /**
-   * Get Anime Info — tries KickAssAnime then AnimePahe then AnimeKai
+   * Get Anime Info — races multiple providers for the fastest response
    */
   async getAnimeInfo(id: string) {
     try {
-      // Try KickAssAnime first
-      try {
-        const info = await Promise.race([
-          this.kickass.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-        ]).catch(() => null);
-        if (info) return info;
-      } catch (e) {}
-
-      // Fallback to AnimePahe
-      try {
-        const info = await Promise.race([
-          this.animepahe.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-        ]).catch(() => null);
-        if (info) return info;
-      } catch (e) {}
-
-      // Fallback to AnimeKai
-      try {
-        const info = await Promise.race([
-          this.animekai.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-        ]).catch(() => null);
-        if (info) return info;
-      } catch (e) {}
-
-      // Fallback to HiAnime
-      try {
-        const info = await Promise.race([
-          this.hianime.fetchAnimeInfo(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-        ]).catch(() => null);
-        if (info) return info;
-      } catch (e) {}
-
-      return null;
+      this.logger.debug(`Fetching anime info for ID: ${id}`);
+      
+      // Race all providers for the fastest response
+      return await Promise.any([
+        this.kickass.fetchAnimeInfo(id),
+        this.animepahe.fetchAnimeInfo(id),
+        this.animekai.fetchAnimeInfo(id),
+        this.hianime.fetchAnimeInfo(id),
+        // Global safety timeout to prevent hanging the whole request
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Global Info Timeout')), 8000))
+      ]);
     } catch (error) {
+      if (error.name === 'AggregateError') {
+        this.logger.warn(`All providers failed for anime info ${id}`);
+        return null;
+      }
+      this.logger.warn(`Unified getAnimeInfo failed for ${id}: ${error.message}`);
       return null;
     }
   }

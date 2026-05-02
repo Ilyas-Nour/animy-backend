@@ -35,12 +35,15 @@ export class MangaService {
     else if (orderBy === "start_date")
       sortStr = sort === "desc" ? "START_DATE_DESC" : "START_DATE";
 
-    const data = await this.anilistService.searchManga(
-      query || "",
-      Number(page),
-      Number(limit),
-      sortStr,
-    );
+    const data = await Promise.race([
+      this.anilistService.searchManga(
+        query || "",
+        Number(page),
+        Number(limit),
+        sortStr,
+      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Manga Search Timeout')), 12000))
+    ]);
 
     return {
       pagination: {

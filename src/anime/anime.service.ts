@@ -142,18 +142,23 @@ export class AnimeService {
     if (cached) return cached;
 
     try {
-      let data;
-      if (filter === "bypopularity") {
-        data = await this.anilistService.getPopular();
-      } else {
-        data = await this.anilistService.getTrending();
-      }
-
-      const response = {
-        data: (data || []).map((item) => this.mapAnilistToResponse(item)),
+      const data = await Promise.race([
+        (async () => {
+          if (filter === "bypopularity") {
+            return await this.anilistService.getPopular();
+          } else {
+            return await this.anilistService.getTrending();
+          }
+        })(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Gateway Safety Timeout')), 15000))
+      ]);
+      
+      const resp = {
+        data: (data.media || []).map((m: any) => this.mapAnilistToResponse(m)),
+        pageInfo: data.pageInfo
       };
-      await this.cacheManager.set(cacheKey, response, 3600000); // 1 hour
-      return response;
+      await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
+      return resp;
     } catch (e) {
       this.logger.warn(`AniList Top Anime failed, falling back to Jikan: ${e.message}`);
       const data = await this.jikanService.getTopAnime();

@@ -234,6 +234,10 @@ export class AnilistService {
 
       return media;
     } catch (error) {
+      if (error?.response?.status === 404) {
+        this.logger.warn(`AniList: Anime ${id} not found (404)`);
+        return null;
+      }
       if (error instanceof HttpException) throw error;
       this.logger.error(`Error fetching anime details for ID ${id}:`, error);
       throw new HttpException(
