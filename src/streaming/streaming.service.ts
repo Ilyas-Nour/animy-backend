@@ -38,15 +38,38 @@ export class StreamingService {
 
   /**
    * Resolve TMDB ID from AniList ID or title
-   * Uses malsync.moe or TMDB Search API
+   * Uses manual mapping, malsync.moe, or TMDB Search API
    */
   async getTmdbId(anilistId?: number, title?: string): Promise<string | null> {
     try {
+      // 0. Manual Fast-Track Mapping for Top Anime
+      const manualMap: Record<number, string> = {
+        21: "37854", // One Piece
+        151807: "94668", // Solo Leveling
+        16498: "57245", // Attack on Titan
+        20605: "60574", // Tokyo Ghoul
+        21087: "62018", // One Punch Man
+        113415: "95479", // Jujutsu Kaisen
+        101922: "85937", // Demon Slayer
+      };
+
+      if (anilistId && manualMap[anilistId]) {
+        this.logger.debug(`Manual Map: AniList ${anilistId} -> TMDB ${manualMap[anilistId]}`);
+        return manualMap[anilistId];
+      }
+
       // 1. First try malsync (fastest)
       if (anilistId && !isNaN(anilistId)) {
         try {
-          const res = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 }).catch(() => null);
-          // Look in Sites for any site that might have TMDB or just use title search fallback
+          const res = await axios.get(`https://api.malsync.moe/anilist/anime/${anilistId}`, { timeout: 3000 }).catch(() => null);
+          const tmdbSite = res?.data?.Sites?.Tmdb;
+          if (tmdbSite) {
+            const tmdbId = Object.keys(tmdbSite)[0];
+            if (tmdbId) {
+              this.logger.debug(`malsync: AniList ${anilistId} -> TMDB ${tmdbId}`);
+              return tmdbId;
+            }
+          }
           if (res?.data?.title) {
             title = res.data.title;
           }
