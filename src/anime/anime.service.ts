@@ -347,6 +347,7 @@ export class AnimeService {
       anilistId: data.id,
       mal_id: data.id, // KEEP as AniList ID for frontend routing compatibility
       idMal: data.idMal, // Real MAL ID for streaming providers like VidLink
+      tmdbId: data.idTmdb, // If available from AniList service or previous DB enrichment
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
       title_japanese: data.title.native,
@@ -429,6 +430,7 @@ export class AnimeService {
       mal_id: dbAnime.id, // Consistent with mapAnilistToResponse (AniList ID)
       anilistId: dbAnime.id,
       idMal: dbAnime.idMal || dbAnime.id, // Real MAL ID for streaming
+      tmdbId: dbAnime.idTmdb,
       title: dbAnime.title,
       title_english: dbAnime.titleEnglish,
       title_japanese: dbAnime.titleJapanese,
