@@ -154,13 +154,21 @@ export class StreamingService {
       const servers: any[] = [];
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 1: MAL-based embeds (VidLink - Most Stable 2026)
+      // TIER 1: MAL & AniList based embeds (VidLink - Most Stable 2026)
       // ──────────────────────────────────────────────────────────────────────
       let malId = isNaN(anilistId) ? null : await this.resolveMalId(anilistId).catch(() => null);
       
       if (malId) {
         this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
         
+        // Mirror 0: VidLink via AniList ID (Sometimes works when MAL 404s)
+        servers.push({
+          name: 'Mirror 0 (VidLink - AL)',
+          url: `https://vidlink.pro/anime/${anilistId}/${epNum}`,
+          provider: 'vidlink',
+          isNative: false
+        });
+
         // VidLink (Primary) - Direct MAL support
         servers.push({
           name: 'Mirror 1 (VidLink - MAL)',
@@ -169,10 +177,18 @@ export class StreamingService {
           isNative: false
         });
 
-        // Vidsrc.cc / .xyz often support MAL IDs too
+        // Vidsrc.cc / .xyz
         servers.push({
           name: 'Mirror 2 (VidSrc - MAL)',
           url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
+          provider: 'vidsrc',
+          isNative: false
+        });
+
+        // Vidsrc.me (Extremely stable)
+        servers.push({
+          name: 'Mirror 3 (VidSrc.me)',
+          url: `https://vidsrc.me/embed/anime/${malId}/${epNum}`,
           provider: 'vidsrc',
           isNative: false
         });
@@ -187,15 +203,15 @@ export class StreamingService {
 
       const tmdbId = await Promise.race([
         tmdbIdPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
       ]).catch(() => null);
 
       if (tmdbId) {
         this.logger.debug(`TMDB resolved: ${tmdbId}`);
 
-        // VidLink.pro (TMDB) - Often more stable than MAL route
+        // VidLink.pro (TMDB)
         servers.push({
-          name: 'Mirror 3 (VidLink - TMDB)',
+          name: 'Mirror 4 (VidLink - TMDB)',
           url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}`,
           provider: 'vidlink',
           isNative: false
@@ -203,7 +219,7 @@ export class StreamingService {
 
         // VidSrc.to — most stable TMDB mirror
         servers.push({
-          name: 'Mirror 4 (VidSrc.to)',
+          name: 'Mirror 5 (VidSrc.to)',
           url: `https://vidsrc.to/embed/tv/${tmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
@@ -211,8 +227,16 @@ export class StreamingService {
 
         // Embed.su (Backup)
         servers.push({
-          name: 'Mirror 5 (Embed.su)',
+          name: 'Mirror 6 (Embed.su)',
           url: `https://embed.su/embed/tv/${tmdbId}/1/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
+
+        // 2Embed.cc (Backup)
+        servers.push({
+          name: 'Mirror 7 (2Embed)',
+          url: `https://www.2embed.cc/embed/${tmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
