@@ -426,9 +426,9 @@ export class AnimeService {
   private mapDbToResponse(dbAnime: any) {
     return {
       id: dbAnime.id,
-      mal_id: dbAnime.idMal || dbAnime.id,
+      mal_id: dbAnime.id, // Consistent with mapAnilistToResponse (AniList ID)
       anilistId: dbAnime.id,
-      idMal: dbAnime.idMal || dbAnime.id,
+      idMal: dbAnime.idMal || dbAnime.id, // Real MAL ID for streaming
       title: dbAnime.title,
       title_english: dbAnime.titleEnglish,
       title_japanese: dbAnime.titleJapanese,
