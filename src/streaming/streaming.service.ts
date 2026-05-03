@@ -38,37 +38,33 @@ export class StreamingService {
 
   /**
    * Resolve TMDB ID from AniList ID or title
-   * Uses malsync.moe to map AniList -> TMDB (no API key needed)
+   * Uses malsync.moe or TMDB Search API
    */
   async getTmdbId(anilistId?: number, title?: string): Promise<string | null> {
     try {
-      // 1. Best: Use malsync to map AniList ID -> TMDB (no key required)
+      // 1. First try malsync (fastest)
       if (anilistId && !isNaN(anilistId)) {
         try {
-          const malsyncUrl = `https://api.malsync.moe/mal/anime/anilist:${anilistId}`;
-          const res = await axios.get(malsyncUrl, { timeout: 4000 }).catch(() => null);
-          // malsync returns sites map with TMDB
-          const tmdbSite = res?.data?.Sites?.Tmdb;
-          if (tmdbSite) {
-            const tmdbId = Object.keys(tmdbSite)[0];
-            if (tmdbId) {
-              this.logger.debug(`malsync: AniList ${anilistId} -> TMDB ${tmdbId}`);
-              return tmdbId;
-            }
+          const res = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 }).catch(() => null);
+          // Look in Sites for any site that might have TMDB or just use title search fallback
+          if (res?.data?.title) {
+            title = res.data.title;
           }
         } catch (e) {}
       }
 
-      // 2. Fallback: TMDB Search API (uses hardcoded public key)
+      // 2. Aggressive TMDB Search
       if (title) {
         const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
         const res = await axios.get(searchUrl, { timeout: 5000 }).catch(() => null);
         if (res?.data?.results?.length) {
-          const bestMatch = res.data.results.find(
-            (r: any) => r.media_type === 'tv' || r.media_type === 'movie'
-          );
+          // Prioritize TV shows for anime, then movies
+          const tvMatch = res.data.results.find((r: any) => r.media_type === 'tv');
+          const movieMatch = res.data.results.find((r: any) => r.media_type === 'movie');
+          const bestMatch = tvMatch || movieMatch;
+          
           if (bestMatch) {
-            this.logger.debug(`TMDB search: "${title}" -> ${bestMatch.id}`);
+            this.logger.debug(`TMDB search: "${title}" -> ${bestMatch.id} (${bestMatch.media_type})`);
             return bestMatch.id.toString();
           }
         }
@@ -121,6 +117,7 @@ export class StreamingService {
   async resolveMalId(anilistId: number): Promise<number | null> {
     try {
       this.logger.debug(`Resolving MAL ID for AniList: ${anilistId}`);
+      // Correct Malsync URL for AniList mapping
       const res = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 });
       return res.data?.mal_id || res.data?.id || null;
     } catch (e) {
@@ -190,6 +187,14 @@ export class StreamingService {
           name: 'Mirror 3 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime/${malId}/${epNum}`,
           provider: 'vidsrc',
+          isNative: false
+        });
+
+        // Vidsrc.to (AL Direct)
+        servers.push({
+          name: 'Mirror 8 (VidSrc.to - AL)',
+          url: `https://vidsrc.to/embed/anime/${anilistId}/${epNum}`,
+          provider: 'mirror',
           isNative: false
         });
       }
