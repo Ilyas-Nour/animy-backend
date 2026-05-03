@@ -197,6 +197,14 @@ export class StreamingService {
           provider: 'mirror',
           isNative: false
         });
+
+        // Vyla (Fail-safe)
+        servers.push({
+          name: 'Mirror 9 (Vyla)',
+          url: `https://vyla.pages.dev/embed/${anilistId}/${epNum}`,
+          provider: 'mirror',
+          isNative: false
+        });
       }
 
       // ──────────────────────────────────────────────────────────────────────
