@@ -32,28 +32,32 @@ export class ConsumetService {
       this.logger.debug(`Searching consumet mesh: "${query}"`);
 
       const results = await Promise.allSettled([
-        // 1. AnimePahe
-        this.animepahe.search(query)
-          .then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animepahe' })))
-          .catch(() => [] as any[]),
+        // 1. AnimePahe (Strict 3s timeout)
+        Promise.race([
+          this.animepahe.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animepahe' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+        ]).catch(() => []),
 
-        // 2. KickAssAnime (kaa.lt)
-        this.kickass.search(query)
-          .then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'kickassanime' })))
-          .catch(() => [] as any[]),
+        // 2. KickAssAnime (Strict 3s timeout)
+        Promise.race([
+          this.kickass.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'kickassanime' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+        ]).catch(() => []),
 
-        // 3. AnimeKai
-        this.animekai.search(query)
-          .then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animekai' })))
-          .catch(() => [] as any[]),
+        // 3. AnimeKai (Strict 3s timeout)
+        Promise.race([
+          this.animekai.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animekai' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+        ]).catch(() => []),
 
         // 4. HiAnime (via Consumet)
-        this.hianime.search(query)
-          .then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'hianime' })))
-          .catch(() => [] as any[]),
+        Promise.race([
+          this.hianime.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'hianime' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+        ]).catch(() => []),
 
         // 5. Anify (Fast & Stable)
-        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 3000 })
+        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 2500 })
           .then(res => (res.data || []).map((r: any) => ({ 
               id: r.id, 
               title: r.title.english || r.title.romaji, 
