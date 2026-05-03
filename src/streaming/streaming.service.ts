@@ -200,7 +200,7 @@ export class StreamingService {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 2: TMDB-based embeds
+      // TIER 2: TMDB-based embeds (With AniList Fallback)
       // ──────────────────────────────────────────────────────────────────────
       const tmdbIdPromise = tmdbIdParam
         ? Promise.resolve(tmdbIdParam)
@@ -211,40 +211,52 @@ export class StreamingService {
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
       ]).catch(() => null);
 
-      if (tmdbId) {
-        this.logger.debug(`TMDB resolved: ${tmdbId}`);
+      // Even if TMDB fails, we can try to use AniList ID for some Tier 2 providers
+      const secondaryId = tmdbId || anilistId;
+      const isTmdb = !!tmdbId;
 
-        // VidLink.pro (TMDB)
-        servers.push({
-          name: 'Mirror 4 (VidLink - TMDB)',
-          url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}`,
-          provider: 'vidlink',
-          isNative: false
-        });
+      if (secondaryId) {
+        this.logger.debug(`Tier 2 active with ID: ${secondaryId} (isTMDB: ${isTmdb})`);
 
-        // VidSrc.to — most stable TMDB mirror
+        // VidLink.pro (Prefer TMDB)
+        if (isTmdb) {
+          servers.push({
+            name: 'Mirror 4 (VidLink - TMDB)',
+            url: `https://vidlink.pro/tv/${secondaryId}/1/${epNum}`,
+            provider: 'vidlink',
+            isNative: false
+          });
+        }
+
+        // VidSrc.to — Always add, use best available ID
         servers.push({
-          name: 'Mirror 5 (VidSrc.to)',
-          url: `https://vidsrc.to/embed/tv/${tmdbId}/1/${epNum}`,
+          name: isTmdb ? 'Mirror 5 (VidSrc.to)' : 'Mirror 5 (VidSrc.to - AL)',
+          url: isTmdb 
+            ? `https://vidsrc.to/embed/tv/${secondaryId}/1/${epNum}`
+            : `https://vidsrc.to/embed/anime/${secondaryId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // Embed.su (Backup)
+        // Embed.su (Prefer TMDB)
         servers.push({
-          name: 'Mirror 6 (Embed.su)',
-          url: `https://embed.su/embed/tv/${tmdbId}/1/${epNum}`,
+          name: isTmdb ? 'Mirror 6 (Embed.su)' : 'Mirror 6 (Embed.su - AL)',
+          url: isTmdb
+            ? `https://embed.su/embed/tv/${secondaryId}/1/${epNum}`
+            : `https://embed.su/embed/anime/${secondaryId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // 2Embed.cc (Backup)
-        servers.push({
-          name: 'Mirror 7 (2Embed)',
-          url: `https://www.2embed.cc/embed/${tmdbId}/1/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
+        // 2Embed.cc
+        if (isTmdb) {
+          servers.push({
+            name: 'Mirror 7 (2Embed)',
+            url: `https://www.2embed.cc/embed/${secondaryId}/1/${epNum}`,
+            provider: 'mirror',
+            isNative: false
+          });
+        }
       }
 
       // ──────────────────────────────────────────────────────────────────────
