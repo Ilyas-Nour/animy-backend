@@ -129,12 +129,12 @@ export class StreamingService {
   }
 
   /**
-   * Nuclear Mesh v10.0 — "Always Streaming"
+   * Nuclear Mesh v11.0 — "Always Streaming"
    *
    * Builds a large set of working mirrors across multiple strategies:
-   *  Tier 1 — Iframe embeds using AniList ID (no extra lookup needed, instant)
-   *  Tier 2 — Iframe embeds using TMDB ID (high quality)
-   *  Tier 3 — Native .m3u8 extraction via consumet (best quality, sometimes fails)
+   *  Tier 1 — High-quality embeds using MAL ID (VidLink - Gold Standard)
+   *  Tier 2 — Iframe embeds using TMDB ID (Stable backups)
+   *  Tier 3 — Native .m3u8 extraction via consumet (Best quality, proxy-enabled)
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -149,12 +149,37 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
 
-      this.logger.log(`Nuclear Mesh v10: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
+      this.logger.log(`Nuclear Mesh v11: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
 
       const servers: any[] = [];
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 1: TMDB-based embeds (lookup in parallel)
+      // TIER 1: MAL-based embeds (VidLink - Most Stable 2026)
+      // ──────────────────────────────────────────────────────────────────────
+      let malId = isNaN(anilistId) ? null : await this.resolveMalId(anilistId).catch(() => null);
+      
+      if (malId) {
+        this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
+        
+        // VidLink (Primary) - Direct MAL support
+        servers.push({
+          name: 'Mirror 1 (VidLink - Stable)',
+          url: `https://vidlink.pro/anime/${malId}/${epNum}`,
+          provider: 'vidlink',
+          isNative: false
+        });
+
+        // Vidsrc.cc / .xyz often support MAL IDs too
+        servers.push({
+          name: 'Mirror 2 (VidSrc - MAL)',
+          url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
+          provider: 'vidsrc',
+          isNative: false
+        });
+      }
+
+      // ──────────────────────────────────────────────────────────────────────
+      // TIER 2: TMDB-based embeds
       // ──────────────────────────────────────────────────────────────────────
       const tmdbIdPromise = tmdbIdParam
         ? Promise.resolve(tmdbIdParam)
@@ -162,7 +187,7 @@ export class StreamingService {
 
       const tmdbId = await Promise.race([
         tmdbIdPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000))
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
       ]).catch(() => null);
 
       if (tmdbId) {
@@ -170,68 +195,53 @@ export class StreamingService {
 
         // VidSrc.to — most stable TMDB mirror
         servers.push({
-          name: 'Mirror 6 (VidSrc.to)',
+          name: 'Mirror 3 (VidSrc.to)',
           url: `https://vidsrc.to/embed/tv/${tmdbId}/1/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
 
-        // VidLink.pro
+        // VidLink.pro fallback
         servers.push({
-          name: 'Mirror 7 (VidLink)',
+          name: 'Mirror 4 (VidLink)',
           url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // Embed.su
-        servers.push({
-          name: 'Mirror 8 (Embed.su)',
-          url: `https://embed.su/embed/tv/${tmdbId}/1/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // SuperEmbed
-        servers.push({
-          name: 'Mirror 9 (SuperEmbed)',
-          url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=1&e=${epNum}`,
-          provider: 'mirror',
+          provider: 'vidlink',
           isNative: false
         });
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 3: Native .m3u8 extraction via consumet (best quality)
-      // All raw CDN URLs are rewritten through our backend proxy to bypass CORS
+      // TIER 3: Native .m3u8 extraction via consumet (Best quality)
       // ──────────────────────────────────────────────────────────────────────
       if (title) {
         try {
           const nativeServers = await Promise.race([
             this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 15000))
+            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 12000))
           ]);
           if (nativeServers.length > 0) {
-            servers.unshift(...nativeServers); // Native sources go FIRST (best quality)
+            // In v11, we still keep native sources near the top if they work
+            servers.unshift(...nativeServers); 
           }
         } catch (e) {}
       }
 
-      this.logger.log(`Nuclear Mesh v10: Returning ${servers.length} servers for EP${epNum}`);
+      this.logger.log(`Nuclear Mesh v11: Returning ${servers.length} servers for EP${epNum}`);
 
       return {
-        provider: "mesh-v10-nuclear",
+        provider: "mesh-v11-nuclear",
         servers,
         anilistId,
+        malId,
         tmdbId: tmdbId || null,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': 'https://animepahe.com/'
+          'Referer': 'https://vidlink.pro/'
         }
       };
     } catch (error) {
-      this.logger.error(`Mesh v10 CRITICAL: ${error.message}`);
-      return { provider: "mesh-v10-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v11 CRITICAL: ${error.message}`);
+      return { provider: "mesh-v11-error", servers: [], headers: {} };
     }
   }
 

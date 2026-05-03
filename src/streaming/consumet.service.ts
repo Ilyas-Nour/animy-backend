@@ -16,7 +16,7 @@ export class ConsumetService {
     (this.animepahe as any).baseUrl = 'https://animepahe.ru';
     (this.kickass as any).baseUrl = 'https://kaas.am';
     (this.animekai as any).baseUrl = 'https://animekai.to';
-    (this.hianime as any).baseUrl = 'https://hianime.to';
+    (this.hianime as any).baseUrl = 'https://hianime.me';
 
     // Override internal cookie domains used by AnimePahe scraper
     try {

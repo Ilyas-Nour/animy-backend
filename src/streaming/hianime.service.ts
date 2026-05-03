@@ -14,13 +14,14 @@ export class HiAnimeService {
     'https://hianime-api-unofficial.vercel.app/api/v2/hianime',
   ];
 
-  // GogoAnime working mirror
-  private readonly gogoMirror = "https://gogoanime3.co";
+  // GogoAnime working mirror (2026)
+  private readonly gogoMirror = "https://gogoanime3.net";
 
   private readonly headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
+    "Referer": "https://gogoanime3.net/",
   };
 
   /**
