@@ -10,6 +10,7 @@ export class ConsumetService {
   private readonly kickass = new ANIME.KickAssAnime();
   private readonly animekai = new ANIME.AnimeKai();
   private readonly hianime = new ANIME.Hianime();
+  private readonly gogoanime = new ANIME.Gogoanime();
 
   constructor() {
     // Override base URLs to working 2025/2026 domains
@@ -17,6 +18,7 @@ export class ConsumetService {
     (this.kickass as any).baseUrl = 'https://kaas.am';
     (this.animekai as any).baseUrl = 'https://animekai.to';
     (this.hianime as any).baseUrl = 'https://hianime.me';
+    (this.gogoanime as any).baseUrl = 'https://gogoanime3.co';
 
     // Override internal cookie domains used by AnimePahe scraper
     try {
@@ -56,7 +58,13 @@ export class ConsumetService {
           new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
         ]).catch(() => []),
 
-        // 5. Anify (Fast & Stable)
+        // 5. GogoAnime (Strict 3s timeout)
+        Promise.race([
+          this.gogoanime.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'gogoanime' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+        ]).catch(() => []),
+
+        // 6. Anify (Fast & Stable)
         axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 2500 })
           .then(res => (res.data || []).map((r: any) => ({ 
               id: r.id, 
@@ -92,6 +100,7 @@ export class ConsumetService {
         this.animepahe.fetchAnimeInfo(id),
         this.animekai.fetchAnimeInfo(id),
         this.hianime.fetchAnimeInfo(id),
+        this.gogoanime.fetchAnimeInfo(id),
         // Global safety timeout to prevent hanging the whole request
         new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Global Info Timeout')), 8000))
       ]);
@@ -141,6 +150,9 @@ export class ConsumetService {
       } else if (provider === 'hianime') {
         targetProvider = this.hianime;
         referer = 'https://hianime.to/';
+      } else if (provider === 'gogoanime') {
+        targetProvider = this.gogoanime;
+        referer = 'https://gogoanime3.co/';
       }
 
       let sources: any = null;

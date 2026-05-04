@@ -169,6 +169,15 @@ export class StreamingService {
       const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
       const epNum = parseInt(episodeNumber || "1", 10);
 
+      // 1. Check Cache First (Anikai level speed)
+      if (!isNaN(anilistId)) {
+        const cached = await this.cacheService.getCachedLinks(anilistId, epNum, "mesh-v11");
+        if (cached) {
+          this.logger.log(`Nuclear Mesh v11: CACHE HIT for AL=${anilistId}, EP=${epNum}`);
+          return cached;
+        }
+      }
+
       this.logger.log(`Nuclear Mesh v11: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
 
       const servers: any[] = [];
@@ -181,7 +190,7 @@ export class StreamingService {
       if (malId) {
         this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
         
-        // Mirror 0: VidLink via AniList ID (Sometimes works when MAL 404s)
+        // Mirror 0: VidLink via AniList ID
         servers.push({
           name: 'Mirror 0 (VidLink - AL)',
           url: `https://vidlink.pro/anime/${anilistId}/${epNum}`,
@@ -231,7 +240,7 @@ export class StreamingService {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 2: TMDB-based embeds (With AniList Fallback)
+      // TIER 2: TMDB-based embeds
       // ──────────────────────────────────────────────────────────────────────
       const tmdbIdPromise = tmdbIdParam
         ? Promise.resolve(tmdbIdParam)
@@ -242,14 +251,10 @@ export class StreamingService {
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
       ]).catch(() => null);
 
-      // Even if TMDB fails, we can try to use AniList ID for some Tier 2 providers
       const secondaryId = tmdbId || anilistId;
       const isTmdb = !!tmdbId;
 
       if (secondaryId) {
-        this.logger.debug(`Tier 2 active with ID: ${secondaryId} (isTMDB: ${isTmdb})`);
-
-        // VidLink.pro (Prefer TMDB)
         if (isTmdb) {
           servers.push({
             name: 'Mirror 4 (VidLink - TMDB)',
@@ -259,7 +264,6 @@ export class StreamingService {
           });
         }
 
-        // VidSrc.to — Always add, use best available ID
         servers.push({
           name: isTmdb ? 'Mirror 5 (VidSrc.to)' : 'Mirror 5 (VidSrc.to - AL)',
           url: isTmdb 
@@ -269,7 +273,6 @@ export class StreamingService {
           isNative: false
         });
 
-        // Embed.su (Prefer TMDB)
         servers.push({
           name: isTmdb ? 'Mirror 6 (Embed.su)' : 'Mirror 6 (Embed.su - AL)',
           url: isTmdb
@@ -278,16 +281,6 @@ export class StreamingService {
           provider: 'mirror',
           isNative: false
         });
-
-        // 2Embed.cc
-        if (isTmdb) {
-          servers.push({
-            name: 'Mirror 7 (2Embed)',
-            url: `https://www.2embed.cc/embed/${secondaryId}/1/${epNum}`,
-            provider: 'mirror',
-            isNative: false
-          });
-        }
       }
 
       // ──────────────────────────────────────────────────────────────────────
@@ -297,18 +290,15 @@ export class StreamingService {
         try {
           const nativeServers = await Promise.race([
             this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 12000))
+            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 15000))
           ]);
           if (nativeServers.length > 0) {
-            // In v11, we still keep native sources near the top if they work
             servers.unshift(...nativeServers); 
           }
         } catch (e) {}
       }
 
-      this.logger.log(`Nuclear Mesh v11: Returning ${servers.length} servers for EP${epNum}`);
-
-      return {
+      const response = {
         provider: "mesh-v11-nuclear",
         servers,
         anilistId,
@@ -319,6 +309,13 @@ export class StreamingService {
           'Referer': 'https://vidlink.pro/'
         }
       };
+
+      // Cache the result (Anikai strategy)
+      if (!isNaN(anilistId) && servers.length > 0) {
+        await this.cacheService.cacheLinks(anilistId, epNum, "mesh-v11", response, 3);
+      }
+
+      return response;
     } catch (error) {
       this.logger.error(`Mesh v11 CRITICAL: ${error.message}`);
       return { provider: "mesh-v11-error", servers: [], headers: {} };
@@ -327,27 +324,18 @@ export class StreamingService {
 
   /**
    * Internal: try to extract native .m3u8 sources via consumet providers.
-   * All CDN URLs are rewritten through the backend proxy to bypass browser CORS restrictions.
    */
   private async extractNativeSources(title: string, epNum: number, anilistId: number, proxyBaseUrl?: string): Promise<any[]> {
     const nativeServers: any[] = [];
 
-    /**
-     * Rewrites a raw CDN URL to go through the backend proxy.
-     * This is the key fix for CORS errors: instead of the browser fetching
-     * hls.krussdomi.com or kwik.cx directly (which they block), all
-     * requests go through our server which can set the correct Referer.
-     */
     const toProxiedUrl = (rawUrl: string, referer: string): string => {
       if (!proxyBaseUrl || !rawUrl) return rawUrl;
-      // Pass referer as query param so the proxy knows which headers to use
       return `${proxyBaseUrl}/${rawUrl}?referer=${encodeURIComponent(referer)}`;
     };
 
     try {
       this.logger.debug(`Native extraction attempt: "${title}" EP${epNum}`);
 
-      // Search across all consumet providers simultaneously
       const searchResults = await Promise.race([
         this.consumetService.search(title),
         new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000))
@@ -355,16 +343,41 @@ export class StreamingService {
 
       if (!searchResults?.length) return [];
 
-      // Try AnimePahe first (most reliable native source)
+      // 1. GogoAnime (Fastest Native)
+      const gogoResult = searchResults.find(r => r.provider === 'gogoanime');
+      if (gogoResult) {
+        try {
+          const gogoEpId = await this.consumetService.resolveEpisodeId(gogoResult.id, epNum, 'gogoanime');
+          if (gogoEpId) {
+            const sources = await this.consumetService.getEpisodeSources(gogoEpId, 'gogoanime');
+            if (sources?.sources?.length) {
+              const gogoReferer = sources.headers?.Referer || 'https://gogoanime3.co/';
+              const proxiedSources = sources.sources.map((s: any) => ({
+                ...s,
+                url: toProxiedUrl(s.url, gogoReferer)
+              }));
+              nativeServers.push({
+                name: 'Native 1 (GogoAnime - HLS)',
+                url: proxiedSources[0].url,
+                sources: proxiedSources,
+                subtitles: sources.subtitles || [],
+                provider: 'gogoanime',
+                isNative: true,
+                headers: sources.headers
+              });
+              this.logger.log(`Native Gogo extraction SUCCESS for EP${epNum}`);
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 2. AnimePahe
       const paheResult = searchResults.find(r => r.provider === 'animepahe');
       if (paheResult) {
         try {
           const paheEpId = await this.consumetService.resolveEpisodeId(paheResult.id, epNum, 'animepahe');
           if (paheEpId) {
-            const sources = await Promise.race([
-              this.consumetService.getEpisodeSources(paheEpId, 'animepahe'),
-              new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
-            ]);
+            const sources = await this.consumetService.getEpisodeSources(paheEpId, 'animepahe');
             if (sources?.sources?.length) {
               const paheReferer = sources.headers?.Referer || 'https://animepahe.com/';
               const proxiedSources = sources.sources.map((s: any) => ({
@@ -372,58 +385,23 @@ export class StreamingService {
                 url: toProxiedUrl(s.url, paheReferer)
               }));
               nativeServers.push({
-                name: 'Native 1 (AnimePahe - HQ)',
+                name: 'Native 2 (AnimePahe)',
                 url: proxiedSources[0].url,
                 sources: proxiedSources,
+                subtitles: sources.subtitles || [],
                 provider: 'animepahe',
                 isNative: true,
                 headers: sources.headers
               });
-              this.logger.log(`Native AnimePahe extraction SUCCESS for EP${epNum}`);
             }
           }
-        } catch (e) {
-          this.logger.warn(`AnimePahe native extraction failed: ${e.message}`);
-        }
+        } catch (e) {}
       }
 
-      // Try KickAssAnime as secondary native source
-      const kaaResult = searchResults.find(r => r.provider === 'kickassanime');
-      if (kaaResult) {
-        try {
-          const kaaEpId = await this.consumetService.resolveEpisodeId(kaaResult.id, epNum, 'kickassanime');
-          if (kaaEpId) {
-            const sources = await Promise.race([
-              this.consumetService.getEpisodeSources(kaaEpId, 'kickassanime'),
-              new Promise<any>((resolve) => setTimeout(() => resolve(null), 10000))
-            ]);
-            if (sources?.sources?.length) {
-              const kaaReferer = sources.headers?.Referer || 'https://kaa.lt/';
-              const proxiedSources = sources.sources.map((s: any) => ({
-                ...s,
-                url: toProxiedUrl(s.url, kaaReferer)
-              }));
-              nativeServers.push({
-                name: 'Native 2 (KickAssAnime)',
-                url: proxiedSources[0].url,
-                sources: proxiedSources,
-                provider: 'kickassanime',
-                isNative: true,
-                headers: sources.headers
-              });
-              this.logger.log(`Native KAA extraction SUCCESS for EP${epNum}`);
-            }
-          }
-        } catch (e) {
-          this.logger.warn(`KAA native extraction failed: ${e.message}`);
-        }
-      }
-
-      // Try Anify as tertiary native source (fastest .m3u8 provider)
+      // 3. Anify
       const anifyResult = searchResults.find(r => r.provider === 'anify');
       if (anifyResult) {
         try {
-          this.logger.debug(`Trying Anify native for: ${anifyResult.id}`);
           const res = await axios.get(`https://api.anify.tv/sources?id=${anifyResult.id}&episodeNumber=${epNum}&providerId=gogoanime&watchId=${anifyResult.id}&subType=sub`, { timeout: 6000 });
           if (res.data?.sources?.length) {
             const sources = res.data.sources.map((s: any) => ({
@@ -432,18 +410,16 @@ export class StreamingService {
               isM3U8: s.url.includes('.m3u8')
             }));
             nativeServers.push({
-              name: 'Native 3 (Anify - Fast)',
+              name: 'Native 3 (Anify)',
               url: sources[0].url,
               sources,
+              subtitles: res.data.subtitles || [],
               provider: 'anify',
               isNative: true,
               headers: { Referer: 'https://anify.tv/' }
             });
-            this.logger.log(`Native Anify extraction SUCCESS for EP${epNum}`);
           }
-        } catch (e) {
-          this.logger.warn(`Anify native extraction failed: ${e.message}`);
-        }
+        } catch (e) {}
       }
     } catch (e) {
       this.logger.warn(`Native extraction failed: ${e.message}`);
