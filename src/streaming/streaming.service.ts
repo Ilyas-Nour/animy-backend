@@ -395,6 +395,33 @@ export class StreamingService {
           }
         } catch (e) {}
       }
+      // 3. HiAnime (Zoro - High Quality Subs)
+      const hiResult = searchResults.find(r => r.provider === 'hianime');
+      if (hiResult) {
+        try {
+          const hiEpId = await this.consumetService.resolveEpisodeId(hiResult.id, epNum, 'hianime');
+          if (hiEpId) {
+            const sources = await this.consumetService.getEpisodeSources(hiEpId, 'hianime');
+            if (sources?.sources?.length) {
+              const hiReferer = sources.headers?.Referer || 'https://hianime.to/';
+              const proxiedSources = sources.sources.map((s: any) => ({
+                ...s,
+                url: toProxiedUrl(s.url, hiReferer)
+              }));
+              nativeServers.push({
+                name: 'Native 3 (HiAnime - Clean)',
+                url: proxiedSources[0].url,
+                sources: proxiedSources,
+                subtitles: sources.subtitles || [],
+                provider: 'hianime',
+                isNative: true,
+                headers: sources.headers
+              });
+              this.logger.log(`Native HiAnime extraction SUCCESS for EP${epNum}`);
+            }
+          }
+        } catch (e) {}
+      }
     } catch (e) {
       this.logger.warn(`Native extraction failed: ${e.message}`);
     }
