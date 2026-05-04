@@ -51,6 +51,7 @@ export class StreamingService {
         21087: "62018", // One Punch Man
         113415: "95479", // Jujutsu Kaisen
         101922: "85937", // Demon Slayer
+        199221: "86031", // Dr. STONE: SCIENCE FUTURE
       };
 
       if (anilistId && manualMap[anilistId]) {
@@ -105,30 +106,33 @@ export class StreamingService {
    */
   async findAnime(title: string, titleEnglish: string, anilistId: string) {
     try {
-      this.logger.debug(`Mesh-v8.2 Discovery: ${title} (AL: ${anilistId})`);
+      this.logger.debug(`Mesh-v11.1 Discovery: ${title} (AL: ${anilistId})`);
 
-      const fallback = {
-        id: anilistId,
-        title: titleEnglish || title,
-        provider: "anilist"
-      };
+      const queries = [title, titleEnglish].filter(Boolean);
+      const broadTitle = title.split(':')[0].split('-')[0].trim();
+      if (broadTitle && !queries.includes(broadTitle)) {
+        queries.push(broadTitle);
+      }
 
-      try {
-        const results = await Promise.race([
-          this.consumetService.search(titleEnglish || title),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2500))
-        ]).catch(() => []);
+      for (const query of queries) {
+        try {
+          const results = await Promise.race([
+            this.consumetService.search(query),
+            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 4000))
+          ]).catch(() => []);
 
-        if (results.length > 0) {
-          return {
-            id: results[0].id,
-            title: results[0].title,
-            provider: results[0].provider
-          };
-        }
-      } catch (e) {}
+          if (results.length > 0) {
+            this.logger.log(`Mesh Discovery Match: "${query}" -> ${results[0].id} (${results[0].provider})`);
+            return {
+              id: results[0].id,
+              title: results[0].title,
+              provider: results[0].provider
+            };
+          }
+        } catch (e) {}
+      }
 
-      return fallback;
+      return { id: anilistId, title: titleEnglish || title, provider: "anilist" };
     } catch (error) {
       return { id: anilistId, title: titleEnglish || title, provider: "anilist" };
     }
@@ -190,25 +194,25 @@ export class StreamingService {
       if (malId) {
         this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
         
-        // Mirror 0: VidLink via AniList ID
+        // Mirror 0: VidLink via MAL ID (Best for Anime 2026)
         servers.push({
-          name: 'Mirror 0 (VidLink - AL)',
-          url: `https://vidlink.pro/anime/${anilistId}/${epNum}`,
+          name: 'Mirror 1 (VidLink - MAL)',
+          url: `https://vidlink.pro/anime/${malId}/${epNum}/sub`,
           provider: 'vidlink',
           isNative: false
         });
 
-        // VidLink (Primary) - Direct MAL support
+        // Mirror 1: VidLink via AniList ID
         servers.push({
-          name: 'Mirror 1 (VidLink - MAL)',
-          url: `https://vidlink.pro/anime/${malId}/${epNum}`,
+          name: 'Mirror 2 (VidLink - AL)',
+          url: `https://vidlink.pro/anime/${anilistId}/${epNum}/sub`,
           provider: 'vidlink',
           isNative: false
         });
 
         // Vidsrc.cc / .xyz
         servers.push({
-          name: 'Mirror 2 (VidSrc - MAL)',
+          name: 'Mirror 3 (VidSrc - MAL)',
           url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
           provider: 'vidsrc',
           isNative: false
@@ -216,7 +220,7 @@ export class StreamingService {
 
         // Vidsrc.me (Extremely stable)
         servers.push({
-          name: 'Mirror 3 (VidSrc.me)',
+          name: 'Mirror 4 (VidSrc.me)',
           url: `https://vidsrc.me/embed/anime/${malId}/${epNum}`,
           provider: 'vidsrc',
           isNative: false
@@ -226,14 +230,6 @@ export class StreamingService {
         servers.push({
           name: 'Mirror 8 (VidSrc.to - AL)',
           url: `https://vidsrc.to/embed/anime/${anilistId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        // Vyla (Fail-safe)
-        servers.push({
-          name: 'Mirror 9 (Vyla)',
-          url: `https://vyla.pages.dev/embed/${anilistId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });
@@ -257,7 +253,7 @@ export class StreamingService {
       if (secondaryId) {
         if (isTmdb) {
           servers.push({
-            name: 'Mirror 4 (VidLink - TMDB)',
+            name: 'Mirror 5 (VidLink - TMDB)',
             url: `https://vidlink.pro/tv/${secondaryId}/1/${epNum}`,
             provider: 'vidlink',
             isNative: false
@@ -265,7 +261,7 @@ export class StreamingService {
         }
 
         servers.push({
-          name: isTmdb ? 'Mirror 5 (VidSrc.to)' : 'Mirror 5 (VidSrc.to - AL)',
+          name: isTmdb ? 'Mirror 6 (VidSrc.to)' : 'Mirror 6 (VidSrc.to - AL)',
           url: isTmdb 
             ? `https://vidsrc.to/embed/tv/${secondaryId}/1/${epNum}`
             : `https://vidsrc.to/embed/anime/${secondaryId}/${epNum}`,
@@ -274,10 +270,10 @@ export class StreamingService {
         });
 
         servers.push({
-          name: isTmdb ? 'Mirror 6 (Embed.su)' : 'Mirror 6 (Embed.su - AL)',
+          name: isTmdb ? 'Mirror 7 (Vsembed.su)' : 'Mirror 7 (Vsembed.su - AL)',
           url: isTmdb
-            ? `https://embed.su/embed/tv/${secondaryId}/1/${epNum}`
-            : `https://embed.su/embed/anime/${secondaryId}/${epNum}`,
+            ? `https://vsembed.su/embed/tv/${secondaryId}/1/${epNum}`
+            : `https://vsembed.su/embed/anime/${secondaryId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });

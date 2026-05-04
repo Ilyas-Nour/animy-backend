@@ -10,12 +10,11 @@ export class HiAnimeService {
   private readonly hiAnimeApiHosts = [
     'https://hianime-api.vercel.app/anime',
     'https://aniwatch-api-net.vercel.app/api/v2/hianime',
-    'https://api-aniwatch.onrender.com/api/v2/hianime',
-    'https://hianime-api-unofficial.vercel.app/api/v2/hianime',
+    'https://hianime-api.ritessh.workers.dev/api/v2/hianime',
   ];
 
   // GogoAnime working mirror (2026)
-  private readonly gogoMirror = "https://gogoanime3.net";
+  private readonly gogoMirror = "https://gogoanime3.co";
 
   private readonly headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",

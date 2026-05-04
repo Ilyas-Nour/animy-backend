@@ -12,11 +12,11 @@ export class ConsumetService {
   private readonly hianime = new ANIME.Hianime();
 
   constructor() {
-    // Override base URLs to working 2025/2026 domains
+    // Override base URLs to working 2026 domains
     (this.animepahe as any).baseUrl = 'https://animepahe.ru';
     (this.kickass as any).baseUrl = 'https://kaas.am';
     (this.animekai as any).baseUrl = 'https://animekai.to';
-    (this.hianime as any).baseUrl = 'https://hianime.me';
+    (this.hianime as any).baseUrl = 'https://hianime.to';
 
     // Override internal cookie domains used by AnimePahe scraper
     try {
@@ -29,35 +29,38 @@ export class ConsumetService {
    */
   async search(query: string) {
     try {
-      this.logger.debug(`Searching consumet mesh: "${query}"`);
+      const normalizedQuery = this.normalizeTitle(query);
+      this.logger.debug(`Searching consumet mesh: "${query}" (Normalized: "${normalizedQuery}")`);
 
-      const results = await Promise.allSettled([
-        // 1. AnimePahe (Strict 3s timeout)
+      const queries = [query];
+      if (normalizedQuery !== query) queries.push(normalizedQuery);
+      const results = await Promise.allSettled(queries.flatMap(q => [
+        // 1. AnimePahe (Strict 3.5s timeout)
         Promise.race([
-          this.animepahe.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animepahe' }))),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+          this.animepahe.search(q).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animepahe' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
         ]).catch(() => []),
 
-        // 2. KickAssAnime (Strict 3s timeout)
+        // 2. KickAssAnime (Strict 3.5s timeout)
         Promise.race([
-          this.kickass.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'kickassanime' }))),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+          this.kickass.search(q).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'kickassanime' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
         ]).catch(() => []),
 
-        // 3. AnimeKai (Strict 3s timeout)
+        // 3. AnimeKai (Strict 3.5s timeout)
         Promise.race([
-          this.animekai.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animekai' }))),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+          this.animekai.search(q).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'animekai' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
         ]).catch(() => []),
 
         // 4. HiAnime (via Consumet)
         Promise.race([
-          this.hianime.search(query).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'hianime' }))),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3000))
+          this.hianime.search(q).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'hianime' }))),
+          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
         ]).catch(() => []),
 
         // 5. Anify (Fast & Stable)
-        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 2500 })
+        axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(q)}`, { timeout: 3000 })
           .then(res => (res.data || []).map((r: any) => ({ 
               id: r.id, 
               title: r.title.english || r.title.romaji, 
@@ -65,18 +68,33 @@ export class ConsumetService {
               provider: 'anify' 
           })))
           .catch(() => [] as any[]),
-      ]);
+      ]));
 
       const flattened = results
         .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
         .flatMap(r => r.value);
 
-      this.logger.debug(`Search mesh found ${flattened.length} results for "${query}"`);
-      return flattened;
+      // Deduplicate by provider + id
+      const unique = Array.from(new Map(flattened.map(item => [`${item.provider}-${item.id}`, item])).values());
+
+      this.logger.debug(`Search mesh found ${unique.length} results for "${query}"`);
+      return unique;
     } catch (error) {
       this.logger.error(`Search mesh failed: ${error.message}`);
       return [];
     }
+  }
+
+  /**
+   * Title Stripper: Removes colons and sub-titles for better search matching
+   * Example: "Dr. STONE: SCIENCE FUTURE" -> "Dr. Stone"
+   */
+  private normalizeTitle(title: string): string {
+    if (!title) return "";
+    let normalized = title.split(':')[0]; // Remove subtitle
+    normalized = normalized.split('-')[0]; // Remove dash subtitles
+    normalized = normalized.split('Season')[0]; // Remove season tags
+    return normalized.trim();
   }
 
   /**
