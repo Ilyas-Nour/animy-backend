@@ -343,35 +343,7 @@ export class StreamingService {
 
       if (!searchResults?.length) return [];
 
-      // 1. GogoAnime (Fastest Native)
-      const gogoResult = searchResults.find(r => r.provider === 'gogoanime');
-      if (gogoResult) {
-        try {
-          const gogoEpId = await this.consumetService.resolveEpisodeId(gogoResult.id, epNum, 'gogoanime');
-          if (gogoEpId) {
-            const sources = await this.consumetService.getEpisodeSources(gogoEpId, 'gogoanime');
-            if (sources?.sources?.length) {
-              const gogoReferer = sources.headers?.Referer || 'https://gogoanime3.co/';
-              const proxiedSources = sources.sources.map((s: any) => ({
-                ...s,
-                url: toProxiedUrl(s.url, gogoReferer)
-              }));
-              nativeServers.push({
-                name: 'Native 1 (GogoAnime - HLS)',
-                url: proxiedSources[0].url,
-                sources: proxiedSources,
-                subtitles: sources.subtitles || [],
-                provider: 'gogoanime',
-                isNative: true,
-                headers: sources.headers
-              });
-              this.logger.log(`Native Gogo extraction SUCCESS for EP${epNum}`);
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 2. AnimePahe
+      // 1. AnimePahe (Most reliable native source)
       const paheResult = searchResults.find(r => r.provider === 'animepahe');
       if (paheResult) {
         try {
@@ -385,7 +357,7 @@ export class StreamingService {
                 url: toProxiedUrl(s.url, paheReferer)
               }));
               nativeServers.push({
-                name: 'Native 2 (AnimePahe)',
+                name: 'Native 1 (AnimePahe)',
                 url: proxiedSources[0].url,
                 sources: proxiedSources,
                 subtitles: sources.subtitles || [],
@@ -393,12 +365,13 @@ export class StreamingService {
                 isNative: true,
                 headers: sources.headers
               });
+              this.logger.log(`Native AnimePahe extraction SUCCESS for EP${epNum}`);
             }
           }
         } catch (e) {}
       }
 
-      // 3. Anify
+      // 2. Anify (Fastest .m3u8 provider)
       const anifyResult = searchResults.find(r => r.provider === 'anify');
       if (anifyResult) {
         try {
@@ -410,7 +383,7 @@ export class StreamingService {
               isM3U8: s.url.includes('.m3u8')
             }));
             nativeServers.push({
-              name: 'Native 3 (Anify)',
+              name: 'Native 2 (Anify - High Speed)',
               url: sources[0].url,
               sources,
               subtitles: res.data.subtitles || [],
@@ -418,6 +391,7 @@ export class StreamingService {
               isNative: true,
               headers: { Referer: 'https://anify.tv/' }
             });
+            this.logger.log(`Native Anify extraction SUCCESS for EP${epNum}`);
           }
         } catch (e) {}
       }
