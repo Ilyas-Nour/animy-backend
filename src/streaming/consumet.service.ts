@@ -10,11 +10,12 @@ export class ConsumetService {
   private readonly kickass = new ANIME.KickAssAnime();
   private readonly animekai = new ANIME.AnimeKai();
   private readonly hianime = new ANIME.Hianime();
-  private readonly gogoanime = new ANIME.Gogoanime();
 
   constructor() {
     // Override base URLs to working 2026 domains
     (this.animepahe as any).baseUrl = 'https://animepahe.ru';
+    (this.kickass as any).baseUrl = 'https://kaas.am';
+    (this.animekai as any).baseUrl = 'https://animekai.to';
     (this.hianime as any).baseUrl = 'https://hianime.to';
   }
 
@@ -38,12 +39,6 @@ export class ConsumetService {
         // 4. HiAnime (via Consumet)
         Promise.race([
           this.hianime.search(q).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'hianime' }))),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
-        ]).catch(() => []),
-        
-        // 4.5 GogoAnime (Rock solid fallback)
-        Promise.race([
-          this.gogoanime.search(q).then(res => (res.results || []).map((r: any) => ({ ...r, provider: 'gogoanime' }))),
           new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
         ]).catch(() => []),
 
