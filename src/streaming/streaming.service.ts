@@ -157,8 +157,8 @@ export class StreamingService {
    *
    * Builds a large set of working mirrors across multiple strategies:
    *  Tier 1 — High-quality embeds using MAL ID (VidLink - Gold Standard)
-   *  Tier 2 — Iframe embeds using TMDB ID (Stable backups)
-   *  Tier 3 — Native .m3u8 extraction via consumet (Best quality, proxy-enabled)
+   *  Tier 2 — Iframe embeds using TMDB/AniList ID (VidSrc - Stable backups)
+   *  Tier 3 — Native .m3u8 extraction via Anify (Ultra-fast, proxy-enabled)
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -194,43 +194,45 @@ export class StreamingService {
       if (malId) {
         this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
         
-        // Mirror 0: VidLink via MAL ID (Best for Anime 2026)
+        // Mirror 1: VidLink via MAL ID (Best for Anime 2026)
         servers.push({
-          name: 'Mirror 1 (VidLink - MAL)',
+          name: 'Mirror 1 (VidLink - Ultra)',
           url: `https://vidlink.pro/anime/${malId}/${epNum}/sub`,
           provider: 'vidlink',
           isNative: false
         });
 
-        // Mirror 1: VidLink via AniList ID
+        // Mirror 2: VidSrc.me (Extremely stable)
         servers.push({
-          name: 'Mirror 2 (VidLink - AL)',
-          url: `https://vidlink.pro/anime/${anilistId}/${epNum}/sub`,
-          provider: 'vidlink',
-          isNative: false
-        });
-
-        // Vidsrc.cc / .xyz
-        servers.push({
-          name: 'Mirror 3 (VidSrc - MAL)',
-          url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
-          provider: 'vidsrc',
-          isNative: false
-        });
-
-        // Vidsrc.me (Extremely stable)
-        servers.push({
-          name: 'Mirror 4 (VidSrc.me)',
+          name: 'Mirror 2 (VidSrc - Stable)',
           url: `https://vidsrc.me/embed/anime/${malId}/${epNum}`,
           provider: 'vidsrc',
           isNative: false
         });
 
-        // Vidsrc.to (AL Direct)
+        // Mirror 3: VidSrc.to
         servers.push({
-          name: 'Mirror 8 (VidSrc.to - AL)',
-          url: `https://vidsrc.to/embed/anime/${anilistId}/${epNum}`,
-          provider: 'mirror',
+          name: 'Mirror 3 (VidSrc.to)',
+          url: `https://vidsrc.to/embed/anime/${malId}/${epNum}`,
+          provider: 'vidsrc',
+          isNative: false
+        });
+
+        // Vidsrc.cc
+        servers.push({
+          name: 'Mirror 4 (VidSrc.cc)',
+          url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
+          provider: 'vidsrc',
+          isNative: false
+        });
+      }
+
+      // AniList ID Direct (as a backup if MAL resolution fails)
+      if (!isNaN(anilistId)) {
+        servers.push({
+          name: 'Mirror 5 (VidLink - AL)',
+          url: `https://vidlink.pro/anime/${anilistId}/${epNum}/sub`,
+          provider: 'vidlink',
           isNative: false
         });
       }
@@ -253,27 +255,17 @@ export class StreamingService {
       if (secondaryId) {
         if (isTmdb) {
           servers.push({
-            name: 'Mirror 5 (VidLink - TMDB)',
+            name: 'Mirror 6 (VidLink - TMDB)',
             url: `https://vidlink.pro/tv/${secondaryId}/1/${epNum}`,
             provider: 'vidlink',
             isNative: false
           });
         }
 
+        // Auto-embed fallback
         servers.push({
-          name: isTmdb ? 'Mirror 6 (VidSrc.to)' : 'Mirror 6 (VidSrc.to - AL)',
-          url: isTmdb 
-            ? `https://vidsrc.to/embed/tv/${secondaryId}/1/${epNum}`
-            : `https://vidsrc.to/embed/anime/${secondaryId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
-        });
-
-        servers.push({
-          name: isTmdb ? 'Mirror 7 (Vsembed.su)' : 'Mirror 7 (Vsembed.su - AL)',
-          url: isTmdb
-            ? `https://vsembed.su/embed/tv/${secondaryId}/1/${epNum}`
-            : `https://vsembed.su/embed/anime/${secondaryId}/${epNum}`,
+          name: 'Mirror 7 (AutoEmbed)',
+          url: `https://player.vidsrc.nl/embed/anime/${malId || anilistId}/${epNum}`,
           provider: 'mirror',
           isNative: false
         });

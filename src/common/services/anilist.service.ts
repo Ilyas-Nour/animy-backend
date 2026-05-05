@@ -573,92 +573,6 @@ export class AnilistService {
     }
   }
 
-  /**
-   * Get trending manga
-   */
-  async getTrendingManga(page = 1, perPage = 20) {
-    const queryGql = gql`
-      query ($page: Int, $perPage: Int) {
-        Page(page: $page, perPage: $perPage) {
-          media(
-            sort: TRENDING_DESC
-            type: MANGA
-            isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
-          ) {
-            id
-            idMal
-            isAdult
-            title {
-              romaji
-              english
-            }
-            coverImage {
-              extraLarge
-              large
-            }
-            description
-            averageScore
-            popularity
-            genres
-            format
-            status
-          }
-        }
-      }
-    `;
-
-    try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
-      return data.Page;
-    } catch (error) {
-      this.logger.error(`Error fetching trending manga:`, error);
-      return [];
-    }
-  }
-
-  /**
-   * Get popular manga
-   */
-  async getPopularManga(page = 1, perPage = 20) {
-    const queryGql = gql`
-      query ($page: Int, $perPage: Int) {
-        Page(page: $page, perPage: $perPage) {
-          media(
-            sort: POPULARITY_DESC
-            type: MANGA
-            isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
-          ) {
-            id
-            isAdult
-            title {
-              romaji
-              english
-            }
-            coverImage {
-              extraLarge
-              large
-            }
-            description
-            averageScore
-            popularity
-            genres
-            format
-            status
-          }
-        }
-      }
-    `;
-
-    try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
-      return data.Page;
-    } catch (error) {
-      this.logger.error(`Error fetching popular manga:`, error);
-      return [];
-    }
-  }
 
   /**
    * Get character details by ID
@@ -831,6 +745,116 @@ export class AnilistService {
       this.logger.error(`Error fetching upcoming anime:`, error.message);
       throw new HttpException(
         "Failed to fetch upcoming from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  /**
+   * Get trending manga
+   */
+  async getTrendingManga(page = 1, perPage = 20) {
+    const queryGql = gql`
+      query ($page: Int, $perPage: Int) {
+        Page(page: $page, perPage: $perPage) {
+          pageInfo {
+            total
+            currentPage
+            lastPage
+            hasNextPage
+            perPage
+          }
+          media(
+            sort: TRENDING_DESC
+            type: MANGA
+            isAdult: false
+            genre_not_in: ["Hentai", "Ecchi"]
+          ) {
+            id
+            idMal
+            isAdult
+            title {
+              romaji
+              english
+            }
+            coverImage {
+              extraLarge
+              large
+            }
+            bannerImage
+            description
+            averageScore
+            popularity
+            genres
+            format
+            status
+          }
+        }
+      }
+    `;
+
+    try {
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      return data.Page;
+    } catch (error) {
+      this.logger.error(`Error fetching trending manga:`, error.message);
+      throw new HttpException(
+        "Failed to fetch trending manga from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  /**
+   * Get popular manga
+   */
+  async getPopularManga(page = 1, perPage = 20) {
+    const queryGql = gql`
+      query ($page: Int, $perPage: Int) {
+        Page(page: $page, perPage: $perPage) {
+          pageInfo {
+            total
+            currentPage
+            lastPage
+            hasNextPage
+            perPage
+          }
+          media(
+            sort: POPULARITY_DESC
+            type: MANGA
+            isAdult: false
+            genre_not_in: ["Hentai", "Ecchi"]
+          ) {
+            id
+            idMal
+            isAdult
+            title {
+              romaji
+              english
+            }
+            coverImage {
+              extraLarge
+              large
+            }
+            bannerImage
+            description
+            averageScore
+            popularity
+            genres
+            format
+            status
+          }
+        }
+      }
+    `;
+
+    try {
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      return data.Page;
+    } catch (error) {
+      this.logger.error(`Error fetching popular manga:`, error.message);
+      throw new HttpException(
+        "Failed to fetch popular manga from AniList",
         HttpStatus.BAD_GATEWAY,
       );
     }

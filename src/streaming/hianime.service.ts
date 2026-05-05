@@ -6,11 +6,11 @@ import * as cheerio from "cheerio";
 export class HiAnimeService {
   private readonly logger = new Logger(HiAnimeService.name);
 
-  // Working HiAnime API (unofficial community-hosted APIs — no Cloudflare)
+  // Working HiAnime API (Updated 2026 hosts)
   private readonly hiAnimeApiHosts = [
-    'https://hianime-api.vercel.app/anime',
-    'https://aniwatch-api-net.vercel.app/api/v2/hianime',
-    'https://hianime-api.ritessh.workers.dev/api/v2/hianime',
+    'https://aniwatch-api-v2.vercel.app/anime',
+    'https://hianime-api-6p6o.onrender.com/api/v2/hianime',
+    'https://hianime-api-alpha.vercel.app/api/v2/hianime',
   ];
 
   // GogoAnime working mirror (2026)
@@ -23,23 +23,44 @@ export class HiAnimeService {
     "Referer": "https://gogoanime3.net/",
   };
 
-  /**
-   * Universal Search — tries HiAnime API then GogoAnime
-   */
   async search(query: string) {
     try {
-      // 1. Try HiAnime unofficial API first
+      // 1. Try Anify first (Most reliable in 2026)
+      const anifyResults = await this.searchAnify(query);
+      if (anifyResults.length > 0) {
+        return { results: anifyResults };
+      }
+
+      // 2. Try HiAnime unofficial API
       const hianimeResults = await this.searchHiAnimeApi(query);
       if (hianimeResults.length > 0) {
         return { results: hianimeResults };
       }
 
-      // 2. Fallback to GogoAnime scraper
+      // 3. Fallback to GogoAnime scraper
       const gogoResults = await this.searchGogo(query);
       return { results: gogoResults };
     } catch (error) {
       this.logger.error(`Search failed: ${error.message}`);
       return { results: [] };
+    }
+  }
+
+  /**
+   * Search via Anify API
+   */
+  private async searchAnify(query: string): Promise<any[]> {
+    try {
+      const { data } = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 5000 });
+      return (data || []).map((a: any) => ({
+        id: a.id,
+        title: a.title.english || a.title.romaji,
+        image: a.coverImage,
+        url: `/anime/${a.id}`,
+        provider: 'hianime' // Using as a drop-in for mesh compatibility
+      }));
+    } catch (e) {
+      return [];
     }
   }
 
@@ -101,14 +122,38 @@ export class HiAnimeService {
     }
   }
 
-  /**
-   * Get anime info — tries HiAnime API then GogoAnime
-   */
   async fetchAnimeInfo(id: string) {
+    // 1. Try Anify (Best metadata)
+    const anifyInfo = await this.fetchAnifyInfo(id);
+    if (anifyInfo) return anifyInfo;
+
+    // 2. Try HiAnime API
     const info = await this.fetchHiAnimeInfoApi(id);
     if (info) return info;
 
+    // 3. Try Gogo fallback
     return this.fetchGogoInfo(id);
+  }
+
+  private async fetchAnifyInfo(id: string) {
+    try {
+      const { data } = await axios.get(`https://api.anify.tv/info/${id}`, { timeout: 5000 });
+      if (data) {
+        return {
+          id: data.id,
+          title: data.title.english || data.title.romaji,
+          image: data.coverImage,
+          episodes: (data.episodes?.data || []).map((e: any) => ({
+            id: e.id,
+            number: e.number,
+            title: e.title || `Episode ${e.number}`,
+            provider: 'hianime'
+          }))
+        };
+      }
+    } catch (e) {
+      return null;
+    }
   }
 
   /**
