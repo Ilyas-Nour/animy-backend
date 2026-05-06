@@ -7,5 +7,6 @@ import { AnimeService } from "./anime.service";
   imports: [HttpModule],
   controllers: [AnimeController],
   providers: [AnimeService],
+  exports: [AnimeService],
 })
 export class AnimeModule {}

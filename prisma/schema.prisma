@@ -551,3 +551,12 @@ model EpisodeCache {
   @@map("episode_cache")
 }
 
+// Caches general lists like Trending, Popular, Upcoming etc.
+model DiscoveryCache {
+  key       String   @id // e.g., "trending_anime", "top_manga"
+  data      Json     // The list data
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("discovery_cache")
+}

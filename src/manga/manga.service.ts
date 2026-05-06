@@ -140,7 +140,7 @@ export class MangaService {
       const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       
-      if (cachedManga?.chaptersList && Array.isArray(cachedManga.chaptersList) && cachedManga.chaptersList.length > 0) {
+      if (cachedManga?.chaptersList && Array.isArray(cachedManga.chaptersList) && (cachedManga.chaptersList as any[]).length > 0) {
         if (cachedManga.lastUpdated > oneDayAgo) {
           this.logger.debug(`CHAPTER CACHE HIT: Manga ${id}`);
           return { chapters: cachedManga.chaptersList };
@@ -160,36 +160,60 @@ export class MangaService {
             englishTitle = anilistInfo.title.english || "";
             nativeTitle = anilistInfo.title.native || "";
           }
-        } catch (e) {}
+        } catch (e) {
+          this.logger.error(`Failed to fetch title for manga ${id} from AniList`);
+        }
       }
 
-      if (!title) return { chapters: [] };
+      if (!title) {
+        this.logger.warn(`No title found for manga ${id}, returning empty chapters`);
+        return { chapters: [] };
+      }
 
       const titlesToSearch = [title, englishTitle, nativeTitle].filter(t => t && t.length > 1);
 
       // --- FAST RACE STRATEGY ---
       this.logger.debug(`Triggering fast race chapter search for: ${title}`);
       
-      const chapters = await Promise.any([
-        this.fetchAnifyChapters(id, title).then(res => {
-          if (res.length > 0) return res;
-          throw new Error('No chapters');
-        }),
-        this.fetchMangaDexChapters(id, titlesToSearch).then(res => {
-          if (res.length > 0) return res;
-          throw new Error('No chapters');
-        }),
-        this.fetchConsumetChapters(id, titlesToSearch).then(res => {
-          if (res.length > 0) return res;
-          throw new Error('No chapters');
-        }),
-        this.fetchMangaPillChapters(id, titlesToSearch).then(res => {
-          if (res.length > 0) return res;
-          throw new Error('No chapters');
-        }),
-        // Global safety timeout to return cache if it exists, or empty
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
-      ]).catch(() => {
+      const startTime = Date.now();
+      const chapters = await Promise.race([
+        Promise.any([
+          this.fetchAnifyChapters(id, title).then(res => {
+            if (res.length > 0) {
+              this.logger.debug(`Anify won the race for ${id} in ${Date.now() - startTime}ms`);
+              return res;
+            }
+            throw new Error('No chapters');
+          }),
+          this.fetchMangaDexChapters(id, titlesToSearch).then(res => {
+            if (res.length > 0) {
+              this.logger.debug(`MangaDex won the race for ${id} in ${Date.now() - startTime}ms`);
+              return res;
+            }
+            throw new Error('No chapters');
+          }),
+          this.fetchConsumetChapters(id, titlesToSearch).then(res => {
+            if (res.length > 0) {
+              this.logger.debug(`Consumet won the race for ${id} in ${Date.now() - startTime}ms`);
+              return res;
+            }
+            throw new Error('No chapters');
+          }),
+          this.fetchMangaPillChapters(id, titlesToSearch).then(res => {
+            if (res.length > 0) {
+              this.logger.debug(`MangaPill won the race for ${id} in ${Date.now() - startTime}ms`);
+              return res;
+            }
+            throw new Error('No chapters');
+          }),
+        ]),
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('HARD_TIMEOUT')), 15000))
+      ]).catch((err) => {
+        if (err.message === 'HARD_TIMEOUT') {
+          this.logger.warn(`Global timeout reached for manga ${id} chapter search`);
+        } else {
+          this.logger.warn(`All parallel providers failed for manga ${id}: ${err.message}`);
+        }
         return (cachedManga?.chaptersList as any[]) || [];
       });
 
@@ -205,10 +229,11 @@ export class MangaService {
             }).catch(e => this.logger.error(`Failed to update chapter cache: ${e.message}`));
         }
 
+        this.logger.debug(`Returning ${sortedChapters.length} chapters for manga ${id}`);
         return { chapters: sortedChapters };
       }
 
-      this.logger.warn(`All parallel providers failed for manga ${id}`);
+      this.logger.warn(`No chapters found for manga ${id} after all attempts`);
       return { chapters: [] };
     } catch (e) {
       this.logger.error(`Failed to fetch chapters for manga ${id}: ${e.message}`);
@@ -293,8 +318,8 @@ export class MangaService {
   private async fetchConsumetChapters(id: number, titles: string[]): Promise<any[]> {
     const apiBaseUrls = ["https://consumet-api-clone.vercel.app", "https://api.consumet.org"];
     
-    // 1. Try Anilist Meta first
-    for (const baseUrl of apiBaseUrls) {
+    // 1. Try Anilist Meta first (Parallel)
+    const metaPromises = apiBaseUrls.map(async (baseUrl) => {
       try {
         const { data } = await axios.get(`${baseUrl}/meta/anilist-manga/${id}?provider=mangadex`, { timeout: 6000 });
         if (data.chapters?.length > 0) {
@@ -304,12 +329,18 @@ export class MangaService {
           }));
         }
       } catch (e) {}
-    }
+      throw new Error("Meta failed");
+    });
 
-    // 2. Try Scraper Search if Meta fails
+    try {
+      const metaResults = await Promise.any(metaPromises);
+      if (metaResults) return metaResults;
+    } catch (e) {}
+
+    // 2. Try Scraper Search if Meta fails (Parallelized providers)
     const providers = ["mangasee123", "mangadex", "mangapill"];
-    for (const provider of providers) {
-      for (const baseUrl of apiBaseUrls) {
+    const searchPromises = providers.flatMap(provider => 
+      apiBaseUrls.map(async (baseUrl) => {
         try {
           const searchRes = await axios.get(`${baseUrl}/manga/${provider}/${encodeURIComponent(titles[0])}`, { timeout: 8000 });
           if (searchRes.data?.results?.length > 0) {
@@ -323,9 +354,16 @@ export class MangaService {
             }
           }
         } catch (e) {}
-      }
+        throw new Error(`${provider} failed on ${baseUrl}`);
+      })
+    );
+
+    try {
+      const searchResults = await Promise.any(searchPromises);
+      return searchResults || [];
+    } catch (e) {
+      return [];
     }
-    return [];
   }
 
   private async fetchMangaPillChapters(id: number, titles: string[]): Promise<any[]> {

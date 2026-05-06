@@ -138,10 +138,16 @@ export class AnimeService {
 
   async getTopAnime(type?: string, filter?: string) {
     const cacheKey = `top:${filter}:${type}`;
+    this.logger.debug(`Fetching top anime: filter=${filter}, type=${type}`);
+    
     const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      this.logger.debug(`TOP ANIME CACHE HIT: ${cacheKey}`);
+      return cached;
+    }
 
     try {
+      this.logger.debug(`TOP ANIME CACHE MISS: ${cacheKey} -> Fetching AniList`);
       const data = await Promise.race([
         (async () => {
           if (filter === "bypopularity") {
