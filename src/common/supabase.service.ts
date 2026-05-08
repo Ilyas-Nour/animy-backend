@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import * as ws from "ws";
 
 @Injectable()
 export class SupabaseService {
@@ -16,7 +17,14 @@ export class SupabaseService {
       return;
     }
 
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    this.supabase = createClient(supabaseUrl, supabaseKey, {
+      realtime: {
+        transport: ws as any,
+      },
+      auth: {
+        persistSession: false,
+      },
+    });
   }
 
   async uploadFile(
