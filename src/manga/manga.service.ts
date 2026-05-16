@@ -136,18 +136,34 @@ export class MangaService {
     try {
       this.logger.debug(`Fetching chapters for manga ${id}`);
       
-      // 1. Check DB Cache first
       const cachedManga = await this.prisma.manga.findUnique({ where: { id } });
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const hasCache = cachedManga?.chaptersList && Array.isArray(cachedManga.chaptersList) && (cachedManga.chaptersList as any[]).length > 0;
       
-      if (cachedManga?.chaptersList && Array.isArray(cachedManga.chaptersList) && (cachedManga.chaptersList as any[]).length > 0) {
+      if (hasCache) {
         if (cachedManga.lastUpdated > oneDayAgo) {
           this.logger.debug(`CHAPTER CACHE HIT: Manga ${id}`);
           return { chapters: cachedManga.chaptersList };
+        } else {
+          this.logger.debug(`CHAPTER CACHE STALE: Manga ${id} -> Returning stale cache instantly, fetching fresh in background`);
+          // Spawn background update and return stale cache immediately
+          this.fetchAndUpdateChaptersBackground(id, cachedManga).catch(e => 
+            this.logger.error(`Background update failed: ${e.message}`)
+          );
+          return { chapters: cachedManga.chaptersList };
         }
-        this.logger.debug(`CHAPTER CACHE STALE: Manga ${id} -> Fetching fresh in parallel`);
       }
 
+      // No cache, we must fetch synchronously
+      return await this.fetchAndUpdateChaptersBackground(id, cachedManga);
+    } catch (e) {
+      this.logger.error(`Failed to fetch chapters for manga ${id}: ${e.message}`);
+      return { chapters: [] };
+    }
+  }
+
+  private async fetchAndUpdateChaptersBackground(id: number, cachedManga: any) {
+    try {
       let title = cachedManga?.title || "";
       let englishTitle = cachedManga?.titleEnglish || "";
       let nativeTitle = cachedManga?.titleJapanese || "";
@@ -207,7 +223,7 @@ export class MangaService {
             throw new Error('No chapters');
           }),
         ]),
-        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('HARD_TIMEOUT')), 15000))
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('HARD_TIMEOUT')), 12000))
       ]).catch((err) => {
         if (err.message === 'HARD_TIMEOUT') {
           this.logger.warn(`Global timeout reached for manga ${id} chapter search`);
