@@ -281,24 +281,6 @@ export class AnimeService {
     }
   }
 
-  async getUpcomingSchedule() {
-    // Current season/year approximation
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    let season: "WINTER" | "SPRING" | "SUMMER" | "FALL" = "WINTER";
-
-    if (month >= 0 && month <= 2) season = "WINTER";
-    else if (month >= 3 && month <= 5) season = "SPRING";
-    else if (month >= 6 && month <= 8) season = "SUMMER";
-    else season = "FALL";
-
-    const data = await this.anilistService.getThisSeason(season, year);
-    return {
-      data: data.map((item) => this.mapAnilistToResponse(item)),
-    };
-  }
-
   // --- Helper Methods ---
 
   private async saveAnimeToDb(data: any) {
