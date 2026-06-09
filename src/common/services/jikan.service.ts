@@ -61,6 +61,16 @@ export class JikanService {
     }
   }
 
+  async getMangaById(id: number) {
+    try {
+      const res = await axios.get(`${this.baseUrl}/manga/${id}/full`, { timeout: 10000 });
+      return res.data?.data || null;
+    } catch (e) {
+      this.logger.error(`Jikan GetMangaById failed for ${id}`, e.message);
+      return null;
+    }
+  }
+
   async getAnimeCharacters(id: number) {
     try {
       const res = await axios.get(`${this.baseUrl}/anime/${id}/characters`, { timeout: 10000 });

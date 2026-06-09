@@ -747,4 +747,42 @@ export class MangaService {
       staff: Array.isArray(dbManga.staff) ? dbManga.staff : [],
     };
   }
+
+  private mapJikanToResponse(jikan: any) {
+    if (!jikan) return null;
+    return {
+      mal_id: jikan.mal_id,
+      title: jikan.title,
+      title_english: jikan.title_english,
+      title_japanese: jikan.title_japanese,
+      synopsis: jikan.synopsis || "No synopsis available.",
+      type: jikan.type,
+      chapters: jikan.chapters,
+      volumes: jikan.volumes,
+      status: jikan.status,
+      score: jikan.score,
+      rank: jikan.rank,
+      popularity: jikan.popularity,
+      members: jikan.members,
+      favorites: jikan.favorites,
+      images: {
+        jpg: {
+          image_url: jikan.images?.jpg?.image_url,
+          large_image_url: jikan.images?.jpg?.large_image_url,
+          small_image_url: jikan.images?.jpg?.small_image_url,
+        },
+        webp: {
+          image_url: jikan.images?.webp?.image_url,
+          large_image_url: jikan.images?.webp?.large_image_url,
+          small_image_url: jikan.images?.webp?.small_image_url,
+        },
+      },
+      authors: jikan.authors?.map((a: any) => ({ name: a.name })) || [],
+      genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
+      characters: [],
+      relations: [],
+      recommendations: [],
+      staff: [],
+    };
+  }
 }
