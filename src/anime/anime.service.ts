@@ -134,8 +134,12 @@ export class AnimeService {
 
       // Final fallback: try Jikan directly assuming id is a MAL ID
       try {
-        const directJikanData = await this.jikanService.getAnimeById(id);
-        if (directJikanData) return this.mapJikanToResponse(directJikanData);
+        const [directJikanData, characters, recommendations] = await Promise.all([
+           this.jikanService.getAnimeById(id),
+           this.jikanService.getAnimeCharacters(id).catch(() => []),
+           this.jikanService.getAnimeRecommendations(id).catch(() => [])
+        ]);
+        if (directJikanData) return this.mapJikanToResponse(directJikanData, characters, recommendations);
       } catch (jikanErr) {
         this.logger.error(`Jikan fallback direct fetch failed for ${id}: ${jikanErr.message}`);
       }
@@ -510,7 +514,7 @@ export class AnimeService {
     };
   }
 
-  private mapJikanToResponse(jikan: any) {
+  private mapJikanToResponse(jikan: any, jikanCharacters: any[] = [], jikanRecommendations: any[] = []) {
     if (!jikan) return null;
     return {
       id: jikan.mal_id,
@@ -555,10 +559,38 @@ export class AnimeService {
       genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
       studios: jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) || [],
       streaming: [],
-      relations: [],
+      relations: jikan.relations?.flatMap((r: any) => 
+        r.entry.map((entry: any) => ({
+          relationType: r.relation.toUpperCase().replace(/\s+/g, '_'),
+          node: {
+            id: entry.mal_id,
+            title: { english: entry.name, romaji: entry.name },
+            type: entry.type.toUpperCase(),
+            coverImage: { large: "" }
+          }
+        }))
+      ) || [],
       staff: [],
-      recommendations: [],
-      characters: [],
+      recommendations: jikanRecommendations?.map((r: any) => ({
+        mediaRecommendation: {
+          id: r.entry.mal_id,
+          title: { romaji: r.entry.title, english: r.entry.title },
+          coverImage: { large: r.entry.images?.jpg?.large_image_url || r.entry.images?.jpg?.image_url }
+        }
+      })) || [],
+      characters: jikanCharacters?.map((c: any) => ({
+        role: c.role,
+        node: {
+          id: c.character.mal_id,
+          name: { full: c.character.name },
+          image: { large: c.character.images?.jpg?.image_url }
+        },
+        voiceActors: c.voice_actors?.filter((va: any) => va.language === 'Japanese').map((va: any) => ({
+          id: va.person.mal_id,
+          name: { full: va.person.name },
+          image: { large: va.person.images?.jpg?.image_url }
+        })) || []
+      })) || [],
     };
   }
 }

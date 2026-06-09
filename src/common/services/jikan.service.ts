@@ -71,6 +71,26 @@ export class JikanService {
     }
   }
 
+  async getMangaCharacters(id: number) {
+    try {
+      const res = await axios.get(`${this.baseUrl}/manga/${id}/characters`, { timeout: 10000 });
+      return res.data?.data || [];
+    } catch (e) {
+      this.logger.error(`Jikan GetMangaCharacters failed for ${id}`, e.message);
+      return [];
+    }
+  }
+
+  async getMangaRecommendations(id: number) {
+    try {
+      const res = await axios.get(`${this.baseUrl}/manga/${id}/recommendations`, { timeout: 10000 });
+      return res.data?.data || [];
+    } catch (e) {
+      this.logger.error(`Jikan GetMangaRecommendations failed for ${id}`, e.message);
+      return [];
+    }
+  }
+
   async getAnimeCharacters(id: number) {
     try {
       const res = await axios.get(`${this.baseUrl}/anime/${id}/characters`, { timeout: 10000 });

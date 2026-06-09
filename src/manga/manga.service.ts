@@ -97,8 +97,12 @@ export class MangaService {
 
       // Final fallback: try Jikan directly
       try {
-        const jikanData = await this.jikanService.getMangaById(id);
-        if (jikanData) return this.mapJikanToResponse(jikanData);
+        const [jikanData, characters, recommendations] = await Promise.all([
+           this.jikanService.getMangaById(id),
+           this.jikanService.getMangaCharacters(id).catch(() => []),
+           this.jikanService.getMangaRecommendations(id).catch(() => [])
+        ]);
+        if (jikanData) return this.mapJikanToResponse(jikanData, characters, recommendations);
       } catch (jikanErr) {
         this.logger.error(`Jikan fallback direct fetch failed for manga ${id}: ${jikanErr.message}`);
       }
@@ -748,7 +752,7 @@ export class MangaService {
     };
   }
 
-  private mapJikanToResponse(jikan: any) {
+  private mapJikanToResponse(jikan: any, jikanCharacters: any[] = [], jikanRecommendations: any[] = []) {
     if (!jikan) return null;
     return {
       mal_id: jikan.mal_id,
@@ -779,9 +783,37 @@ export class MangaService {
       },
       authors: jikan.authors?.map((a: any) => ({ name: a.name })) || [],
       genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
-      characters: [],
-      relations: [],
-      recommendations: [],
+      relations: jikan.relations?.flatMap((r: any) => 
+        r.entry.map((entry: any) => ({
+          relationType: r.relation.toUpperCase().replace(/\s+/g, '_'),
+          node: {
+            id: entry.mal_id,
+            title: { english: entry.name, romaji: entry.name },
+            type: entry.type.toUpperCase(),
+            coverImage: { large: "" }
+          }
+        }))
+      ) || [],
+      recommendations: jikanRecommendations?.map((r: any) => ({
+        mediaRecommendation: {
+          id: r.entry.mal_id,
+          title: { romaji: r.entry.title, english: r.entry.title },
+          coverImage: { large: r.entry.images?.jpg?.large_image_url || r.entry.images?.jpg?.image_url }
+        }
+      })) || [],
+      characters: jikanCharacters?.map((c: any) => ({
+        role: c.role,
+        node: {
+          id: c.character.mal_id,
+          name: { full: c.character.name },
+          image: { large: c.character.images?.jpg?.image_url }
+        },
+        voiceActors: c.voice_actors?.filter((va: any) => va.language === 'Japanese').map((va: any) => ({
+          id: va.person.mal_id,
+          name: { full: va.person.name },
+          image: { large: va.person.images?.jpg?.image_url }
+        })) || []
+      })) || [],
       staff: [],
     };
   }
