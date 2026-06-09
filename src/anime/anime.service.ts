@@ -205,13 +205,35 @@ export class AnimeService {
     try {
       const data = await this.anilistService.getNextSeason(page);
       return {
-        data: (data.media || []).map((item) => this.mapAnilistToResponse(item)).filter(a => a !== null),
+        data: (data.media || []).map((item: any) => this.mapAnilistToResponse(item)).filter((a: any) => a !== null),
         pageInfo: data.pageInfo
       };
     } catch (e) {
       this.logger.warn(`AniList Upcoming failed, falling back to Jikan: ${e.message}`);
       const data = await this.jikanService.getUpcoming();
       return { data: data.map(r => this.mapJikanToResponse(r)) };
+    }
+  }
+
+  async getUpcomingSchedule() {
+    const cacheKey = `schedule:today`;
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
+
+    try {
+      // Jikan /schedules endpoint returns today's schedule by default or can specify a day
+      const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const today = days[new Date().getDay()];
+      const res = await fetch(`https://api.jikan.moe/v4/schedules?filter=${today}`);
+      if (!res.ok) throw new Error("Jikan schedule failed");
+      const json = await res.json();
+      
+      const response = { data: json.data || [] };
+      await this.cacheManager.set(cacheKey, response, 3600000); // cache for 1 hour
+      return response;
+    } catch (e) {
+      this.logger.error(`Failed to fetch schedule: ${e.message}`);
+      return { data: [] };
     }
   }
 
