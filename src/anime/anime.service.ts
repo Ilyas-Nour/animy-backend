@@ -132,6 +132,14 @@ export class AnimeService {
         if (jikanData) return this.mapJikanToResponse(jikanData);
       }
 
+      // Final fallback: try Jikan directly assuming id is a MAL ID
+      try {
+        const directJikanData = await this.jikanService.getAnimeById(id);
+        if (directJikanData) return this.mapJikanToResponse(directJikanData);
+      } catch (jikanErr) {
+        this.logger.error(`Jikan fallback direct fetch failed for ${id}: ${jikanErr.message}`);
+      }
+
       throw error;
     }
   }
@@ -152,6 +160,8 @@ export class AnimeService {
         (async () => {
           if (filter === "bypopularity") {
             return await this.anilistService.getPopular();
+          } else if (filter === "airing") {
+            return await this.anilistService.getTopAiring();
           } else {
             return await this.anilistService.getTrending();
           }
@@ -167,7 +177,7 @@ export class AnimeService {
       return resp;
     } catch (e) {
       this.logger.warn(`AniList Top Anime failed, falling back to Jikan: ${e.message}`);
-      const data = await this.jikanService.getTopAnime();
+      const data = await this.jikanService.getTopAnime(filter);
       return {
         data: (data || []).map(r => this.mapJikanToResponse(r))
       };

@@ -4,6 +4,7 @@ import { AnilistService } from "../common/services/anilist.service";
 import { IdMappingService } from "../streaming/id-mapping.service";
 import { StreamingProxyService } from "../streaming/streaming.proxy.service";
 import { SearchMangaDto } from "./dto/search-manga.dto";
+import { JikanService } from "../common/services/jikan.service";
 import { Response } from "express";
 import axios from "axios";
 
@@ -14,6 +15,7 @@ export class MangaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly anilistService: AnilistService,
+    private readonly jikanService: JikanService,
     private readonly idMappingService: IdMappingService,
     private readonly streamingProxyService: StreamingProxyService,
   ) {}
@@ -92,6 +94,15 @@ export class MangaService {
       // Fallback to DB
       const cached = await this.prisma.manga.findUnique({ where: { id } });
       if (cached) return this.mapDbToResponse(cached);
+
+      // Final fallback: try Jikan directly
+      try {
+        const jikanData = await this.jikanService.getMangaById(id);
+        if (jikanData) return this.mapJikanToResponse(jikanData);
+      } catch (jikanErr) {
+        this.logger.error(`Jikan fallback direct fetch failed for manga ${id}: ${jikanErr.message}`);
+      }
+
       throw error;
     }
   }

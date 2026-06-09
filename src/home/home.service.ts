@@ -14,7 +14,7 @@ export class HomeService {
   ) {}
 
   async getHomeData() {
-    const cacheKey = "home_data_v1";
+    const cacheKey = "home_data_v2";
     
     try {
       const cached = await this.prisma.discoveryCache.findUnique({
@@ -69,7 +69,7 @@ export class HomeService {
     // Parallel fetch with timeouts handled by individual services
     const [trending, popular, upcoming, topManga, publishingManga] = await Promise.allSettled([
       this.animeService.getTopAnime(undefined, "trending"),
-      this.animeService.getTopAnime(undefined, "bypopularity"),
+      this.animeService.getTopAnime(undefined, "airing"),
       this.animeService.getUpcomingNextSeason(),
       this.mangaService.searchManga({ order_by: "popularity", sort: "desc", limit: 15 }),
       this.mangaService.searchManga({ order_by: "popularity", sort: "desc", limit: 15 }),

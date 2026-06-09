@@ -347,6 +347,57 @@ export class AnilistService {
   }
 
   /**
+   * Get top airing anime
+   */
+  async getTopAiring(page = 1, perPage = 20) {
+    const queryGql = gql`
+      query ($page: Int, $perPage: Int) {
+        Page(page: $page, perPage: $perPage) {
+          media(
+            status: RELEASING
+            sort: POPULARITY_DESC
+            type: ANIME
+            isAdult: false
+            genre_not_in: ["Hentai", "Ecchi"]
+          ) {
+            id
+            idMal
+            isAdult
+            title {
+              romaji
+              english
+            }
+            coverImage {
+              extraLarge
+              large
+            }
+            bannerImage
+            description
+            averageScore
+            popularity
+            genres
+            format
+            episodes
+            status
+          }
+        }
+      }
+    `;
+
+    try {
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      return data.Page;
+    } catch (error) {
+      this.logger.error(`Error fetching top airing anime:`, error.message);
+      throw new HttpException(
+        "Failed to fetch top airing from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+
+  /**
    * Get anime by season
    */
   async getThisSeason(

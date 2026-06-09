@@ -6,9 +6,11 @@ export class JikanService {
   private readonly logger = new Logger(JikanService.name);
   private readonly baseUrl = process.env.JIKAN_API_URL || 'https://api.jikan.moe/v4';
 
-  async getTopAnime() {
+  async getTopAnime(filter?: string) {
     try {
-      const res = await axios.get(`${this.baseUrl}/top/anime`, { timeout: 10000 });
+      const params: any = {};
+      if (filter) params.filter = filter;
+      const res = await axios.get(`${this.baseUrl}/top/anime`, { params, timeout: 10000 });
       return res.data?.data || [];
     } catch (e) {
       this.logger.error('Jikan Top Anime failed', e.message);
