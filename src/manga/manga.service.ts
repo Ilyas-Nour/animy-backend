@@ -44,7 +44,7 @@ export class MangaService {
         Number(limit),
         sortStr,
       ),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Manga Search Timeout')), 12000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Manga Search Timeout')), 25000))
     ]);
 
     return {
