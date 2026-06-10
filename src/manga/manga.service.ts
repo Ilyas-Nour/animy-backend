@@ -581,38 +581,40 @@ export class MangaService {
       favorites: data.favourites,
       characters:
         data.characters?.edges?.map((edge: any) => ({
-          role: edge.role,
+          role: edge?.role,
           character: {
-            mal_id: edge.node.id,
-            name: edge.node.name.full,
+            mal_id: edge?.node?.id,
+            name: edge?.node?.name?.full,
             images: {
-              jpg: { image_url: edge.node.image.large },
+              jpg: { image_url: edge?.node?.image?.large },
             },
           },
         })) || [],
       relations:
         data.relations?.edges?.map((edge: any) => ({
-          relation: edge.relationType,
+          relation: edge?.relationType,
           entry: [
             {
-              mal_id: edge.node.id,
-              type: edge.node.type,
-              name: edge.node.title.english || edge.node.title.romaji,
+              mal_id: edge?.node?.id,
+              type: edge?.node?.type,
+              name: edge?.node?.title?.english || edge?.node?.title?.romaji,
               images: {
-                jpg: { image_url: edge.node.coverImage.large },
+                jpg: { image_url: edge?.node?.coverImage?.large },
               },
             },
           ],
         })) || [],
       recommendations:
-        data.recommendations?.nodes?.map((node: any) => ({
+        data.recommendations?.nodes
+          ?.filter((node: any) => node?.mediaRecommendation)
+          ?.map((node: any) => ({
           entry: {
-            mal_id: node.mediaRecommendation.id,
+            mal_id: node?.mediaRecommendation?.id,
             title:
-              node.mediaRecommendation.title.english ||
-              node.mediaRecommendation.title.romaji,
+              node?.mediaRecommendation?.title?.english ||
+              node?.mediaRecommendation?.title?.romaji,
             images: {
-              jpg: { image_url: node.mediaRecommendation.coverImage.large },
+              jpg: { image_url: node?.mediaRecommendation?.coverImage?.large },
             },
           },
         })) || [],
@@ -661,21 +663,21 @@ export class MangaService {
       genres: data.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
       characters:
         data.characters?.edges?.map((edge: any) => ({
-          role: edge.role,
+          role: edge?.role,
           character: {
-            mal_id: edge.node.id,
-            name: edge.node.name.full,
+            mal_id: edge?.node?.id,
+            name: edge?.node?.name?.full,
             images: {
-              jpg: { image_url: edge.node.image.large },
+              jpg: { image_url: edge?.node?.image?.large },
             },
           },
         })) ||
         data.characters?.nodes?.map((char: any) => ({
           character: {
-            mal_id: char.id,
-            name: char.name.full,
+            mal_id: char?.id,
+            name: char?.name?.full,
             images: {
-              jpg: { image_url: char.image.large },
+              jpg: { image_url: char?.image?.large },
             },
           },
           role: "Main",
@@ -683,27 +685,29 @@ export class MangaService {
         [],
       relations:
         data.relations?.edges?.map((edge: any) => ({
-          relation: edge.relationType,
+          relation: edge?.relationType,
           entry: [
             {
-              mal_id: edge.node.id,
-              type: edge.node.type,
-              name: edge.node.title.english || edge.node.title.romaji,
+              mal_id: edge?.node?.id,
+              type: edge?.node?.type,
+              name: edge?.node?.title?.english || edge?.node?.title?.romaji,
               images: {
-                jpg: { image_url: edge.node.coverImage.large },
+                jpg: { image_url: edge?.node?.coverImage?.large },
               },
             },
           ],
         })) || [],
       recommendations:
-        data.recommendations?.nodes?.map((node: any) => ({
+        data.recommendations?.nodes
+          ?.filter((node: any) => node?.mediaRecommendation)
+          ?.map((node: any) => ({
           entry: {
-            mal_id: node.mediaRecommendation.id,
+            mal_id: node?.mediaRecommendation?.id,
             title:
-              node.mediaRecommendation.title.english ||
-              node.mediaRecommendation.title.romaji,
+              node?.mediaRecommendation?.title?.english ||
+              node?.mediaRecommendation?.title?.romaji,
             images: {
-              jpg: { image_url: node.mediaRecommendation.coverImage.large },
+              jpg: { image_url: node?.mediaRecommendation?.coverImage?.large },
             },
           },
         })) || [],
