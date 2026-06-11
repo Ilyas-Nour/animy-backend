@@ -283,7 +283,10 @@ export class StreamingService {
             new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 12000)),
           ]);
 
-          for (const stream of witanimeStreams) {
+          // Reverse the array to maintain the order when unshifting
+          const reversedStreams = [...witanimeStreams].reverse();
+
+          for (const stream of reversedStreams) {
             if (stream.isNative && stream.streamUrl) {
               // Native .m3u8 — proxy through our server to handle CORS
               const proxiedUrl = proxyBaseUrl
@@ -302,7 +305,7 @@ export class StreamingService {
               });
             } else if (stream.embedUrl) {
               // Embed-only server (ok.ru, videa, etc.) — renderable as iframe
-              servers.push({
+              servers.unshift({
                 name: `Witanime ${stream.quality || 'HD'} (${stream.provider.replace('witanime-', '')})`,
                 url: stream.embedUrl,
                 provider: stream.provider,

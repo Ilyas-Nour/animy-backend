@@ -80,6 +80,15 @@ export class WitanimeExtractorService {
 
   // ─── Anime Search ─────────────────────────────────────────────────────────────
 
+  private normalizeTitle(title: string): string {
+    if (!title) return "";
+    let normalized = title.split(':')[0]; // Remove subtitle
+    normalized = normalized.split('-')[0]; // Remove dash subtitles
+    normalized = normalized.split('Season')[0]; // Remove season tags
+    normalized = normalized.split('Part')[0]; // Remove part tags
+    return normalized.trim();
+  }
+
   async searchAnime(query: string): Promise<{ id: number; name: string; slug: string }[]> {
     try {
       const { data } = await axios.get(
@@ -258,7 +267,17 @@ export class WitanimeExtractorService {
 
     try {
       // 1. Search for the anime on Witanime
-      const searchResults = await this.searchAnime(animeTitle);
+      let searchResults = await this.searchAnime(animeTitle);
+      
+      // Fallback to normalized title if exact title yields no results
+      if (!searchResults.length) {
+        const normalized = this.normalizeTitle(animeTitle);
+        if (normalized && normalized !== animeTitle) {
+          this.logger.debug(`Witanime: falling back to normalized title "${normalized}"`);
+          searchResults = await this.searchAnime(normalized);
+        }
+      }
+
       if (!searchResults.length) {
         this.logger.warn(`Witanime: no results for "${animeTitle}"`);
         return [];
