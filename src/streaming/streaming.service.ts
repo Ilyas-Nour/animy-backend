@@ -177,14 +177,14 @@ export class StreamingService {
 
       // 1. Check Cache First (Anikai level speed)
       if (!isNaN(anilistId)) {
-        const cached = await this.cacheService.getCachedLinks(anilistId, epNum, "mesh-v11");
+        const cached = await this.cacheService.getCachedLinks(anilistId, epNum, "mesh-v12");
         if (cached) {
-          this.logger.log(`Nuclear Mesh v11: CACHE HIT for AL=${anilistId}, EP=${epNum}`);
+          this.logger.log(`Nuclear Mesh v12: CACHE HIT for AL=${anilistId}, EP=${epNum}`);
           return cached;
         }
       }
 
-      this.logger.log(`Nuclear Mesh v11: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
+      this.logger.log(`Nuclear Mesh v12: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
 
       const servers: any[] = [];
 
@@ -336,7 +336,7 @@ export class StreamingService {
       }
 
       const response = {
-        provider: "mesh-v11-nuclear",
+        provider: "mesh-v12-nuclear",
         servers,
         anilistId,
         malId,
@@ -349,13 +349,13 @@ export class StreamingService {
 
       // Cache the result (Anikai strategy)
       if (!isNaN(anilistId) && servers.length > 0) {
-        await this.cacheService.cacheLinks(anilistId, epNum, "mesh-v11", response, 3);
+        await this.cacheService.cacheLinks(anilistId, epNum, "mesh-v12", response, 3);
       }
 
       return response;
     } catch (error) {
-      this.logger.error(`Mesh v11 CRITICAL: ${error.message}`);
-      return { provider: "mesh-v11-error", servers: [], headers: {} };
+      this.logger.error(`Mesh v12 CRITICAL: ${error.message}`);
+      return { provider: "mesh-v12-error", servers: [], headers: {} };
     }
   }
 
