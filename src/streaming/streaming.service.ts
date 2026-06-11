@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConsumetService } from "./consumet.service";
 import { IdMappingService } from "./id-mapping.service";
 import { EpisodeCacheService } from "./episode-cache.service";
+import { WitanimeExtractorService } from "./witanime-extractor.service";
 import axios from "axios";
 
 @Injectable()
@@ -12,6 +13,7 @@ export class StreamingService {
     private readonly consumetService: ConsumetService,
     private readonly mappingService: IdMappingService,
     private readonly cacheService: EpisodeCacheService,
+    private readonly witanimeExtractor: WitanimeExtractorService,
   ) {}
 
   /**
@@ -272,9 +274,53 @@ export class StreamingService {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 3: Native .m3u8 extraction via consumet (Best quality)
+      // TIER 0: Witanime native extraction (Arabic CDN, highest quality)
       // ──────────────────────────────────────────────────────────────────────
       if (title) {
+        try {
+          const witanimeStreams = await Promise.race([
+            this.witanimeExtractor.extractEpisodeStreams(title, epNum),
+            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 12000)),
+          ]);
+
+          for (const stream of witanimeStreams) {
+            if (stream.isNative && stream.streamUrl) {
+              // Native .m3u8 — proxy through our server to handle CORS
+              const proxiedUrl = proxyBaseUrl
+                ? `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || 'https://witanime.cyou/')}`
+                : stream.streamUrl;
+
+              servers.unshift({
+                name: `Witanime ${stream.quality || 'HD'} (${stream.provider.replace('witanime-', '')})`,
+                url: proxiedUrl,
+                sources: [{ url: proxiedUrl, quality: stream.quality || 'auto', isM3U8: true }],
+                provider: stream.provider,
+                isNative: true,
+                headers: {
+                  Referer: stream.referer || 'https://witanime.cyou/',
+                },
+              });
+            } else if (stream.embedUrl) {
+              // Embed-only server (ok.ru, videa, etc.) — renderable as iframe
+              servers.push({
+                name: `Witanime ${stream.quality || 'HD'} (${stream.provider.replace('witanime-', '')})`,
+                url: stream.embedUrl,
+                provider: stream.provider,
+                isNative: false,
+              });
+            }
+          }
+
+          this.logger.log(`Witanime Tier 0: ${witanimeStreams.length} servers extracted`);
+        } catch (e) {
+          this.logger.warn(`Witanime Tier 0 failed: ${e.message}`);
+        }
+      }
+
+      // ──────────────────────────────────────────────────────────────────────
+      // TIER 3: Native .m3u8 extraction via consumet (Best quality)
+      // ──────────────────────────────────────────────────────────────────────
+      if (title && servers.filter(s => s.isNative).length === 0) {
         try {
           const nativeServers = await Promise.race([
             this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),

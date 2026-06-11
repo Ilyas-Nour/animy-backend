@@ -5,6 +5,7 @@ import { HiAnimeService } from "./hianime.service";
 import { StreamingProxyService } from "./streaming.proxy.service";
 import { IdMappingService } from "./id-mapping.service";
 import { DatabaseModule } from "../database/database.module";
+import { WitanimeExtractorService } from "./witanime-extractor.service";
 
 import { ConsumetService } from "./consumet.service";
 import { EpisodeCacheService } from "./episode-cache.service";
@@ -12,7 +13,7 @@ import { EpisodeCacheService } from "./episode-cache.service";
 @Module({
   imports: [DatabaseModule],
   controllers: [StreamingController],
-  providers: [StreamingService, HiAnimeService, ConsumetService, StreamingProxyService, IdMappingService, EpisodeCacheService],
-  exports: [StreamingService, IdMappingService, StreamingProxyService, EpisodeCacheService],
+  providers: [StreamingService, HiAnimeService, ConsumetService, StreamingProxyService, IdMappingService, EpisodeCacheService, WitanimeExtractorService],
+  exports: [StreamingService, IdMappingService, StreamingProxyService, EpisodeCacheService, WitanimeExtractorService],
 })
 export class StreamingModule {}
