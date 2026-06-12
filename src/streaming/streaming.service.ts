@@ -326,7 +326,7 @@ export class StreamingService {
       // ──────────────────────────────────────────────────────────────────────
       // TIER 3: Native .m3u8 extraction via consumet (Best quality)
       // ──────────────────────────────────────────────────────────────────────
-      if (title && servers.filter(s => s.isNative).length === 0) {
+      if (title) {
         try {
           const nativeServers = await Promise.race([
             this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),
