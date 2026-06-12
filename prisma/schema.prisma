@@ -530,8 +530,9 @@ model AnimeMapping {
   hiAnimeId   String?       // HiAnime/Aniwatch ID, e.g. "one-piece-100"
   anikaiId    String?       // Anikai/MegaUp ID
   mangaDexId  String?       // MangaDex UUID
-  mangaPillId String?       // MangaPill slug
-  lastChecked DateTime @default(now())
+  mangaPillId  String?       // MangaPill slug
+  witanimeSlug String?       // Witanime anime slug (cached from search)
+  lastChecked  DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("anime_mappings")
