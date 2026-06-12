@@ -293,7 +293,7 @@ export class StreamingService {
             if (stream.isNative && stream.streamUrl) {
               // Native .m3u8 — proxy through our server to handle CORS
               const proxiedUrl = proxyBaseUrl
-                ? `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || 'https://witanime.cyou/')}`
+                ? `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || 'https://witanime.you/')}`
                 : stream.streamUrl;
 
               servers.unshift({
@@ -303,7 +303,7 @@ export class StreamingService {
                 provider: stream.provider,
                 isNative: true,
                 headers: {
-                  Referer: stream.referer || 'https://witanime.cyou/',
+                  Referer: stream.referer || 'https://witanime.you/',
                 },
               });
             } else if (stream.embedUrl) {

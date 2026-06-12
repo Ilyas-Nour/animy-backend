@@ -27,7 +27,7 @@ interface ExtractedStream {
 @Injectable()
 export class WitanimeExtractorService {
   private readonly logger = new Logger(WitanimeExtractorService.name);
-  private readonly BASE = 'https://witanime.cyou';
+  private readonly BASE = 'https://witanime.you';
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -182,13 +182,13 @@ export class WitanimeExtractorService {
       if (!match) return null;
       const videoId = match[1];
 
-      const apiUrl = `https://www.dailymotion.com/player/metadata/video/${videoId}?embedder=https%3A%2F%2Fwitanime.cyou%2F&locale=en&dmV1st=&dmTs=&is_iab_vast=1&app=sirius-v6801`;
+      const apiUrl = `https://www.dailymotion.com/player/metadata/video/${videoId}?embedder=https%3A%2F%2Fwitanime.you%2F&locale=en&dmV1st=&dmTs=&is_iab_vast=1&app=sirius-v6801`;
       const { data } = await axios.get(apiUrl, {
         timeout: 6000,
         headers: {
           ...this.HEADERS,
-          Referer: 'https://witanime.cyou/',
-          Origin: 'https://witanime.cyou',
+          Referer: 'https://witanime.you/',
+          Origin: 'https://witanime.you',
         },
       });
 
@@ -227,7 +227,7 @@ export class WitanimeExtractorService {
         timeout: 8000,
         headers: {
           ...this.HEADERS,
-          Referer: 'https://witanime.cyou/',
+          Referer: 'https://witanime.you/',
         },
         maxRedirects: 5,
       });
@@ -419,7 +419,7 @@ export class WitanimeExtractorService {
             provider: 'witanime-dailymotion',
             embedUrl: url,
             streamUrl,
-            referer: 'https://witanime.cyou/',
+            referer: 'https://witanime.you/',
             isNative: true,
             quality: name.includes('fhd') ? '1080p' : '720p',
           });
@@ -435,7 +435,7 @@ export class WitanimeExtractorService {
             provider: 'witanime-streamwish',
             embedUrl: url,
             streamUrl,
-            referer: 'https://witanime.cyou/',
+            referer: 'https://witanime.you/',
             isNative: true,
             quality: name.includes('fhd') ? '1080p' : '720p',
           });
