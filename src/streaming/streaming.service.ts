@@ -275,11 +275,14 @@ export class StreamingService {
 
       // ──────────────────────────────────────────────────────────────────────
       // TIER 0: Witanime native extraction (Arabic CDN, highest quality)
+      // Uses AniList ID → MAL-Sync → Witanime slug resolution with DB caching
       // ──────────────────────────────────────────────────────────────────────
-      if (title) {
+      {
         try {
           const witanimeStreams = await Promise.race([
-            this.witanimeExtractor.extractEpisodeStreams(title, epNum),
+            (!isNaN(anilistId) && anilistId > 0)
+              ? this.witanimeExtractor.extractEpisodeStreamsByAnilistId(anilistId, epNum, title)
+              : (title ? this.witanimeExtractor.extractEpisodeStreams(title, epNum) : Promise.resolve([])),
             new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 12000)),
           ]);
 

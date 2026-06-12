@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../database/prisma.service';
 import axios from 'axios';
 
 interface WitanimeServer {
@@ -27,6 +28,8 @@ interface ExtractedStream {
 export class WitanimeExtractorService {
   private readonly logger = new Logger(WitanimeExtractorService.name);
   private readonly BASE = 'https://witanime.cyou';
+
+  constructor(private readonly prisma: PrismaService) {}
 
   // Cached WP REST route paths (discovered once per process lifetime)
   private episodeListRoute: string | null = null;
@@ -250,10 +253,213 @@ export class WitanimeExtractorService {
     }
   }
 
-  // ─── Main Orchestrator ────────────────────────────────────────────────────────
+  // ─── Witanime Slug Resolution (AniList ID → slug) ─────────────────────────────
 
   /**
-   * Extracts streaming sources for a given anime + episode number.
+   * Resolves an AniList ID to a Witanime anime slug.
+   * 1. Checks DB cache (AnimeMapping.witanimeSlug)
+   * 2. Queries MAL-Sync for canonical title
+   * 3. Searches Witanime with canonical title (then fallback title)
+   * 4. Caches the discovered slug for future requests
+   */
+  private async resolveWitanimeSlug(
+    anilistId: number,
+    fallbackTitle?: string,
+  ): Promise<{ slug: string; name: string } | null> {
+    // 1. Check DB cache
+    try {
+      const cached = await this.prisma.animeMapping.findUnique({
+        where: { id: anilistId },
+      });
+      if (cached?.witanimeSlug) {
+        this.logger.debug(`Witanime CACHE HIT: AL ${anilistId} → slug "${cached.witanimeSlug}"`);
+        return { slug: cached.witanimeSlug, name: cached.witanimeSlug };
+      }
+    } catch (e) {
+      // DB miss or error, continue to live resolution
+    }
+
+    // 2. Query MAL-Sync for canonical title
+    let canonicalTitle: string | null = null;
+    try {
+      const malsyncRes = await axios.get(
+        `https://api.malsync.moe/mal/anime/anilist:${anilistId}`,
+        { timeout: 4000 },
+      );
+      canonicalTitle = malsyncRes.data?.title || null;
+      this.logger.debug(`MAL-Sync canonical title for AL ${anilistId}: "${canonicalTitle}"`);
+    } catch (e) {
+      this.logger.debug(`MAL-Sync lookup failed for AL ${anilistId}: ${e.message}`);
+    }
+
+    // 3. Build search queries: canonical title first, then fallback, then normalized variants
+    const queries: string[] = [];
+    if (canonicalTitle) queries.push(canonicalTitle);
+    if (fallbackTitle && fallbackTitle !== canonicalTitle) queries.push(fallbackTitle);
+    // Add normalized variants
+    for (const q of [...queries]) {
+      const normalized = this.normalizeTitle(q);
+      if (normalized && !queries.includes(normalized)) queries.push(normalized);
+    }
+
+    // 4. Search Witanime with each query
+    for (const query of queries) {
+      const results = await this.searchAnime(query);
+      if (results.length > 0) {
+        const match = results[0];
+        this.logger.log(`Witanime slug resolved: AL ${anilistId} → "${match.slug}" (via search: "${query}")`);
+
+        // 5. Cache the slug in DB
+        try {
+          await this.prisma.animeMapping.upsert({
+            where: { id: anilistId },
+            update: { witanimeSlug: match.slug, lastChecked: new Date() },
+            create: { id: anilistId, witanimeSlug: match.slug },
+          });
+        } catch (e) {
+          this.logger.warn(`Failed to cache Witanime slug for AL ${anilistId}: ${e.message}`);
+        }
+
+        return { slug: match.slug, name: match.name };
+      }
+    }
+
+    this.logger.warn(`Witanime slug resolution FAILED for AL ${anilistId} (tried: ${queries.join(', ')})`);
+    return null;
+  }
+
+  // ─── Main Orchestrator (AniList ID aware) ─────────────────────────────────────
+
+  /**
+   * Primary extraction method — resolves AniList ID to Witanime slug via
+   * MAL-Sync enrichment + DB caching, then extracts episode streams.
+   * Falls back to title-based search if ID resolution fails.
+   */
+  async extractEpisodeStreamsByAnilistId(
+    anilistId: number,
+    episodeNumber: number,
+    fallbackTitle?: string,
+  ): Promise<ExtractedStream[]> {
+    // Try ID-based resolution first
+    if (!isNaN(anilistId) && anilistId > 0) {
+      const resolved = await this.resolveWitanimeSlug(anilistId, fallbackTitle);
+      if (resolved) {
+        return this.extractEpisodeStreamsBySlug(resolved.slug, episodeNumber);
+      }
+    }
+
+    // Fallback to title-based search if ID resolution failed
+    if (fallbackTitle) {
+      this.logger.debug(`Witanime: falling back to title-based search for "${fallbackTitle}"`);
+      return this.extractEpisodeStreams(fallbackTitle, episodeNumber);
+    }
+
+    return [];
+  }
+
+  /**
+   * Extracts streaming sources given a known Witanime slug + episode number.
+   * Skips the search step entirely — goes straight to episode resolution.
+   */
+  private async extractEpisodeStreamsBySlug(
+    slug: string,
+    episodeNumber: number,
+  ): Promise<ExtractedStream[]> {
+    const results: ExtractedStream[] = [];
+
+    try {
+      this.logger.debug(`Witanime slug extraction: "${slug}" EP${episodeNumber}`);
+
+      // Get episode post IDs
+      const postIds = await this.getEpisodePostIds(slug);
+      if (!postIds.length) {
+        this.logger.warn(`Witanime: no episodes found for slug "${slug}"`);
+        return [];
+      }
+
+      // Find the correct episode via binary search
+      const postId = await this.findEpisodePostId(postIds, episodeNumber);
+      if (!postId) {
+        this.logger.warn(`Witanime: ep ${episodeNumber} not found in "${slug}"`);
+        return [];
+      }
+
+      // Get episode meta (server list)
+      const meta = await this.getEpisodeMeta(postId);
+      const servers: WitanimeServer[] = meta?.meta?.servers || [];
+
+      this.logger.debug(`Witanime: ${servers.length} servers for slug "${slug}" EP${episodeNumber}`);
+
+      // Process servers (reuse existing extraction logic)
+      return this.processServers(servers);
+    } catch (e) {
+      this.logger.error(`Witanime slug extraction failed: ${e.message}`);
+    }
+
+    return results;
+  }
+
+  /**
+   * Processes a list of Witanime servers, extracting native .m3u8 where possible.
+   */
+  private async processServers(servers: WitanimeServer[]): Promise<ExtractedStream[]> {
+    const results: ExtractedStream[] = [];
+
+    for (const server of servers) {
+      const name = server.name?.toLowerCase() || '';
+      const url = server.url;
+
+      if (!url) continue;
+
+      // --- Dailymotion: Use public metadata API to get .m3u8
+      if (name.includes('dailymotion') || url.includes('dailymotion.com')) {
+        const streamUrl = await this.extractDailymotionStream(url);
+        if (streamUrl) {
+          results.push({
+            provider: 'witanime-dailymotion',
+            embedUrl: url,
+            streamUrl,
+            referer: 'https://witanime.cyou/',
+            isNative: true,
+            quality: name.includes('fhd') ? '1080p' : '720p',
+          });
+          continue;
+        }
+      }
+
+      // --- StreamWish: Try to extract .m3u8 from embed HTML
+      if (name.includes('streamwish') || url.includes('hgcloud.to') || url.includes('streamwish')) {
+        const streamUrl = await this.extractStreamWishStream(url);
+        if (streamUrl) {
+          results.push({
+            provider: 'witanime-streamwish',
+            embedUrl: url,
+            streamUrl,
+            referer: 'https://witanime.cyou/',
+            isNative: true,
+            quality: name.includes('fhd') ? '1080p' : '720p',
+          });
+          continue;
+        }
+      }
+
+      // --- All others: Return as embeddable iframe
+      results.push({
+        provider: `witanime-${name.split(' ')[0]}`,
+        embedUrl: url,
+        isNative: false,
+        quality: name.includes('fhd') ? '1080p' : name.includes('multi') ? 'multi' : '720p',
+      });
+    }
+
+    return results;
+  }
+
+  // ─── Legacy Main Orchestrator (title-based) ───────────────────────────────────
+
+  /**
+   * Extracts streaming sources for a given anime title + episode number.
+   * This is the legacy method — prefer extractEpisodeStreamsByAnilistId().
    *
    * Returns an array of server objects compatible with the streaming service format.
    * Native servers (with .m3u8) are returned with isNative=true.
@@ -303,53 +509,9 @@ export class WitanimeExtractorService {
 
       this.logger.debug(`Witanime: ${servers.length} servers for EP${episodeNumber}`);
 
-      // 5. Process each server — try to extract native .m3u8, fall back to embed
-      for (const server of servers) {
-        const name = server.name?.toLowerCase() || '';
-        const url = server.url;
-
-        if (!url) continue;
-
-        // --- Dailymotion: Use public metadata API to get .m3u8
-        if (name.includes('dailymotion') || url.includes('dailymotion.com')) {
-          const streamUrl = await this.extractDailymotionStream(url);
-          if (streamUrl) {
-            results.push({
-              provider: 'witanime-dailymotion',
-              embedUrl: url,
-              streamUrl,
-              referer: 'https://witanime.cyou/',
-              isNative: true,
-              quality: name.includes('fhd') ? '1080p' : '720p',
-            });
-            continue;
-          }
-        }
-
-        // --- StreamWish: Try to extract .m3u8 from embed HTML
-        if (name.includes('streamwish') || url.includes('hgcloud.to') || url.includes('streamwish')) {
-          const streamUrl = await this.extractStreamWishStream(url);
-          if (streamUrl) {
-            results.push({
-              provider: 'witanime-streamwish',
-              embedUrl: url,
-              streamUrl,
-              referer: 'https://witanime.cyou/',
-              isNative: true,
-              quality: name.includes('fhd') ? '1080p' : '720p',
-            });
-            continue;
-          }
-        }
-
-        // --- All others: Return as embeddable iframe (user stays on site)
-        results.push({
-          provider: `witanime-${name.split(' ')[0]}`,
-          embedUrl: url,
-          isNative: false,
-          quality: name.includes('fhd') ? '1080p' : name.includes('multi') ? 'multi' : '720p',
-        });
-      }
+      // 5. Process each server using shared extraction logic
+      const extracted = await this.processServers(servers);
+      results.push(...extracted);
 
       this.logger.log(
         `Witanime extraction complete: ${results.filter(r => r.isNative).length} native, ${results.filter(r => !r.isNative).length} embed servers`,
