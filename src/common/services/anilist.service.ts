@@ -11,7 +11,7 @@ export class AnilistService {
     this.client = new GraphQLClient(this.endpoint);
   }
 
-  private async requestWithTimeout(query: any, variables: any = {}, timeoutMs = 15000) {
+  private async requestWithTimeout(query: any, variables: any = {}, timeoutMs = 8000) {
     return Promise.race([
       this.client.request(query, variables),
       new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), timeoutMs))
@@ -286,7 +286,7 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching trending anime:`, error.message);
@@ -335,7 +335,7 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching popular anime:`, error.message);
@@ -385,7 +385,7 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching top airing anime:`, error.message);
@@ -446,7 +446,7 @@ export class AnilistService {
         year,
         page,
         perPage,
-      }, 10000);
+      }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching seasonal anime:`, error.message);
@@ -790,7 +790,7 @@ export class AnilistService {
         year,
         page,
         perPage,
-      }, 10000);
+      }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching upcoming anime:`, error.message);
@@ -845,7 +845,7 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching trending manga:`, error.message);
@@ -900,7 +900,7 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 10000);
+      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching popular manga:`, error.message);

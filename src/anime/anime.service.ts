@@ -9,6 +9,7 @@ import { SearchAnimeDto } from "./dto/search-anime.dto";
 @Injectable()
 export class AnimeService {
   private readonly logger = new Logger(AnimeService.name);
+  private readonly activeRequests = new Map<number, Promise<any>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -94,29 +95,49 @@ export class AnimeService {
 
       if (
         cachedAnime &&
-        cachedAnime.lastUpdated > sevenDaysAgo &&
         cachedAnime.imageUrl &&
         cachedAnime.synopsis &&
         cachedAnime.idMal && 
         cachedAnime.characters && 
         (cachedAnime.characters as any[]).length > 0
       ) {
-        this.logger.debug(`DB HIT (DEEP): Anime ${id}`);
-        const resp = this.mapDbToResponse(cachedAnime);
-        await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
-        return resp;
+        if (cachedAnime.lastUpdated > sevenDaysAgo) {
+          this.logger.debug(`DB HIT (FRESH): Anime ${id}`);
+          const resp = this.mapDbToResponse(cachedAnime);
+          await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
+          return resp;
+        } else {
+          this.logger.debug(`DB HIT (STALE): Anime ${id} -> Returning stale and triggering SWR update`);
+          this.updateAnimeInBackground(id).catch(err => this.logger.error(`Background update failed for ${id}: ${err.message}`));
+          const resp = this.mapDbToResponse(cachedAnime);
+          await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
+          return resp;
+        }
       }
 
-      this.logger.debug(`DB STALE/MISS: Anime ${id} -> Fetching AniList`);
-      const data = await this.anilistService.getAnimeById(id);
+      this.logger.debug(`DB MISS/INCOMPLETE: Anime ${id} -> Fetching AniList`);
 
-      if (data) {
-        await this.saveAnimeToDb(data);
+      if (this.activeRequests.has(id)) {
+        try { await this.activeRequests.get(id); } catch (e) {}
+        const freshlyCached = await this.cacheManager.get(cacheKey);
+        if (freshlyCached) return freshlyCached;
       }
 
-      const resp = this.mapAnilistToResponse(data);
-      await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
-      return resp;
+      const fetchPromise = (async () => {
+        try {
+          const data = await this.anilistService.getAnimeById(id);
+          if (data) {
+            await this.saveAnimeToDb(data);
+          }
+          const resp = this.mapAnilistToResponse(data);
+          await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
+          return resp;
+        } finally {
+          this.activeRequests.delete(id);
+        }
+      })();
+      this.activeRequests.set(id, fetchPromise);
+      return await fetchPromise;
     } catch (error) {
       this.logger.error(`Error fetching anime ${id}`, error.message);
       
@@ -124,11 +145,16 @@ export class AnimeService {
       const cached = await this.prisma.anime.findUnique({ where: { id } });
       if (cached) return this.mapDbToResponse(cached);
 
-      // Fallback to Jikan if we have MAL ID or if we can search
+      // Fallback to Jikan if we have MAL ID
       this.logger.warn(`AniList Failed for ${id}, trying Jikan fallback`);
-      const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
-      if (mapping?.idMal) {
-        const jikanData = await this.jikanService.getAnimeById(mapping.idMal);
+      let malId = cached?.idMal;
+      if (!malId) {
+        const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+        malId = mapping?.idMal;
+      }
+
+      if (malId) {
+        const jikanData = await this.jikanService.getAnimeById(malId);
         if (jikanData) return this.mapJikanToResponse(jikanData);
       }
 
@@ -282,6 +308,24 @@ export class AnimeService {
   }
 
   // --- Helper Methods ---
+
+  private async updateAnimeInBackground(id: number) {
+    if (this.activeRequests.has(id)) return;
+    const fetchPromise = (async () => {
+      try {
+        const data = await this.anilistService.getAnimeById(id);
+        if (data) {
+          await this.saveAnimeToDb(data);
+          const resp = this.mapAnilistToResponse(data);
+          await this.cacheManager.set(`anime:${id}`, resp, 3600000);
+        }
+      } finally {
+        this.activeRequests.delete(id);
+      }
+    })();
+    this.activeRequests.set(id, fetchPromise);
+    await fetchPromise;
+  }
 
   private async saveAnimeToDb(data: any) {
     try {
