@@ -70,14 +70,9 @@ export class StreamingController {
     }
 
     // Build absolute proxy base URL dynamically from the request host
-    // This ensures the frontend gets a URL that points back to this backend instance
-    const protocol =
-      req.secure || req.headers["x-forwarded-proto"] === "https"
-        ? "https"
-        : "http";
-    const host = req.headers.host;
-    const proxyBaseUrl =
-      customProxyUrl || `${protocol}://${host}/api/v1/streaming/proxy`;
+    // Only use backend proxy if explicitly requested, otherwise return raw URLs
+    // so the frontend Cloudflare Edge can handle the proxying bandwidth.
+    const proxyBaseUrl = customProxyUrl || "";
 
     return this.streamingService.getEpisodeLinks(
       id,
