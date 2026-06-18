@@ -29,8 +29,8 @@ export class HomeService {
         
         if (isStale) {
           this.logger.debug("Home data stale, triggering background refresh");
-          // Non-blocking refresh
-          this.refreshHomeData(cacheKey).catch(err => 
+          // Non-blocking refresh, pass the old data so we can fallback to it if the fetch fails
+          this.refreshHomeData(cacheKey, cached.data).catch(err => 
             this.logger.error(`Background refresh failed: ${err.message}`)
           );
         }
@@ -46,8 +46,8 @@ export class HomeService {
     }
   }
 
-  async refreshHomeData(key: string) {
-    const data = await this.fetchFreshHomeData();
+  async refreshHomeData(key: string, oldData?: any) {
+    const data = await this.fetchFreshHomeData(oldData);
     
     try {
       await this.prisma.discoveryCache.upsert({
@@ -63,7 +63,7 @@ export class HomeService {
     return data;
   }
 
-  private async fetchFreshHomeData() {
+  private async fetchFreshHomeData(oldData?: any) {
     this.logger.debug("Fetching fresh home data from providers...");
     
     // Parallel fetch with timeouts handled by individual services
@@ -75,13 +75,28 @@ export class HomeService {
       this.mangaService.searchManga({ order_by: "popularity", sort: "desc", limit: 15 }),
     ]);
 
-    const extractData = (res: any) => (res.status === "fulfilled" ? res.value : { data: [] });
+    const extractData = (res: any, fallbackKey: string) => {
+      // If the fetch succeeded and returned data, use it
+      if (res.status === "fulfilled" && res.value?.data && Array.isArray(res.value.data) && res.value.data.length > 0) {
+        return res.value;
+      }
+      
+      // If fetch failed or returned empty array, try to fallback to old data
+      if (oldData && oldData[fallbackKey] && Array.isArray(oldData[fallbackKey]) && oldData[fallbackKey].length > 0) {
+        this.logger.warn(`Provider failed or returned empty for ${fallbackKey}, falling back to stale cache.`);
+        return { data: oldData[fallbackKey] };
+      }
+      
+      // Complete failure and no fallback
+      this.logger.error(`Complete failure for ${fallbackKey} and no fallback data available.`);
+      return { data: [] };
+    };
 
-    const trendingData = extractData(trending);
-    const popularData = extractData(popular);
-    const upcomingData = extractData(upcoming);
-    const topMangaData = extractData(topManga);
-    const publishingMangaData = extractData(publishingManga);
+    const trendingData = extractData(trending, "trendingAnime");
+    const popularData = extractData(popular, "popularAnime");
+    const upcomingData = extractData(upcoming, "upcomingAnime");
+    const topMangaData = extractData(topManga, "topManga");
+    const publishingMangaData = extractData(publishingManga, "publishingManga");
 
     return {
       trendingAnime: trendingData.data || [],

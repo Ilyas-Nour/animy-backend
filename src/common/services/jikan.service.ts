@@ -51,6 +51,17 @@ export class JikanService {
     }
   }
 
+  async searchManga(query: string, page = 1, limit = 25) {
+    try {
+      const params: any = { q: query, page, limit };
+      const res = await axios.get(`${this.baseUrl}/manga`, { params, timeout: 10000 });
+      return res.data?.data || [];
+    } catch (e) {
+      this.logger.error(`Jikan Search Manga failed for "${query}"`, e.message);
+      return [];
+    }
+  }
+
   async getAnimeById(id: number) {
     try {
       const res = await axios.get(`${this.baseUrl}/anime/${id}/full`, { timeout: 10000 });

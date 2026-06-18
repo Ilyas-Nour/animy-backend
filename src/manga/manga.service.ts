@@ -37,30 +37,52 @@ export class MangaService {
     else if (orderBy === "start_date")
       sortStr = sort === "desc" ? "START_DATE_DESC" : "START_DATE";
 
-    const data = await Promise.race([
-      this.anilistService.searchManga(
-        query || "",
-        Number(page),
-        Number(limit),
-        sortStr,
-      ),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Manga Search Timeout')), 25000))
-    ]);
+    try {
+      const data = await Promise.race([
+        this.anilistService.searchManga(
+          query || "",
+          Number(page),
+          Number(limit),
+          sortStr,
+        ),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Manga Search Timeout')), 25000))
+      ]);
 
-    return {
-      pagination: {
-        last_visible_page: data.pageInfo.lastPage,
-        has_next_page: data.pageInfo.hasNextPage,
-        current_page: data.pageInfo.currentPage,
-        items: {
-          count: data.media.length,
-          total: data.pageInfo.total,
-          per_page: data.pageInfo.perPage,
+      return {
+        pagination: {
+          last_visible_page: data.pageInfo.lastPage,
+          has_next_page: data.pageInfo.hasNextPage,
+          current_page: data.pageInfo.currentPage,
+          items: {
+            count: data.media.length,
+            total: data.pageInfo.total,
+            per_page: data.pageInfo.perPage,
+          },
         },
-      },
-      data: data.media.map(this.mapAnilistToResponse).filter(m => m !== null),
-    };
+        data: data.media.map(this.mapAnilistToResponse).filter(m => m !== null),
+      };
+    } catch (e) {
+      this.logger.warn(`searchManga failed (AniList rate-limited or down): ${e.message}. Returning empty gracefully.`);
+      // Try Jikan fallback for search queries
+      if (query) {
+        try {
+          const jikanResults = await this.jikanService.searchManga(query, Number(page), Number(limit));
+          return {
+            pagination: { last_visible_page: 1, has_next_page: false, current_page: Number(page), items: { count: jikanResults.length, total: jikanResults.length, per_page: Number(limit) } },
+            data: jikanResults.map(m => this.mapJikanToResponse(m)).filter(m => m !== null),
+          };
+        } catch (jikanErr) {
+          this.logger.error(`Jikan searchManga fallback also failed: ${jikanErr.message}`);
+        }
+      }
+      // Return empty — home service's extractData fallback will use stale cache
+      return {
+        pagination: { last_visible_page: 1, has_next_page: false, current_page: Number(page), items: { count: 0, total: 0, per_page: Number(limit) } },
+        data: [],
+      };
+    }
   }
+
 
   async getMangaById(id: number) {
     try {
