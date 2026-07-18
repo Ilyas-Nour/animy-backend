@@ -3,8 +3,6 @@ import { PrismaService } from "../database/prisma.service";
 import { AnilistService } from "../common/services/anilist.service";
 import { IdMappingService } from "../streaming/id-mapping.service";
 import { StreamingProxyService } from "../streaming/streaming.proxy.service";
-import { InjectQueue } from "@nestjs/bullmq";
-import { Queue } from "bullmq";
 import { SearchMangaDto } from "./dto/search-manga.dto";
 import { JikanService } from "../common/services/jikan.service";
 import { Response } from "express";
@@ -20,7 +18,6 @@ export class MangaService {
     private readonly jikanService: JikanService,
     private readonly idMappingService: IdMappingService,
     private readonly streamingProxyService: StreamingProxyService,
-    @InjectQueue("scrape-queue") private readonly scrapeQueue: Queue,
   ) {}
 
   async searchManga(searchDto: SearchMangaDto) {
@@ -208,14 +205,9 @@ export class MangaService {
         } else {
           this.logger.debug(`CHAPTER CACHE STALE: Manga ${id} -> Returning stale cache instantly, dispatching job to BullMQ`);
           
-          this.scrapeQueue.add(
-            "update-manga-chapters",
-            { id, cachedManga },
-            {
-              removeOnComplete: true,
-              removeOnFail: 100, // keep some history of failures
-            }
-          ).catch(e => this.logger.error(`Failed to dispatch BullMQ job: ${e.message}`));
+          this.fetchAndUpdateChaptersBackground(id, cachedManga).catch(e => 
+            this.logger.error(`Background chapter update failed: ${e.message}`)
+          );
           
           return { chapters: cachedManga.chaptersList };
         }

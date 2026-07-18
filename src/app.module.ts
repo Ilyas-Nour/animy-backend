@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
-import { BullModule } from "@nestjs/bullmq";
+
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import configuration from "./config/configuration";
 import { DatabaseModule } from "./database/database.module";
@@ -24,7 +24,6 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { StreamingModule } from "./streaming/streaming.module";
 import { PeopleModule } from "./people/people.module";
 import { HomeModule } from "./home/home.module";
-import { ScrapingModule } from "./scraping/scraping.module";
 // import { ConsumetModule } from './consumet/consumet.module';
 import * as redisStore from "cache-manager-redis-store";
 
@@ -66,42 +65,6 @@ import * as redisStore from "cache-manager-redis-store";
       inject: [ConfigService],
     }),
 
-    // Background Job Queue (BullMQ)
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
-        const redisUrl = configService.get("REDIS_URL");
-        if (redisUrl) {
-          try {
-            const parsed = new URL(redisUrl);
-            const connectionOpts: any = {
-              host: parsed.hostname,
-              port: Number(parsed.port) || 6379,
-            };
-            if (parsed.username) {
-              connectionOpts.username = parsed.username;
-            }
-            if (parsed.password) {
-              connectionOpts.password = decodeURIComponent(parsed.password);
-            }
-            if (parsed.protocol === "rediss:") {
-              connectionOpts.tls = {};
-            }
-            return { connection: connectionOpts };
-          } catch (e) {
-            // Fallback to basic connection if URL parsing fails
-          }
-        }
-        return {
-          connection: {
-            host: configService.get("REDIS_HOST") || "localhost",
-            port: configService.get("REDIS_PORT") || 6379,
-          },
-        };
-      },
-      inject: [ConfigService],
-    }),
-
     // Database module
     DatabaseModule,
 
@@ -126,7 +89,6 @@ import * as redisStore from "cache-manager-redis-store";
     StreamingModule,
     PeopleModule,
     HomeModule,
-    ScrapingModule,
     // ConsumetModule,
   ],
   controllers: [],
