@@ -104,11 +104,8 @@ export class MangaService {
 
       // 2. Fetch from AniList
       const data = await this.anilistService.getMangaById(id);
-
-      if (data) {
-        // 3. Upsert to Database
-        await this.saveMangaToDb(data);
-      }
+      if (!data) throw new HttpException("Not found on AniList", HttpStatus.NOT_FOUND);
+      await this.saveMangaToDb(data);
 
       return this.mapAnilistToResponse(data);
     } catch (error) {
@@ -150,7 +147,8 @@ export class MangaService {
         this.logger.error(`Jikan fallback direct fetch failed for manga ${id}: ${jikanErr.message}`);
       }
 
-      throw error;
+      if (error instanceof HttpException) throw error;
+      throw new HttpException("Manga not found", HttpStatus.NOT_FOUND);
     }
   }
 

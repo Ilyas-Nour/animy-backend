@@ -126,9 +126,8 @@ export class AnimeService {
       const fetchPromise = (async () => {
         try {
           const data = await this.anilistService.getAnimeById(id);
-          if (data) {
-            await this.saveAnimeToDb(data);
-          }
+          if (!data) throw new HttpException("Not found on AniList", HttpStatus.NOT_FOUND);
+          await this.saveAnimeToDb(data);
           const resp = this.mapAnilistToResponse(data);
           await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
           return resp;
@@ -166,11 +165,12 @@ export class AnimeService {
            this.jikanService.getAnimeRecommendations(id).catch(() => [])
         ]);
         if (directJikanData) return this.mapJikanToResponse(directJikanData, characters, recommendations);
-      } catch (jikanErr) {
+      } catch (jikanErr: any) {
         this.logger.error(`Jikan fallback direct fetch failed for ${id}: ${jikanErr.message}`);
       }
 
-      throw error;
+      if (error instanceof HttpException) throw error;
+      throw new HttpException("Anime not found", HttpStatus.NOT_FOUND);
     }
   }
 
