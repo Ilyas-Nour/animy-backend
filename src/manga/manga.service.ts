@@ -1,4 +1,6 @@
-import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
+import { Injectable, Logger, HttpException, HttpStatus, Inject } from "@nestjs/common";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Cache } from "cache-manager";
 import { PrismaService } from "../database/prisma.service";
 import { AnilistService } from "../common/services/anilist.service";
 import { IdMappingService } from "../streaming/id-mapping.service";
@@ -18,6 +20,7 @@ export class MangaService {
     private readonly jikanService: JikanService,
     private readonly idMappingService: IdMappingService,
     private readonly streamingProxyService: StreamingProxyService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async searchManga(searchDto: SearchMangaDto) {
@@ -533,6 +536,26 @@ export class MangaService {
   }
 
   async getChapterPages(chapterId: string, proxyBaseUrl?: string) {
+    const rawId = decodeURIComponent(chapterId);
+    const cacheKey = `manga_pages:${rawId}`;
+    
+    const cachedPages = await this.cacheManager.get(cacheKey);
+    if (cachedPages) {
+      this.logger.debug(`[Cache Hit] Serving pages for chapter: ${rawId}`);
+      return cachedPages;
+    }
+
+    const pages = await this.fetchChapterPages(chapterId, proxyBaseUrl);
+    
+    if (pages && pages.pages && pages.pages.length > 0) {
+      // Cache the pages for 7 days
+      await this.cacheManager.set(cacheKey, pages, 7 * 24 * 60 * 60 * 1000);
+    }
+    
+    return pages;
+  }
+
+  private async fetchChapterPages(chapterId: string, proxyBaseUrl?: string) {
     try {
       // URL-decode in case the frontend passed an encoded chapter ID
       const rawId = decodeURIComponent(chapterId);
