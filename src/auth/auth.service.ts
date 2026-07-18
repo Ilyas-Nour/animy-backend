@@ -218,6 +218,70 @@ export class AuthService {
     return { message: "Verification email sent" };
   }
 
+  // Google OAuth Login
+  async googleLogin(reqUser: any) {
+    if (!reqUser) {
+      throw new BadRequestException("No user from Google");
+    }
+
+    // Find existing user by providerId or email
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { providerId: reqUser.providerId },
+          { email: reqUser.email }
+        ]
+      }
+    });
+
+    if (!user) {
+      // Create new Google user
+      let baseUsername = (reqUser.firstName + reqUser.lastName).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!baseUsername) {
+        baseUsername = reqUser.email.split('@')[0];
+      }
+      let finalUsername = baseUsername;
+      let counter = 1;
+      
+      // Ensure unique username
+      while (await this.prisma.user.findUnique({ where: { username: finalUsername } })) {
+        finalUsername = `${baseUsername}${counter}`;
+        counter++;
+      }
+
+      user = await this.prisma.user.create({
+        data: {
+          email: reqUser.email,
+          firstName: reqUser.firstName,
+          lastName: reqUser.lastName,
+          username: finalUsername,
+          avatar: reqUser.picture,
+          provider: AuthProvider.GOOGLE,
+          providerId: reqUser.providerId,
+          emailVerified: true, // Google verifies emails automatically
+        }
+      });
+    } else {
+      // User exists. Update their provider logic if they previously used email.
+      if (user.provider !== AuthProvider.GOOGLE) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            provider: AuthProvider.GOOGLE,
+            providerId: reqUser.providerId,
+            emailVerified: true,
+          }
+        });
+      }
+    }
+
+    const payload = { sub: user.id, email: user.email, role: user.role };
+    return {
+      token: this.jwtService.sign(payload),
+      user,
+    };
+  }
+
   async validateUser(userId: string) {
     return this.usersService.findById(userId);
   }

@@ -64,4 +64,25 @@ export class AuthController {
 
     return fullProfile;
   }
+
+  @Public()
+  @Get("google")
+  @UseGuards(AuthGuard("google"))
+  async googleAuth(@Req() req) {
+    // Initiates the Google OAuth flow
+  }
+
+  @Public()
+  @Get("google/callback")
+  @UseGuards(AuthGuard("google"))
+  async googleAuthRedirect(@Req() req, @Res() res: Response) {
+    const { token, user } = await this.authService.googleLogin(req.user);
+    
+    // Determine frontend URL
+    const isDev = process.env.NODE_ENV !== "production";
+    const frontendUrl = isDev ? "http://localhost:3000" : "https://animy.xyz";
+    
+    // Redirect to frontend with token
+    return res.redirect(`${frontendUrl}/?token=${token}`);
+  }
 }
