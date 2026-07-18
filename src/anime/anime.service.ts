@@ -419,7 +419,7 @@ export class AnimeService {
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
       title_japanese: data.title.native,
-      synopsis: data.description ? data.description : "No synopsis available.",
+      synopsis: data.description ? data.description : 'No synopsis available.',
       type: data.format,
       episodes: data.episodes,
       status: data.status,
@@ -432,6 +432,12 @@ export class AnimeService {
       source: data.source,
       bannerImage: data.bannerImage,
       color: data.coverImage?.color,
+      airing: data.status === 'RELEASING',
+      aired: {
+        from: data.startDate?.year
+          ? `${data.startDate.year}-${String(data.startDate.month || 1).padStart(2, '0')}-${String(data.startDate.day || 1).padStart(2, '0')}`
+          : null,
+      },
       images: {
         jpg: {
           image_url: data.coverImage.large,
@@ -445,15 +451,15 @@ export class AnimeService {
         },
       },
       trailer: {
-        url: data.trailer?.site === "youtube"
+        url: data.trailer?.site === 'youtube'
           ? `https://www.youtube.com/watch?v=${data.trailer.id}`
-          : data.trailer?.site === "dailymotion"
+          : data.trailer?.site === 'dailymotion'
             ? `https://www.dailymotion.com/video/${data.trailer.id}`
             : data.trailer?.id ? `https://www.youtube.com/watch?v=${data.trailer.id}` : null,
-        youtube_id: data.trailer?.site === "youtube" ? data.trailer.id : null,
-        embed_url: data.trailer?.site === "youtube"
+        youtube_id: data.trailer?.site === 'youtube' ? data.trailer.id : null,
+        embed_url: data.trailer?.site === 'youtube'
           ? `https://www.youtube.com/embed/${data.trailer.id}`
-          : data.trailer?.site === "dailymotion"
+          : data.trailer?.site === 'dailymotion'
             ? `https://www.dailymotion.com/embed/video/${data.trailer.id}`
             : data.trailer?.id ? `https://www.youtube.com/embed/${data.trailer.id}` : null,
         thumbnail: data.trailer?.thumbnail,
@@ -493,6 +499,19 @@ export class AnimeService {
   }
 
   private mapDbToResponse(dbAnime: any) {
+    // Normalize the aired object from DB storage
+    const airedRaw = dbAnime.aired;
+    let aired: { from: string | null } = { from: null };
+    if (airedRaw && typeof airedRaw === 'object') {
+      // DB stores { from: "YYYY-M-D" } or { from: "YYYY" } or { from: null }
+      aired = { from: airedRaw.from || null };
+    } else if (typeof airedRaw === 'string' && airedRaw) {
+      aired = { from: airedRaw };
+    } else if (dbAnime.year) {
+      // Fallback: build from year field if aired is missing
+      aired = { from: `${dbAnime.year}-01-01` };
+    }
+
     return {
       id: dbAnime.id,
       mal_id: dbAnime.id, // Consistent with mapAnilistToResponse (AniList ID)
@@ -513,7 +532,7 @@ export class AnimeService {
       duration: dbAnime.duration,
       source: dbAnime.source,
       airing: dbAnime.airing,
-      aired: dbAnime.aired,
+      aired,
       scored_by: dbAnime.scoredBy,
       members: dbAnime.members,
       favorites: dbAnime.favorites,
@@ -521,29 +540,29 @@ export class AnimeService {
       bannerImage: dbAnime.bannerImage,
       images: {
         jpg: {
-          image_url: dbAnime.imageUrl || "",
-          large_image_url: dbAnime.imageUrl || "",
-          small_image_url: dbAnime.imageUrl || "",
+          image_url: dbAnime.imageUrl || '',
+          large_image_url: dbAnime.imageUrl || '',
+          small_image_url: dbAnime.imageUrl || '',
         },
         webp: {
-          image_url: dbAnime.imageUrl || "",
-          large_image_url: dbAnime.imageUrl || "",
-          small_image_url: dbAnime.imageUrl || "",
+          image_url: dbAnime.imageUrl || '',
+          large_image_url: dbAnime.imageUrl || '',
+          small_image_url: dbAnime.imageUrl || '',
         },
       },
       trailer: {
         url: dbAnime.trailerUrl,
-        youtube_id: dbAnime.trailerUrl?.includes("youtube.com/watch?v=")
-          ? dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]
-          : dbAnime.trailerUrl?.includes("youtu.be/")
-            ? dbAnime.trailerUrl.split("/").pop()
+        youtube_id: dbAnime.trailerUrl?.includes('youtube.com/watch?v=')
+          ? dbAnime.trailerUrl.split('v=')[1]?.split('&')[0]
+          : dbAnime.trailerUrl?.includes('youtu.be/')
+            ? dbAnime.trailerUrl.split('/').pop()
             : null,
-        embed_url: dbAnime.trailerUrl?.includes("youtube.com/watch?v=")
-          ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]}`
-          : dbAnime.trailerUrl?.includes("youtu.be/")
-            ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split("/").pop()}`
-            : dbAnime.trailerUrl?.includes("dailymotion.com/video/")
-              ? `https://www.dailymotion.com/embed/video/${dbAnime.trailerUrl.split("/").pop()}`
+        embed_url: dbAnime.trailerUrl?.includes('youtube.com/watch?v=')
+          ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split('v=')[1]?.split('&')[0]}`
+          : dbAnime.trailerUrl?.includes('youtu.be/')
+            ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split('/').pop()}`
+            : dbAnime.trailerUrl?.includes('dailymotion.com/video/')
+              ? `https://www.dailymotion.com/embed/video/${dbAnime.trailerUrl.split('/').pop()}`
               : null,
       },
       year: dbAnime.year,

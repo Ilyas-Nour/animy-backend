@@ -9,11 +9,12 @@ import { WitanimeExtractorService } from "./witanime-extractor.service";
 
 import { ConsumetService } from "./consumet.service";
 import { EpisodeCacheService } from "./episode-cache.service";
+import { StorageService } from "./storage.service";
 
 @Module({
   imports: [DatabaseModule],
   controllers: [StreamingController],
-  providers: [StreamingService, HiAnimeService, ConsumetService, StreamingProxyService, IdMappingService, EpisodeCacheService, WitanimeExtractorService],
-  exports: [StreamingService, IdMappingService, StreamingProxyService, EpisodeCacheService, WitanimeExtractorService],
+  providers: [StreamingService, HiAnimeService, ConsumetService, StreamingProxyService, IdMappingService, EpisodeCacheService, WitanimeExtractorService, StorageService],
+  exports: [StreamingService, IdMappingService, StreamingProxyService, EpisodeCacheService, WitanimeExtractorService, StorageService],
 })
 export class StreamingModule {}

@@ -1,10 +1,14 @@
 import { Injectable, Logger, HttpStatus, HttpException } from "@nestjs/common";
 import axios from "axios";
 import { Response } from "express";
+import { StorageService } from "./storage.service";
+import * as crypto from "crypto";
 
 @Injectable()
 export class StreamingProxyService {
   private readonly logger = new Logger(StreamingProxyService.name);
+
+  constructor(private readonly storageService: StorageService) {}
 
   /**
    * Proxies a request to a remote video source and pipes result to response
@@ -23,6 +27,23 @@ export class StreamingProxyService {
     try {
       const urlObj = new URL(url);
       const origin = `${urlObj.protocol}//${urlObj.host}`;
+
+      // Check cache for images (Manga Pages)
+      const isImage = url.match(/\.(jpg|jpeg|png|webp|gif|avif)$/i) || url.includes('/data/') || url.includes('mangadex') || url.includes('anify.tv') || referer?.includes('mangadex') || referer?.includes('mangapill');
+      let cacheKey: string | null = null;
+
+      if (isImage && this.storageService.isReady()) {
+        cacheKey = `manga-pages/${crypto.createHash('md5').update(url).digest('hex')}`;
+        const cachedExists = await this.storageService.fileExists(cacheKey);
+        
+        if (cachedExists) {
+          const cachedUrl = await this.storageService.getFileUrl(cacheKey);
+          if (cachedUrl) {
+            this.logger.debug(`S3 Cache HIT for image: ${url}`);
+            return res.redirect(HttpStatus.FOUND, cachedUrl);
+          }
+        }
+      }
 
       // Default to hianime referer if none provided
       const finalReferer = referer || "https://hianime.to/";
@@ -105,6 +126,32 @@ export class StreamingProxyService {
 
           response.data.on("error", (err: any) => {
             this.logger.error(`Manifest stream error for ${url}: ${err.message}`);
+            if (!res.headersSent) res.status(HttpStatus.BAD_GATEWAY).end();
+            reject(err);
+          });
+        });
+      }
+
+      if (isImage && cacheKey && this.storageService.isReady() && response.status === 200) {
+        this.logger.debug(`S3 Cache MISS for image: ${url} -> Buffering and Uploading`);
+        const chunks: Buffer[] = [];
+        
+        return new Promise((resolve, reject) => {
+          response.data.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.data.on("end", async () => {
+            const buffer = Buffer.concat(chunks);
+            // Upload to S3 asynchronously
+            this.storageService.uploadFile(cacheKey, buffer, contentType).catch(e => 
+              this.logger.error(`Failed to cache image ${cacheKey}: ${e.message}`)
+            );
+            
+            // Send to client
+            res.setHeader("Content-Length", String(buffer.length));
+            res.end(buffer);
+            resolve(true);
+          });
+          response.data.on("error", (err: any) => {
+            this.logger.error(`Image download error for ${url}: ${err.message}`);
             if (!res.headersSent) res.status(HttpStatus.BAD_GATEWAY).end();
             reject(err);
           });
