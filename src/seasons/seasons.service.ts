@@ -27,7 +27,7 @@ export class SeasonsService {
       const data = await this.anilistService.getThisSeason(season, year);
 
       return {
-        data: data.map(this.mapAnilistToResponse),
+        data: (data?.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter((a: any) => a !== null),
         season,
         year,
       };
@@ -46,7 +46,7 @@ export class SeasonsService {
     try {
       const data = await this.anilistService.getNextSeason();
       return {
-        data: data.map(this.mapAnilistToResponse),
+        data: (data?.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter((a: any) => a !== null),
       };
     } catch (e) {
       this.logger.warn(`AniList Upcoming Season failed: ${e.message}`);
@@ -77,7 +77,7 @@ export class SeasonsService {
       );
       return {
         pagination: { last_visible_page: 100, has_next_page: true },
-        data: data.map(this.mapAnilistToResponse),
+        data: (data?.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter((a: any) => a !== null),
       };
     } catch (e) {
       this.logger.warn(`AniList Season ${year} ${season} failed: ${e.message}`);
