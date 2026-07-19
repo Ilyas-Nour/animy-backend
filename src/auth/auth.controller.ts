@@ -79,7 +79,7 @@ export class AuthController {
     const { token, user } = await this.authService.googleLogin(req.user);
     
     // Determine frontend URL dynamically and trim any accidental whitespace/newlines
-    const frontendUrl = (process.env.FRONTEND_URL || "https://animy.xyz").trim();
+    const frontendUrl = process.env.FRONTEND_URL?.trim() || "https://animy.xyz";
     
     // Redirect to frontend with token
     return res.redirect(`${frontendUrl}/?token=${token}`);
