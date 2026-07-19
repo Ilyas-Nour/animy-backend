@@ -78,8 +78,8 @@ export class AuthController {
   async googleAuthRedirect(@Req() req, @Res() res: Response) {
     const { token, user } = await this.authService.googleLogin(req.user);
     
-    // Determine frontend URL dynamically
-    const frontendUrl = process.env.FRONTEND_URL || "https://animy.xyz";
+    // Determine frontend URL dynamically and trim any accidental whitespace/newlines
+    const frontendUrl = (process.env.FRONTEND_URL || "https://animy.xyz").trim();
     
     // Redirect to frontend with token
     return res.redirect(`${frontendUrl}/?token=${token}`);
