@@ -312,35 +312,75 @@ export class MangaService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // PROVIDER: Consumet AniList Meta — most reliable from server context
-  // Uses the AniList ID directly, returns MangaDex chapters
+  // PROVIDER: MangaDex via AniList ID → MAL-Sync → MangaDex UUID
+  // Replaces the broken Consumet meta endpoint (returns 0 chapters).
+  // Uses curl-style UA which MangaDex whitelists from server environments.
   // ─────────────────────────────────────────────────────────────────────────
   private async fetchConsumetByAnilistId(anilistId: number): Promise<any[]> {
-    const baseUrls = [
-      'https://consumet-api-clone.vercel.app',
-      'https://api.consumet.org',
-    ];
+    const curlHeaders = {
+      'User-Agent': 'curl/7.88.1',
+      'Accept': 'application/json',
+    };
 
-    for (const baseUrl of baseUrls) {
+    try {
+      this.logger.debug(`[MangaDex Primary] Resolving AL=${anilistId} via MAL-Sync`);
+
+      // Step 1: Get MangaDex UUID from MAL-Sync using AniList ID
+      let mangaDexId: string | null = null;
       try {
-        this.logger.debug(`[Consumet Meta] Trying ${baseUrl} for AL=${anilistId}`);
-        const { data } = await axios.get(
-          `${baseUrl}/meta/anilist-manga/${anilistId}?provider=mangadex`,
-          { timeout: 12000 }
+        const syncRes = await axios.get(
+          `https://api.malsync.moe/mal/manga/anilist:${anilistId}`,
+          { timeout: 6000, headers: curlHeaders }
         );
-
-        if (data?.chapters?.length > 0) {
-          this.logger.debug(`[Consumet Meta] ${baseUrl} returned ${data.chapters.length} chapters`);
-          return data.chapters.map((c: any) => ({
-            id: `anilist___${Buffer.from(String(c.id)).toString('base64url')}___${Buffer.from(baseUrl).toString('base64url')}`,
-            title: c.title || `Chapter ${c.chapterNumber || c.number || ''}`,
-            chapterNumber: String(c.chapterNumber || c.number || '0'),
-            volumeNumber: String(c.volumeNumber || c.volume || '0'),
-          }));
+        const mdSite = syncRes?.data?.Sites?.MangaDex;
+        if (mdSite) {
+          const keys = Object.keys(mdSite);
+          if (keys.length > 0) {
+            mangaDexId = keys[0];
+            this.logger.debug(`[MangaDex Primary] MAL-Sync resolved AL=${anilistId} → MangaDex=${mangaDexId}`);
+          }
         }
       } catch (e: any) {
-        this.logger.debug(`[Consumet Meta] ${baseUrl} failed: ${e.message}`);
+        this.logger.debug(`[MangaDex Primary] MAL-Sync failed: ${e.message}`);
       }
+
+      if (!mangaDexId) return [];
+
+      // Step 2: Fetch chapters using curl UA + properly encoded URL params
+      // MangaDex REQUIRES %5B%5D encoding for array params from server IPs
+      const params = new URLSearchParams();
+      params.append('translatedLanguage[]', 'en');
+      params.append('order[chapter]', 'desc');
+      params.append('limit', '500');
+      params.append('offset', '0');
+      const feedUrl = `https://api.mangadex.org/manga/${mangaDexId}/feed?${params.toString()}`;
+
+      const chaptersRes = await axios.get(feedUrl, {
+        timeout: 15000,
+        headers: curlHeaders,
+      });
+
+      if (chaptersRes.data?.data?.length > 0) {
+        const seen = new Set<string>();
+        const chapters: any[] = [];
+        for (const ch of chaptersRes.data.data) {
+          const num = ch.attributes?.chapter || '';
+          const key = `ch_${num}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            chapters.push({
+              id: `mangadex_direct___${ch.id}___na`,
+              title: ch.attributes?.title || `Chapter ${num}`,
+              chapterNumber: num || '0',
+              volumeNumber: ch.attributes?.volume || '0',
+            });
+          }
+        }
+        this.logger.debug(`[MangaDex Primary] Fetched ${chapters.length} chapters for AL=${anilistId}`);
+        return chapters;
+      }
+    } catch (e: any) {
+      this.logger.debug(`[MangaDex Primary] Failed for AL=${anilistId}: ${e.message}`);
     }
     return [];
   }
@@ -351,12 +391,10 @@ export class MangaService {
   // Uses browser-like headers to avoid Cloudflare bot detection
   // ─────────────────────────────────────────────────────────────────────────
   private async fetchMangaDexViaMalSync(anilistId: number, malId: number | null, titles: string[]): Promise<any[]> {
-    const browserHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
+    // MangaDex REQUIRES curl-style UA from server environments (Chrome UA → blocked)
+    const curlHeaders = {
+      'User-Agent': 'curl/7.88.1',
+      'Accept': 'application/json',
     };
 
     let mangaDexId: string | null = null;
@@ -365,7 +403,7 @@ export class MangaService {
     try {
       // Try via AniList ID first
       const malsyncUrl = `https://api.malsync.moe/mal/manga/anilist:${anilistId}`;
-      const syncRes = await axios.get(malsyncUrl, { timeout: 5000 }).catch(() => null);
+      const syncRes = await axios.get(malsyncUrl, { timeout: 5000, headers: curlHeaders }).catch(() => null);
       const mdSite = syncRes?.data?.Sites?.MangaDex;
       if (mdSite) {
         mangaDexId = Object.keys(mdSite)[0] || null;
@@ -390,16 +428,22 @@ export class MangaService {
       }
     }
 
-    // Step 3: Direct MangaDex search with browser headers
+    // Step 3: Direct MangaDex search with curl UA (Chrome UA is blocked from servers)
     if (!mangaDexId) {
       for (const title of titles.slice(0, 2)) {
         try {
+          // Build properly encoded search URL
+          const searchParams = new URLSearchParams();
+          searchParams.set('title', title);
+          searchParams.set('limit', '5');
+          searchParams.append('contentRating[]', 'safe');
+          searchParams.append('contentRating[]', 'suggestive');
+          searchParams.append('order[relevance]', 'desc');
           const searchRes = await axios.get(
-            `https://api.mangadex.org/manga?title=${encodeURIComponent(title)}&limit=5&contentRating[]=safe&contentRating[]=suggestive&order[relevance]=desc`,
-            { timeout: 8000, headers: browserHeaders }
+            `https://api.mangadex.org/manga?${searchParams.toString()}`,
+            { timeout: 8000, headers: curlHeaders }
           );
           if (searchRes.data?.data?.length > 0) {
-            // Pick first result
             mangaDexId = searchRes.data.data[0].id;
             this.logger.debug(`[MangaDex] Search found ID ${mangaDexId} for "${title}"`);
             break;
@@ -412,12 +456,20 @@ export class MangaService {
 
     if (!mangaDexId) return [];
 
-    // Step 4: Fetch chapters using browser headers (crucial for Cloudflare bypass)
+    // Step 4: Fetch chapters — MUST use URLSearchParams for proper %5B%5D encoding
+    // and curl UA. MangaDex returns 400 if array params are unencoded or Chrome UA is used.
     try {
-      const chaptersRes = await axios.get(
-        `https://api.mangadex.org/manga/${mangaDexId}/feed?translatedLanguage[]=en&order[chapter]=desc&limit=500&offset=0`,
-        { timeout: 12000, headers: browserHeaders }
-      );
+      const params = new URLSearchParams();
+      params.append('translatedLanguage[]', 'en');
+      params.append('order[chapter]', 'desc');
+      params.append('limit', '500');
+      params.append('offset', '0');
+      const feedUrl = `https://api.mangadex.org/manga/${mangaDexId}/feed?${params.toString()}`;
+
+      const chaptersRes = await axios.get(feedUrl, {
+        timeout: 15000,
+        headers: curlHeaders,
+      });
 
       if (chaptersRes.data?.data?.length > 0) {
         // Deduplicate by chapter number (keep first scan group)
@@ -630,11 +682,12 @@ export class MangaService {
         }
 
         if (provider === 'mangadex_direct') {
-          // Try MangaDex at-home API with browser headers
+          // Try MangaDex at-home API with curl UA (Chrome UA blocked from servers)
+          const curlHeaders = { 'User-Agent': 'curl/7.88.1', 'Accept': 'application/json' };
           try {
             const atHomeRes = await axios.get(
               `https://api.mangadex.org/at-home/server/${actualId}`,
-              { timeout: 12000, headers: browserHeaders }
+              { timeout: 12000, headers: curlHeaders }
             );
             const host = atHomeRes.data.baseUrl;
             const hash = atHomeRes.data.chapter.hash;
@@ -648,34 +701,20 @@ export class MangaService {
                 })),
               };
             }
-          } catch (e: any) {
-            this.logger.warn(`MangaDex at-home failed for ${actualId}: ${e.message}`);
-          }
 
-          // Fallback: Use consumet to get pages for this MangaDex chapter ID
-          try {
-            const fallbackBases = ['https://consumet-api-clone.vercel.app', 'https://api.consumet.org'];
-            for (const fBase of fallbackBases) {
-              try {
-                const fallbackRes = await axios.get(
-                  `${fBase}/meta/anilist-manga/read?chapterId=${actualId}&provider=mangadex`,
-                  { timeout: 12000 }
-                );
-                const rawPages = Array.isArray(fallbackRes.data) ? fallbackRes.data : (fallbackRes.data?.pages || []);
-                if (rawPages.length > 0) {
-                  return {
-                    pages: rawPages.map((p: any, i: number) => ({
-                      img: wrapInProxy(p.img || p.url || p),
-                      page: p.page || i + 1
-                    }))
-                  };
-                }
-              } catch (e: any) {
-                this.logger.debug(`Consumet fallback failed at ${fBase}: ${e.message}`);
-              }
+            // Fallback to data-saver quality
+            const dataSaverFiles = atHomeRes.data.chapter.dataSaver;
+            if (dataSaverFiles && dataSaverFiles.length > 0) {
+              const dataSaverHash = atHomeRes.data.chapter.hash;
+              return {
+                pages: dataSaverFiles.map((f: string, i: number) => ({
+                  img: wrapInProxy(`${host}/data-saver/${dataSaverHash}/${f}`),
+                  page: i + 1,
+                })),
+              };
             }
           } catch (e: any) {
-            this.logger.warn(`All MangaDex page fallbacks failed: ${e.message}`);
+            this.logger.warn(`MangaDex at-home failed for ${actualId}: ${e.message}`);
           }
           throw new Error('Could not load MangaDex chapter pages');
         }

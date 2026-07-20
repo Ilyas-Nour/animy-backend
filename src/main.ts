@@ -57,6 +57,14 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix(apiPrefix);
 
+  // Health check endpoint — used by the frontend keep-alive pinger to
+  // prevent Hugging Face Spaces free-tier from sleeping.
+  // Must be registered AFTER setGlobalPrefix so it respects the prefix.
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get(`/${apiPrefix}/health`, (_req: any, res: any) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime(), ts: Date.now() });
+  });
+
   // CORS configuration
   app.enableCors({
     origin: (origin, callback) => {
