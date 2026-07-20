@@ -1,4 +1,10 @@
-import { Injectable, Logger, HttpException, HttpStatus, Inject } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  HttpException,
+  HttpStatus,
+  Inject,
+} from "@nestjs/common";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Cache } from "cache-manager";
 import { PrismaService } from "../database/prisma.service";
@@ -25,7 +31,7 @@ export class AnimeService {
     let format = null;
     if (type) {
       format = type.toUpperCase();
-      if (format === "SPECIAL") format = "SPECIAL"; 
+      if (format === "SPECIAL") format = "SPECIAL";
     }
 
     // Map Jikan 'order_by' to AniList 'sort'
@@ -65,16 +71,32 @@ export class AnimeService {
         },
         data: data.media.map((item) => this.mapAnilistToResponse(item)),
       };
-      
+
       await this.cacheManager.set(cacheKey, response, 1800000); // 30 mins
       return response;
     } catch (e) {
-      this.logger.warn(`AniList Search Failed, falling back to Jikan: ${e.message}`);
+      this.logger.warn(
+        `AniList Search Failed, falling back to Jikan: ${e.message}`,
+      );
       // Actual search fallback to Jikan
-      const jikanResults = await this.jikanService.searchAnime(query || "", Number(page), Number(limit), type);
+      const jikanResults = await this.jikanService.searchAnime(
+        query || "",
+        Number(page),
+        Number(limit),
+        type,
+      );
       const response = {
-        pagination: { last_visible_page: 1, has_next_page: jikanResults.length === limit, current_page: Number(page), items: { count: jikanResults.length, total: jikanResults.length, per_page: Number(limit) } },
-        data: jikanResults.map(r => this.mapJikanToResponse(r))
+        pagination: {
+          last_visible_page: 1,
+          has_next_page: jikanResults.length === limit,
+          current_page: Number(page),
+          items: {
+            count: jikanResults.length,
+            total: jikanResults.length,
+            per_page: Number(limit),
+          },
+        },
+        data: jikanResults.map((r) => this.mapJikanToResponse(r)),
       };
       return response;
     }
@@ -97,8 +119,8 @@ export class AnimeService {
         cachedAnime &&
         cachedAnime.imageUrl &&
         cachedAnime.synopsis &&
-        cachedAnime.idMal && 
-        cachedAnime.characters && 
+        cachedAnime.idMal &&
+        cachedAnime.characters &&
         (cachedAnime.characters as any[]).length > 0
       ) {
         if (cachedAnime.lastUpdated > sevenDaysAgo) {
@@ -107,8 +129,14 @@ export class AnimeService {
           await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
           return resp;
         } else {
-          this.logger.debug(`DB HIT (STALE): Anime ${id} -> Returning stale and triggering SWR update`);
-          this.updateAnimeInBackground(id).catch(err => this.logger.error(`Background update failed for ${id}: ${err.message}`));
+          this.logger.debug(
+            `DB HIT (STALE): Anime ${id} -> Returning stale and triggering SWR update`,
+          );
+          this.updateAnimeInBackground(id).catch((err) =>
+            this.logger.error(
+              `Background update failed for ${id}: ${err.message}`,
+            ),
+          );
           const resp = this.mapDbToResponse(cachedAnime);
           await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
           return resp;
@@ -118,7 +146,9 @@ export class AnimeService {
       this.logger.debug(`DB MISS/INCOMPLETE: Anime ${id} -> Fetching AniList`);
 
       if (this.activeRequests.has(id)) {
-        try { await this.activeRequests.get(id); } catch (e) {}
+        try {
+          await this.activeRequests.get(id);
+        } catch (e) {}
         const freshlyCached = await this.cacheManager.get(cacheKey);
         if (freshlyCached) return freshlyCached;
       }
@@ -126,7 +156,11 @@ export class AnimeService {
       const fetchPromise = (async () => {
         try {
           const data = await this.anilistService.getAnimeById(id);
-          if (!data) throw new HttpException("Not found on AniList", HttpStatus.NOT_FOUND);
+          if (!data)
+            throw new HttpException(
+              "Not found on AniList",
+              HttpStatus.NOT_FOUND,
+            );
           await this.saveAnimeToDb(data);
           const resp = this.mapAnilistToResponse(data);
           await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
@@ -139,7 +173,7 @@ export class AnimeService {
       return await fetchPromise;
     } catch (error) {
       this.logger.error(`Error fetching anime ${id}`, error.message);
-      
+
       // Fallback to DB if possible
       const cached = await this.prisma.anime.findUnique({ where: { id } });
       if (cached) return this.mapDbToResponse(cached);
@@ -148,7 +182,9 @@ export class AnimeService {
       this.logger.warn(`AniList Failed for ${id}, trying Jikan fallback`);
       let malId = cached?.idMal;
       if (!malId) {
-        const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+        const mapping = await this.prisma.animeMapping.findUnique({
+          where: { id },
+        });
         malId = mapping?.idMal;
       }
 
@@ -159,14 +195,22 @@ export class AnimeService {
 
       // Final fallback: try Jikan directly assuming id is a MAL ID
       try {
-        const [directJikanData, characters, recommendations] = await Promise.all([
-           this.jikanService.getAnimeById(id),
-           this.jikanService.getAnimeCharacters(id).catch(() => []),
-           this.jikanService.getAnimeRecommendations(id).catch(() => [])
-        ]);
-        if (directJikanData) return this.mapJikanToResponse(directJikanData, characters, recommendations);
+        const [directJikanData, characters, recommendations] =
+          await Promise.all([
+            this.jikanService.getAnimeById(id),
+            this.jikanService.getAnimeCharacters(id).catch(() => []),
+            this.jikanService.getAnimeRecommendations(id).catch(() => []),
+          ]);
+        if (directJikanData)
+          return this.mapJikanToResponse(
+            directJikanData,
+            characters,
+            recommendations,
+          );
       } catch (jikanErr: any) {
-        this.logger.error(`Jikan fallback direct fetch failed for ${id}: ${jikanErr.message}`);
+        this.logger.error(
+          `Jikan fallback direct fetch failed for ${id}: ${jikanErr.message}`,
+        );
       }
 
       if (error instanceof HttpException) throw error;
@@ -177,7 +221,7 @@ export class AnimeService {
   async getTopAnime(type?: string, filter?: string) {
     const cacheKey = `top:${filter}:${type}`;
     this.logger.debug(`Fetching top anime: filter=${filter}, type=${type}`);
-    
+
     const cached = await this.cacheManager.get(cacheKey);
     if (cached) {
       this.logger.debug(`TOP ANIME CACHE HIT: ${cacheKey}`);
@@ -185,7 +229,9 @@ export class AnimeService {
     }
 
     try {
-      this.logger.debug(`TOP ANIME CACHE MISS: ${cacheKey} -> Fetching AniList`);
+      this.logger.debug(
+        `TOP ANIME CACHE MISS: ${cacheKey} -> Fetching AniList`,
+      );
       const data = await Promise.race([
         (async () => {
           if (filter === "bypopularity") {
@@ -196,20 +242,26 @@ export class AnimeService {
             return await this.anilistService.getTrending();
           }
         })(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Gateway Safety Timeout')), 15000))
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Gateway Safety Timeout")), 15000),
+        ),
       ]);
-      
+
       const resp = {
-        data: (data.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter(a => a !== null),
-        pageInfo: data.pageInfo
+        data: (data.media || [])
+          .map((m: any) => this.mapAnilistToResponse(m))
+          .filter((a) => a !== null),
+        pageInfo: data.pageInfo,
       };
       await this.cacheManager.set(cacheKey, resp, 3600000); // 1 hour
       return resp;
     } catch (e) {
-      this.logger.warn(`AniList Top Anime failed, falling back to Jikan: ${e.message}`);
+      this.logger.warn(
+        `AniList Top Anime failed, falling back to Jikan: ${e.message}`,
+      );
       const data = await this.jikanService.getTopAnime(filter);
       return {
-        data: (data || []).map(r => this.mapJikanToResponse(r))
+        data: (data || []).map((r) => this.mapJikanToResponse(r)),
       };
     }
   }
@@ -218,12 +270,14 @@ export class AnimeService {
     try {
       const data = await this.anilistService.getPopular(page);
       return {
-        data: (data.media || []).map((item) => this.mapAnilistToResponse(item)).filter(a => a !== null),
-        pageInfo: data.pageInfo
+        data: (data.media || [])
+          .map((item) => this.mapAnilistToResponse(item))
+          .filter((a) => a !== null),
+        pageInfo: data.pageInfo,
       };
     } catch (e) {
       const data = await this.jikanService.getTopAnime();
-      return { data: data.map(r => this.mapJikanToResponse(r)) };
+      return { data: data.map((r) => this.mapJikanToResponse(r)) };
     }
   }
 
@@ -231,13 +285,17 @@ export class AnimeService {
     try {
       const data = await this.anilistService.getNextSeason(page);
       return {
-        data: (data.media || []).map((item: any) => this.mapAnilistToResponse(item)).filter((a: any) => a !== null),
-        pageInfo: data.pageInfo
+        data: (data.media || [])
+          .map((item: any) => this.mapAnilistToResponse(item))
+          .filter((a: any) => a !== null),
+        pageInfo: data.pageInfo,
       };
     } catch (e) {
-      this.logger.warn(`AniList Upcoming failed, falling back to Jikan: ${e.message}`);
+      this.logger.warn(
+        `AniList Upcoming failed, falling back to Jikan: ${e.message}`,
+      );
       const data = await this.jikanService.getUpcoming();
-      return { data: data.map(r => this.mapJikanToResponse(r)) };
+      return { data: data.map((r) => this.mapJikanToResponse(r)) };
     }
   }
 
@@ -248,12 +306,22 @@ export class AnimeService {
 
     try {
       // Jikan /schedules endpoint returns today's schedule by default or can specify a day
-      const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const days = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ];
       const today = days[new Date().getDay()];
-      const res = await fetch(`https://api.jikan.moe/v4/schedules?filter=${today}`);
+      const res = await fetch(
+        `https://api.jikan.moe/v4/schedules?filter=${today}`,
+      );
       if (!res.ok) throw new Error("Jikan schedule failed");
       const json = await res.json();
-      
+
       const response = { data: json.data || [] };
       await this.cacheManager.set(cacheKey, response, 3600000); // cache for 1 hour
       return response;
@@ -274,11 +342,26 @@ export class AnimeService {
       await this.cacheManager.set(cacheKey, response, 3600000);
       return response;
     } catch (e) {
-      this.logger.warn(`AniList Characters failed for ${id}, trying Jikan fallback`);
-      const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+      this.logger.warn(
+        `AniList Characters failed for ${id}, trying Jikan fallback`,
+      );
+      const mapping = await this.prisma.animeMapping.findUnique({
+        where: { id },
+      });
       if (mapping?.idMal) {
-        const jikanChars = await this.jikanService.getAnimeCharacters(mapping.idMal);
-        return { data: jikanChars.map(c => ({ role: c.role, node: { id: c.character.mal_id, name: { full: c.character.name }, image: { large: c.character.images?.jpg?.image_url } } })) };
+        const jikanChars = await this.jikanService.getAnimeCharacters(
+          mapping.idMal,
+        );
+        return {
+          data: jikanChars.map((c) => ({
+            role: c.role,
+            node: {
+              id: c.character.mal_id,
+              name: { full: c.character.name },
+              image: { large: c.character.images?.jpg?.image_url },
+            },
+          })),
+        };
       }
       return { data: [] };
     }
@@ -297,11 +380,25 @@ export class AnimeService {
       await this.cacheManager.set(cacheKey, response, 3600000);
       return response;
     } catch (e) {
-      this.logger.warn(`AniList Recommendations failed for ${id}, trying Jikan fallback`);
-      const mapping = await this.prisma.animeMapping.findUnique({ where: { id } });
+      this.logger.warn(
+        `AniList Recommendations failed for ${id}, trying Jikan fallback`,
+      );
+      const mapping = await this.prisma.animeMapping.findUnique({
+        where: { id },
+      });
       if (mapping?.idMal) {
-        const jikanRecs = await this.jikanService.getAnimeRecommendations(mapping.idMal);
-        return { data: jikanRecs.map(r => ({ mediaRecommendation: { id: r.entry.mal_id, title: { romaji: r.entry.title }, coverImage: { large: r.entry.images?.jpg?.image_url } } })) };
+        const jikanRecs = await this.jikanService.getAnimeRecommendations(
+          mapping.idMal,
+        );
+        return {
+          data: jikanRecs.map((r) => ({
+            mediaRecommendation: {
+              id: r.entry.mal_id,
+              title: { romaji: r.entry.title },
+              coverImage: { large: r.entry.images?.jpg?.image_url },
+            },
+          })),
+        };
       }
       return { data: [] };
     }
@@ -356,7 +453,9 @@ export class AnimeService {
       status: data.status,
       rating: "PG-13", // Default/Placeholder as AniList doesn't give simple rating string like MAL
       score: data.averageScore ? data.averageScore / 10 : null,
-      rank: data.rankings?.find((r: any) => r.allTime)?.rank || data.rankings?.[0]?.rank,
+      rank:
+        data.rankings?.find((r: any) => r.allTime)?.rank ||
+        data.rankings?.[0]?.rank,
       popularity: data.popularity,
       imageUrl: data.coverImage.extraLarge || data.coverImage.large,
       bannerImage: data.bannerImage,
@@ -419,12 +518,14 @@ export class AnimeService {
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
       title_japanese: data.title.native,
-      synopsis: data.description ? data.description : 'No synopsis available.',
+      synopsis: data.description ? data.description : "No synopsis available.",
       type: data.format,
       episodes: data.episodes,
       status: data.status,
       score: data.averageScore ? data.averageScore / 10 : null,
-      rank: data.rankings?.find((r: any) => r.allTime)?.rank || data.rankings?.[0]?.rank,
+      rank:
+        data.rankings?.find((r: any) => r.allTime)?.rank ||
+        data.rankings?.[0]?.rank,
       popularity: data.popularity,
       members: data.popularity,
       favorites: data.favourites,
@@ -432,10 +533,10 @@ export class AnimeService {
       source: data.source,
       bannerImage: data.bannerImage,
       color: data.coverImage?.color,
-      airing: data.status === 'RELEASING',
+      airing: data.status === "RELEASING",
       aired: {
         from: data.startDate?.year
-          ? `${data.startDate.year}-${String(data.startDate.month || 1).padStart(2, '0')}-${String(data.startDate.day || 1).padStart(2, '0')}`
+          ? `${data.startDate.year}-${String(data.startDate.month || 1).padStart(2, "0")}-${String(data.startDate.day || 1).padStart(2, "0")}`
           : null,
       },
       images: {
@@ -451,17 +552,23 @@ export class AnimeService {
         },
       },
       trailer: {
-        url: data.trailer?.site === 'youtube'
-          ? `https://www.youtube.com/watch?v=${data.trailer.id}`
-          : data.trailer?.site === 'dailymotion'
-            ? `https://www.dailymotion.com/video/${data.trailer.id}`
-            : data.trailer?.id ? `https://www.youtube.com/watch?v=${data.trailer.id}` : null,
-        youtube_id: data.trailer?.site === 'youtube' ? data.trailer.id : null,
-        embed_url: data.trailer?.site === 'youtube'
-          ? `https://www.youtube.com/embed/${data.trailer.id}`
-          : data.trailer?.site === 'dailymotion'
-            ? `https://www.dailymotion.com/embed/video/${data.trailer.id}`
-            : data.trailer?.id ? `https://www.youtube.com/embed/${data.trailer.id}` : null,
+        url:
+          data.trailer?.site === "youtube"
+            ? `https://www.youtube.com/watch?v=${data.trailer.id}`
+            : data.trailer?.site === "dailymotion"
+              ? `https://www.dailymotion.com/video/${data.trailer.id}`
+              : data.trailer?.id
+                ? `https://www.youtube.com/watch?v=${data.trailer.id}`
+                : null,
+        youtube_id: data.trailer?.site === "youtube" ? data.trailer.id : null,
+        embed_url:
+          data.trailer?.site === "youtube"
+            ? `https://www.youtube.com/embed/${data.trailer.id}`
+            : data.trailer?.site === "dailymotion"
+              ? `https://www.dailymotion.com/embed/video/${data.trailer.id}`
+              : data.trailer?.id
+                ? `https://www.youtube.com/embed/${data.trailer.id}`
+                : null,
         thumbnail: data.trailer?.thumbnail,
       },
       year: data.seasonYear,
@@ -502,10 +609,10 @@ export class AnimeService {
     // Normalize the aired object from DB storage
     const airedRaw = dbAnime.aired;
     let aired: { from: string | null } = { from: null };
-    if (airedRaw && typeof airedRaw === 'object') {
+    if (airedRaw && typeof airedRaw === "object") {
       // DB stores { from: "YYYY-M-D" } or { from: "YYYY" } or { from: null }
       aired = { from: airedRaw.from || null };
-    } else if (typeof airedRaw === 'string' && airedRaw) {
+    } else if (typeof airedRaw === "string" && airedRaw) {
       aired = { from: airedRaw };
     } else if (dbAnime.year) {
       // Fallback: build from year field if aired is missing
@@ -540,29 +647,29 @@ export class AnimeService {
       bannerImage: dbAnime.bannerImage,
       images: {
         jpg: {
-          image_url: dbAnime.imageUrl || '',
-          large_image_url: dbAnime.imageUrl || '',
-          small_image_url: dbAnime.imageUrl || '',
+          image_url: dbAnime.imageUrl || "",
+          large_image_url: dbAnime.imageUrl || "",
+          small_image_url: dbAnime.imageUrl || "",
         },
         webp: {
-          image_url: dbAnime.imageUrl || '',
-          large_image_url: dbAnime.imageUrl || '',
-          small_image_url: dbAnime.imageUrl || '',
+          image_url: dbAnime.imageUrl || "",
+          large_image_url: dbAnime.imageUrl || "",
+          small_image_url: dbAnime.imageUrl || "",
         },
       },
       trailer: {
         url: dbAnime.trailerUrl,
-        youtube_id: dbAnime.trailerUrl?.includes('youtube.com/watch?v=')
-          ? dbAnime.trailerUrl.split('v=')[1]?.split('&')[0]
-          : dbAnime.trailerUrl?.includes('youtu.be/')
-            ? dbAnime.trailerUrl.split('/').pop()
+        youtube_id: dbAnime.trailerUrl?.includes("youtube.com/watch?v=")
+          ? dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]
+          : dbAnime.trailerUrl?.includes("youtu.be/")
+            ? dbAnime.trailerUrl.split("/").pop()
             : null,
-        embed_url: dbAnime.trailerUrl?.includes('youtube.com/watch?v=')
-          ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split('v=')[1]?.split('&')[0]}`
-          : dbAnime.trailerUrl?.includes('youtu.be/')
-            ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split('/').pop()}`
-            : dbAnime.trailerUrl?.includes('dailymotion.com/video/')
-              ? `https://www.dailymotion.com/embed/video/${dbAnime.trailerUrl.split('/').pop()}`
+        embed_url: dbAnime.trailerUrl?.includes("youtube.com/watch?v=")
+          ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split("v=")[1]?.split("&")[0]}`
+          : dbAnime.trailerUrl?.includes("youtu.be/")
+            ? `https://www.youtube.com/embed/${dbAnime.trailerUrl.split("/").pop()}`
+            : dbAnime.trailerUrl?.includes("dailymotion.com/video/")
+              ? `https://www.dailymotion.com/embed/video/${dbAnime.trailerUrl.split("/").pop()}`
               : null,
       },
       year: dbAnime.year,
@@ -581,7 +688,11 @@ export class AnimeService {
     };
   }
 
-  private mapJikanToResponse(jikan: any, jikanCharacters: any[] = [], jikanRecommendations: any[] = []) {
+  private mapJikanToResponse(
+    jikan: any,
+    jikanCharacters: any[] = [],
+    jikanRecommendations: any[] = [],
+  ) {
     if (!jikan) return null;
     return {
       id: jikan.mal_id,
@@ -623,41 +734,55 @@ export class AnimeService {
       },
       year: jikan.year,
       season: jikan.season,
-      genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
-      studios: jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) || [],
+      genres:
+        jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) ||
+        [],
+      studios:
+        jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) ||
+        [],
       streaming: [],
-      relations: jikan.relations?.flatMap((r: any) => 
-        r.entry.map((entry: any) => ({
-          relationType: r.relation.toUpperCase().replace(/\s+/g, '_'),
-          node: {
-            id: entry.mal_id,
-            title: { english: entry.name, romaji: entry.name },
-            type: entry.type.toUpperCase(),
-            coverImage: { large: "" }
-          }
-        }))
-      ) || [],
+      relations:
+        jikan.relations?.flatMap((r: any) =>
+          r.entry.map((entry: any) => ({
+            relationType: r.relation.toUpperCase().replace(/\s+/g, "_"),
+            node: {
+              id: entry.mal_id,
+              title: { english: entry.name, romaji: entry.name },
+              type: entry.type.toUpperCase(),
+              coverImage: { large: "" },
+            },
+          })),
+        ) || [],
       staff: [],
-      recommendations: jikanRecommendations?.map((r: any) => ({
-        mediaRecommendation: {
-          id: r.entry.mal_id,
-          title: { romaji: r.entry.title, english: r.entry.title },
-          coverImage: { large: r.entry.images?.jpg?.large_image_url || r.entry.images?.jpg?.image_url }
-        }
-      })) || [],
-      characters: jikanCharacters?.map((c: any) => ({
-        role: c.role,
-        node: {
-          id: c.character.mal_id,
-          name: { full: c.character.name },
-          image: { large: c.character.images?.jpg?.image_url }
-        },
-        voiceActors: c.voice_actors?.filter((va: any) => va.language === 'Japanese').map((va: any) => ({
-          id: va.person.mal_id,
-          name: { full: va.person.name },
-          image: { large: va.person.images?.jpg?.image_url }
-        })) || []
-      })) || [],
+      recommendations:
+        jikanRecommendations?.map((r: any) => ({
+          mediaRecommendation: {
+            id: r.entry.mal_id,
+            title: { romaji: r.entry.title, english: r.entry.title },
+            coverImage: {
+              large:
+                r.entry.images?.jpg?.large_image_url ||
+                r.entry.images?.jpg?.image_url,
+            },
+          },
+        })) || [],
+      characters:
+        jikanCharacters?.map((c: any) => ({
+          role: c.role,
+          node: {
+            id: c.character.mal_id,
+            name: { full: c.character.name },
+            image: { large: c.character.images?.jpg?.image_url },
+          },
+          voiceActors:
+            c.voice_actors
+              ?.filter((va: any) => va.language === "Japanese")
+              .map((va: any) => ({
+                id: va.person.mal_id,
+                name: { full: va.person.name },
+                image: { large: va.person.images?.jpg?.image_url },
+              })) || [],
+        })) || [],
     };
   }
 }

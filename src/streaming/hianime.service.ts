@@ -8,19 +8,21 @@ export class HiAnimeService {
 
   // Working HiAnime API (Updated 2026 hosts)
   private readonly hiAnimeApiHosts = [
-    'https://aniwatch-api-v2.vercel.app/anime',
-    'https://hianime-api-6p6o.onrender.com/api/v2/hianime',
-    'https://hianime-api-alpha.vercel.app/api/v2/hianime',
+    "https://aniwatch-api-v2.vercel.app/anime",
+    "https://hianime-api-6p6o.onrender.com/api/v2/hianime",
+    "https://hianime-api-alpha.vercel.app/api/v2/hianime",
   ];
 
   // GogoAnime working mirror (2026)
   private readonly gogoMirror = "https://gogoanime3.co";
 
   private readonly headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
-    "Referer": "https://gogoanime3.net/",
+    Referer: "https://gogoanime3.net/",
   };
 
   async search(query: string) {
@@ -51,13 +53,16 @@ export class HiAnimeService {
    */
   private async searchAnify(query: string): Promise<any[]> {
     try {
-      const { data } = await axios.get(`https://api.anify.tv/search/anime/${encodeURIComponent(query)}`, { timeout: 5000 });
+      const { data } = await axios.get(
+        `https://api.anify.tv/search/anime/${encodeURIComponent(query)}`,
+        { timeout: 5000 },
+      );
       return (data || []).map((a: any) => ({
         id: a.id,
         title: a.title.english || a.title.romaji,
         image: a.coverImage,
         url: `/anime/${a.id}`,
-        provider: 'hianime' // Using as a drop-in for mesh compatibility
+        provider: "hianime", // Using as a drop-in for mesh compatibility
       }));
     } catch (e) {
       return [];
@@ -71,16 +76,21 @@ export class HiAnimeService {
     for (const host of this.hiAnimeApiHosts) {
       try {
         const url = `${host}/search?q=${encodeURIComponent(query)}&page=1`;
-        const { data } = await axios.get(url, { timeout: 5000, headers: this.headers });
+        const { data } = await axios.get(url, {
+          timeout: 5000,
+          headers: this.headers,
+        });
         const animes = data?.data?.animes || data?.animes || [];
         if (animes.length > 0) {
-          this.logger.debug(`HiAnime API found ${animes.length} results from ${host}`);
+          this.logger.debug(
+            `HiAnime API found ${animes.length} results from ${host}`,
+          );
           return animes.map((a: any) => ({
             id: a.id,
             title: a.name || a.title,
             image: a.poster || a.image,
             url: `/anime/${a.id}`,
-            provider: 'hianime'
+            provider: "hianime",
           }));
         }
       } catch (e) {
@@ -97,7 +107,7 @@ export class HiAnimeService {
     try {
       const { data } = await axios.get(
         `${this.gogoMirror}/search.html?keyword=${encodeURIComponent(query)}`,
-        { headers: this.headers, timeout: 6000 }
+        { headers: this.headers, timeout: 6000 },
       );
       const $ = cheerio.load(data);
       const results: any[] = [];
@@ -111,7 +121,7 @@ export class HiAnimeService {
             title: item.find(".name a").text().trim(),
             image: item.find("img").attr("src"),
             url: `/anime/${id}`,
-            provider: 'gogo'
+            provider: "gogo",
           });
         }
       });
@@ -137,7 +147,9 @@ export class HiAnimeService {
 
   private async fetchAnifyInfo(id: string) {
     try {
-      const { data } = await axios.get(`https://api.anify.tv/info/${id}`, { timeout: 5000 });
+      const { data } = await axios.get(`https://api.anify.tv/info/${id}`, {
+        timeout: 5000,
+      });
       if (data) {
         return {
           id: data.id,
@@ -147,8 +159,8 @@ export class HiAnimeService {
             id: e.id,
             number: e.number,
             title: e.title || `Episode ${e.number}`,
-            provider: 'hianime'
-          }))
+            provider: "hianime",
+          })),
         };
       }
     } catch (e) {
@@ -163,21 +175,28 @@ export class HiAnimeService {
     for (const host of this.hiAnimeApiHosts) {
       try {
         const url = `${host}/info?id=${encodeURIComponent(id)}`;
-        const { data } = await axios.get(url, { timeout: 6000, headers: this.headers });
-        const anime = data?.data?.anime?.info || data?.anime?.info || data?.info;
-        const episodes = data?.data?.seasons || data?.data?.episodes || data?.episodes || [];
+        const { data } = await axios.get(url, {
+          timeout: 6000,
+          headers: this.headers,
+        });
+        const anime =
+          data?.data?.anime?.info || data?.anime?.info || data?.info;
+        const episodes =
+          data?.data?.seasons || data?.data?.episodes || data?.episodes || [];
 
         if (anime) {
           return {
             id,
             title: anime.name || anime.title,
             image: anime.poster || anime.image,
-            episodes: (Array.isArray(episodes) ? episodes : []).map((e: any) => ({
-              id: e.episodeId || e.id,
-              number: e.number,
-              title: e.title || `Episode ${e.number}`,
-              provider: 'hianime'
-            }))
+            episodes: (Array.isArray(episodes) ? episodes : []).map(
+              (e: any) => ({
+                id: e.episodeId || e.id,
+                number: e.number,
+                title: e.title || `Episode ${e.number}`,
+                provider: "hianime",
+              }),
+            ),
           };
         }
       } catch (e) {
@@ -194,7 +213,7 @@ export class HiAnimeService {
     try {
       const { data } = await axios.get(`${this.gogoMirror}/category/${id}`, {
         headers: this.headers,
-        timeout: 6000
+        timeout: 6000,
       });
       const $ = cheerio.load(data);
       const movie_id = $("#movie_id").val();
@@ -204,7 +223,7 @@ export class HiAnimeService {
 
       const { data: epData } = await axios.get(
         `https://ajax.gogocdn.net/ajax/load-list-episode?ep_start=0&ep_end=2000&id=${movie_id}&default_ep=0&alias=${alias}`,
-        { timeout: 6000 }
+        { timeout: 6000 },
       );
       const $eps = cheerio.load(epData);
       const episodes: any[] = [];
@@ -216,7 +235,7 @@ export class HiAnimeService {
           id: epId,
           number: parseFloat(epNum),
           title: `Episode ${epNum}`,
-          provider: 'gogo'
+          provider: "gogo",
         });
       });
 
@@ -224,7 +243,7 @@ export class HiAnimeService {
         id,
         title: $(".anime_info_body_bg h1").text().trim(),
         image: $(".anime_info_body_bg img").attr("src"),
-        episodes: episodes.reverse()
+        episodes: episodes.reverse(),
       };
     } catch (e) {
       this.logger.warn(`GogoAnime info failed: ${e.message}`);
@@ -244,7 +263,10 @@ export class HiAnimeService {
     const hianimeSource = await this.fetchHiAnimeSourcesApi(episodeId);
     if (hianimeSource) return hianimeSource;
 
-    throw new HttpException("All providers offline", HttpStatus.SERVICE_UNAVAILABLE);
+    throw new HttpException(
+      "All providers offline",
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
   }
 
   /**
@@ -255,26 +277,31 @@ export class HiAnimeService {
     try {
       const { data } = await axios.get(`${this.gogoMirror}/${episodeId}`, {
         headers: this.headers,
-        timeout: 6000
+        timeout: 6000,
       });
       const $ = cheerio.load(data);
 
       // Try to find iframe source
-      const iframeSrc = $("div.anime_video_body iframe").attr("src")
-        || $(".play-video iframe").attr("src")
-        || $("iframe").first().attr("src");
+      const iframeSrc =
+        $("div.anime_video_body iframe").attr("src") ||
+        $(".play-video iframe").attr("src") ||
+        $("iframe").first().attr("src");
 
       if (iframeSrc) {
-        const embedUrl = iframeSrc.startsWith("//") ? `https:${iframeSrc}` : iframeSrc;
+        const embedUrl = iframeSrc.startsWith("//")
+          ? `https:${iframeSrc}`
+          : iframeSrc;
         return {
           iframeUrl: embedUrl,
-          servers: [{ name: 'GogoAnime', url: embedUrl, provider: 'gogo' }]
+          servers: [{ name: "GogoAnime", url: embedUrl, provider: "gogo" }],
         };
       }
 
       return null;
     } catch (e) {
-      this.logger.warn(`GogoAnime sources failed for ${episodeId}: ${e.message}`);
+      this.logger.warn(
+        `GogoAnime sources failed for ${episodeId}: ${e.message}`,
+      );
       return null;
     }
   }
@@ -287,14 +314,23 @@ export class HiAnimeService {
       try {
         // episodeId format: anime-slug?ep=12345
         const url = `${host}/episode/sources?animeEpisodeId=${encodeURIComponent(episodeId)}&server=vidstreaming&category=sub`;
-        const { data } = await axios.get(url, { timeout: 6000, headers: this.headers });
+        const { data } = await axios.get(url, {
+          timeout: 6000,
+          headers: this.headers,
+        });
         const link = data?.data?.link || data?.link || data?.sources?.[0]?.url;
 
         if (link) {
           this.logger.debug(`HiAnime API sources found from ${host}`);
           return {
             iframeUrl: link,
-            servers: [{ name: 'HiAnime (VidStreaming)', url: link, provider: 'hianime' }]
+            servers: [
+              {
+                name: "HiAnime (VidStreaming)",
+                url: link,
+                provider: "hianime",
+              },
+            ],
           };
         }
       } catch (e) {

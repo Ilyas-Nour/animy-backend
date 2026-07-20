@@ -64,6 +64,12 @@ export class AuthService {
     // Send Verification Email
     await this.emailService.sendVerificationEmail(user.email, token);
 
+    await this.prisma.activityLog
+      .create({
+        data: { action: "USER_REGISTERED", userId: user.id },
+      })
+      .catch((e) => console.error("[ActivityLog] Error:", e));
+
     // Generate JWT token (User can technically access but frontend should block based on verify status or we restrict here.
     // Usually we return a specific response telling them to verify.)
     // For this flow, we'll return the user but login will block them.
@@ -108,6 +114,12 @@ export class AuthService {
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     const access_token = this.jwtService.sign(payload);
+
+    await this.prisma.activityLog
+      .create({
+        data: { action: "USER_LOGGED_IN", userId: user.id },
+      })
+      .catch((e) => console.error("[ActivityLog] Error:", e));
 
     return {
       access_token,
@@ -227,24 +239,27 @@ export class AuthService {
     // Find existing user by providerId or email
     let user = await this.prisma.user.findFirst({
       where: {
-        OR: [
-          { providerId: reqUser.providerId },
-          { email: reqUser.email }
-        ]
-      }
+        OR: [{ providerId: reqUser.providerId }, { email: reqUser.email }],
+      },
     });
 
     if (!user) {
       // Create new Google user
-      let baseUsername = (reqUser.firstName + reqUser.lastName).toLowerCase().replace(/[^a-z0-9]/g, '');
+      let baseUsername = (reqUser.firstName + reqUser.lastName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
       if (!baseUsername) {
-        baseUsername = reqUser.email.split('@')[0];
+        baseUsername = reqUser.email.split("@")[0];
       }
       let finalUsername = baseUsername;
       let counter = 1;
-      
+
       // Ensure unique username
-      while (await this.prisma.user.findUnique({ where: { username: finalUsername } })) {
+      while (
+        await this.prisma.user.findUnique({
+          where: { username: finalUsername },
+        })
+      ) {
         finalUsername = `${baseUsername}${counter}`;
         counter++;
       }
@@ -259,7 +274,7 @@ export class AuthService {
           provider: AuthProvider.GOOGLE,
           providerId: reqUser.providerId,
           emailVerified: true, // Google verifies emails automatically
-        }
+        },
       });
     } else {
       // User exists. Update their provider logic if they previously used email.
@@ -270,7 +285,7 @@ export class AuthService {
             provider: AuthProvider.GOOGLE,
             providerId: reqUser.providerId,
             emailVerified: true,
-          }
+          },
         });
       }
     }

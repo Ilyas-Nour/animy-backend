@@ -11,10 +11,16 @@ export class AnilistService {
     this.client = new GraphQLClient(this.endpoint);
   }
 
-  private async requestWithTimeout(query: any, variables: any = {}, timeoutMs = 8000) {
+  private async requestWithTimeout(
+    query: any,
+    variables: any = {},
+    timeoutMs = 8000,
+  ) {
     return Promise.race([
       this.client.request(query, variables),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('AniList Timeout')), timeoutMs))
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("AniList Timeout")), timeoutMs),
+      ),
     ]);
   }
 
@@ -45,7 +51,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}] ${query ? '' : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
+                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}] ${query ? "" : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
@@ -286,7 +292,11 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        { page, perPage },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching trending anime:`, error.message);
@@ -335,7 +345,11 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        { page, perPage },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching popular anime:`, error.message);
@@ -385,7 +399,11 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        { page, perPage },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching top airing anime:`, error.message);
@@ -395,7 +413,6 @@ export class AnilistService {
       );
     }
   }
-
 
   /**
    * Get anime by season
@@ -441,12 +458,16 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, {
-        season,
-        year,
-        page,
-        perPage,
-      }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        {
+          season,
+          year,
+          page,
+          perPage,
+        },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching seasonal anime:`, error.message);
@@ -482,7 +503,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: [${sortValue}] ${query ? '' : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
+                    media(search: $search, type: MANGA, sort: [${sortValue}] ${query ? "" : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
@@ -623,7 +644,6 @@ export class AnilistService {
       );
     }
   }
-
 
   /**
    * Get character details by ID
@@ -785,12 +805,16 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, {
-        season,
-        year,
-        page,
-        perPage,
-      }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        {
+          season,
+          year,
+          page,
+          perPage,
+        },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching upcoming anime:`, error.message);
@@ -845,7 +869,11 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        { page, perPage },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching trending manga:`, error.message);
@@ -900,7 +928,11 @@ export class AnilistService {
     `;
 
     try {
-      const data: any = await this.requestWithTimeout(queryGql, { page, perPage }, 8000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        { page, perPage },
+        8000,
+      );
       return data.Page;
     } catch (error) {
       this.logger.error(`Error fetching popular manga:`, error.message);

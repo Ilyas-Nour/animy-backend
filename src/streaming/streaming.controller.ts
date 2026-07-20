@@ -118,14 +118,14 @@ export class StreamingController {
   async proxyStream(@Req() req: any, @Res() res: any) {
     // Extract the full target URL from the request URL
     // e.g., /api/v1/streaming/proxy/https://cdn.com/video.m3u8?token=123
-    let url = req.url.substring(req.url.indexOf('/proxy/') + 7);
-    
+    let url = req.url.substring(req.url.indexOf("/proxy/") + 7);
+
     // Support the legacy ?url= format if it's still being used somewhere
     if (req.query.url) {
       url = req.query.url as string;
     }
 
-    if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
       throw new HttpException(
         "Valid absolute URL path parameter is required",
         HttpStatus.BAD_REQUEST,
@@ -133,19 +133,33 @@ export class StreamingController {
     }
 
     // Build absolute proxy base URL dynamically from the request host
-    const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    const protocol =
+      req.secure || req.headers["x-forwarded-proto"] === "https"
+        ? "https"
+        : "http";
     const host = req.headers.host;
     const proxyBaseUrl = `${protocol}://${host}/api/v1/streaming/proxy`;
 
     // Extract referer from query if provided, otherwise auto-detect based on URL
     let referer = (req.query.referer as string) || "";
     if (!referer) {
-      if (url.includes('krussdomi.com') || url.includes('kaa.lt') || url.includes('kickassanime')) referer = 'https://kaa.lt/';
-      else if (url.includes('kwik.cx')) referer = 'https://animepahe.com/';
-      else if (url.includes('animepahe')) referer = 'https://animepahe.com/';
-      else if (url.includes('megaup')) referer = 'https://megaup.nl/';
+      if (
+        url.includes("krussdomi.com") ||
+        url.includes("kaa.lt") ||
+        url.includes("kickassanime")
+      )
+        referer = "https://kaa.lt/";
+      else if (url.includes("kwik.cx")) referer = "https://animepahe.com/";
+      else if (url.includes("animepahe")) referer = "https://animepahe.com/";
+      else if (url.includes("megaup")) referer = "https://megaup.nl/";
     }
 
-    await this.streamingProxyService.proxy(url, referer, res, req, proxyBaseUrl);
+    await this.streamingProxyService.proxy(
+      url,
+      referer,
+      res,
+      req,
+      proxyBaseUrl,
+    );
   }
 }

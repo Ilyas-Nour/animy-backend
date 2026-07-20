@@ -1,4 +1,14 @@
-import { Controller, Get, Param, Query, ParseIntPipe, Req, Res, HttpException, HttpStatus } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  ParseIntPipe,
+  Req,
+  Res,
+  HttpException,
+  HttpStatus,
+} from "@nestjs/common";
 import { MangaService } from "./manga.service";
 import { Request, Response } from "express";
 import { SearchMangaDto } from "./dto/search-manga.dto";
@@ -30,12 +40,18 @@ export class MangaController {
   }
 
   @Get("read/:chapterId")
-  async getChapterPages(@Param("chapterId") chapterId: string, @Req() req: Request) {
+  async getChapterPages(
+    @Param("chapterId") chapterId: string,
+    @Req() req: Request,
+  ) {
     // Build absolute proxy base URL dynamically from the request host
-    const protocol = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    const protocol =
+      req.secure || req.headers["x-forwarded-proto"] === "https"
+        ? "https"
+        : "http";
     const host = req.headers.host;
     const proxyBaseUrl = `${protocol}://${host}/api/v1/manga/image-proxy`;
-    
+
     return this.mangaService.getChapterPages(chapterId, proxyBaseUrl);
   }
 
@@ -43,10 +59,13 @@ export class MangaController {
   async proxyImage(
     @Query("url") url: string,
     @Query("referer") referer: string,
-    @Res() res: Response
+    @Res() res: Response,
   ) {
     if (!url) {
-      throw new HttpException("URL parameter is required", HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        "URL parameter is required",
+        HttpStatus.BAD_REQUEST,
+      );
     }
     return this.mangaService.proxyImage(url, referer, res);
   }

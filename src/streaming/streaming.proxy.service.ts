@@ -23,19 +23,31 @@ export class StreamingProxyService {
    * @param req The Express request object
    * @param proxyBaseUrl The base URL of this proxy endpoint (for manifest rewriting)
    */
-  async proxy(url: string, referer: string, res: Response, req?: any, proxyBaseUrl?: string) {
+  async proxy(
+    url: string,
+    referer: string,
+    res: Response,
+    req?: any,
+    proxyBaseUrl?: string,
+  ) {
     try {
       const urlObj = new URL(url);
       const origin = `${urlObj.protocol}//${urlObj.host}`;
 
       // Check cache for images (Manga Pages)
-      const isImage = url.match(/\.(jpg|jpeg|png|webp|gif|avif)$/i) || url.includes('/data/') || url.includes('mangadex') || url.includes('anify.tv') || referer?.includes('mangadex') || referer?.includes('mangapill');
+      const isImage =
+        url.match(/\.(jpg|jpeg|png|webp|gif|avif)$/i) ||
+        url.includes("/data/") ||
+        url.includes("mangadex") ||
+        url.includes("anify.tv") ||
+        referer?.includes("mangadex") ||
+        referer?.includes("mangapill");
       let cacheKey: string | null = null;
 
       if (isImage && this.storageService.isReady()) {
-        cacheKey = `manga-pages/${crypto.createHash('md5').update(url).digest('hex')}`;
+        cacheKey = `manga-pages/${crypto.createHash("md5").update(url).digest("hex")}`;
         const cachedExists = await this.storageService.fileExists(cacheKey);
-        
+
         if (cachedExists) {
           const cachedUrl = await this.storageService.getFileUrl(cacheKey);
           if (cachedUrl) {
@@ -51,7 +63,8 @@ export class StreamingProxyService {
       const headers: any = {
         Referer: finalReferer,
         "User-Agent":
-          req?.headers?.["user-agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          req?.headers?.["user-agent"] ||
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         Accept: "*/*",
         "Accept-Language": "en-US,en;q=0.9",
         Origin: new URL(finalReferer).origin,
@@ -68,7 +81,8 @@ export class StreamingProxyService {
         headers,
         responseType: "stream",
         timeout: 20000,
-        validateStatus: (status) => (status >= 200 && status < 300) || status === 206,
+        validateStatus: (status) =>
+          (status >= 200 && status < 300) || status === 206,
       });
 
       // Forward relevant headers
@@ -86,12 +100,21 @@ export class StreamingProxyService {
       res.setHeader("Cache-Control", "public, max-age=3600");
 
       if (response.headers["content-range"]) {
-        res.setHeader("Content-Range", String(response.headers["content-range"]));
+        res.setHeader(
+          "Content-Range",
+          String(response.headers["content-range"]),
+        );
         res.status(HttpStatus.PARTIAL_CONTENT);
       }
-      
-      if (response.headers["content-length"] && !contentType.includes("mpegurl")) {
-        res.setHeader("Content-Length", String(response.headers["content-length"]));
+
+      if (
+        response.headers["content-length"] &&
+        !contentType.includes("mpegurl")
+      ) {
+        res.setHeader(
+          "Content-Length",
+          String(response.headers["content-length"]),
+        );
       }
 
       // If it's a manifest file, we MUST rewrite it to ensure segments are also proxied
@@ -125,33 +148,48 @@ export class StreamingProxyService {
           });
 
           response.data.on("error", (err: any) => {
-            this.logger.error(`Manifest stream error for ${url}: ${err.message}`);
+            this.logger.error(
+              `Manifest stream error for ${url}: ${err.message}`,
+            );
             if (!res.headersSent) res.status(HttpStatus.BAD_GATEWAY).end();
             reject(err);
           });
         });
       }
 
-      if (isImage && cacheKey && this.storageService.isReady() && response.status === 200) {
-        this.logger.debug(`S3 Cache MISS for image: ${url} -> Buffering and Uploading`);
+      if (
+        isImage &&
+        cacheKey &&
+        this.storageService.isReady() &&
+        response.status === 200
+      ) {
+        this.logger.debug(
+          `S3 Cache MISS for image: ${url} -> Buffering and Uploading`,
+        );
         const chunks: Buffer[] = [];
-        
+
         return new Promise((resolve, reject) => {
           response.data.on("data", (chunk: Buffer) => chunks.push(chunk));
           response.data.on("end", async () => {
             const buffer = Buffer.concat(chunks);
             // Upload to S3 asynchronously
-            this.storageService.uploadFile(cacheKey, buffer, contentType).catch(e => 
-              this.logger.error(`Failed to cache image ${cacheKey}: ${e.message}`)
-            );
-            
+            this.storageService
+              .uploadFile(cacheKey, buffer, contentType)
+              .catch((e) =>
+                this.logger.error(
+                  `Failed to cache image ${cacheKey}: ${e.message}`,
+                ),
+              );
+
             // Send to client
             res.setHeader("Content-Length", String(buffer.length));
             res.end(buffer);
             resolve(true);
           });
           response.data.on("error", (err: any) => {
-            this.logger.error(`Image download error for ${url}: ${err.message}`);
+            this.logger.error(
+              `Image download error for ${url}: ${err.message}`,
+            );
             if (!res.headersSent) res.status(HttpStatus.BAD_GATEWAY).end();
             reject(err);
           });
@@ -166,7 +204,7 @@ export class StreamingProxyService {
       };
 
       req?.on("close", cleanup);
-      
+
       response.data.pipe(res);
 
       return new Promise((resolve, reject) => {
@@ -189,7 +227,7 @@ export class StreamingProxyService {
         res.status(status).json({
           error: "Proxy error",
           message: error.message,
-          url: url
+          url: url,
         });
       }
     }
@@ -224,15 +262,21 @@ export class StreamingProxyService {
 
         // 1. Rewrite Tags with URI attributes (e.g. #EXT-X-KEY, #EXT-X-MEDIA)
         if (trimmed.startsWith("#")) {
-          return line.replace(/URI=(['"])([^'"]+)(['"])/g, (match, quote, p2, endQuote) => {
-            const absoluteUrl = this.resolveUrl(p2, baseUrl, origin);
-            return `URI=${quote}${proxyPrefix}${encodeURIComponent(absoluteUrl)}${endQuote}`;
-          }).replace(/URI=([^'",\s]+)/g, (match, p1) => {
-            // Handle unquoted URIs (rare but possible)
-            if (match.includes("URI=\"") || match.includes("URI='")) return match;
-            const absoluteUrl = this.resolveUrl(p1, baseUrl, origin);
-            return `URI="${proxyPrefix}${encodeURIComponent(absoluteUrl)}"`;
-          });
+          return line
+            .replace(
+              /URI=(['"])([^'"]+)(['"])/g,
+              (match, quote, p2, endQuote) => {
+                const absoluteUrl = this.resolveUrl(p2, baseUrl, origin);
+                return `URI=${quote}${proxyPrefix}${encodeURIComponent(absoluteUrl)}${endQuote}`;
+              },
+            )
+            .replace(/URI=([^'",\s]+)/g, (match, p1) => {
+              // Handle unquoted URIs (rare but possible)
+              if (match.includes('URI="') || match.includes("URI='"))
+                return match;
+              const absoluteUrl = this.resolveUrl(p1, baseUrl, origin);
+              return `URI="${proxyPrefix}${encodeURIComponent(absoluteUrl)}"`;
+            });
         }
 
         // 2. Rewrite Segment URLs or Sub-playlist URLs
@@ -248,5 +292,4 @@ export class StreamingProxyService {
     if (url.startsWith("/")) return `${origin}${url}`;
     return `${baseUrl}${url}`;
   }
-
 }

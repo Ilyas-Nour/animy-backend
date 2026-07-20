@@ -33,10 +33,13 @@ export class StreamingService {
   /**
    * Find anime by title (AniList fallback)
    */
-  async findAnimeByTitle(title: string, titleEnglish?: string, anilistId?: number) {
+  async findAnimeByTitle(
+    title: string,
+    titleEnglish?: string,
+    anilistId?: number,
+  ) {
     return this.consumetService.search(title);
   }
-
 
   /**
    * Resolve TMDB ID from AniList ID or title
@@ -57,19 +60,27 @@ export class StreamingService {
       };
 
       if (anilistId && manualMap[anilistId]) {
-        this.logger.debug(`Manual Map: AniList ${anilistId} -> TMDB ${manualMap[anilistId]}`);
+        this.logger.debug(
+          `Manual Map: AniList ${anilistId} -> TMDB ${manualMap[anilistId]}`,
+        );
         return manualMap[anilistId];
       }
 
       // 1. First try malsync (fastest)
       if (anilistId && !isNaN(anilistId)) {
         try {
-          const res = await axios.get(`https://api.malsync.moe/anilist/anime/${anilistId}`, { timeout: 3000 }).catch(() => null);
+          const res = await axios
+            .get(`https://api.malsync.moe/anilist/anime/${anilistId}`, {
+              timeout: 3000,
+            })
+            .catch(() => null);
           const tmdbSite = res?.data?.Sites?.Tmdb;
           if (tmdbSite) {
             const tmdbId = Object.keys(tmdbSite)[0];
             if (tmdbId) {
-              this.logger.debug(`malsync: AniList ${anilistId} -> TMDB ${tmdbId}`);
+              this.logger.debug(
+                `malsync: AniList ${anilistId} -> TMDB ${tmdbId}`,
+              );
               return tmdbId;
             }
           }
@@ -82,15 +93,23 @@ export class StreamingService {
       // 2. Aggressive TMDB Search
       if (title) {
         const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
-        const res = await axios.get(searchUrl, { timeout: 5000 }).catch(() => null);
+        const res = await axios
+          .get(searchUrl, { timeout: 5000 })
+          .catch(() => null);
         if (res?.data?.results?.length) {
           // Prioritize TV shows for anime, then movies
-          const tvMatch = res.data.results.find((r: any) => r.media_type === 'tv');
-          const movieMatch = res.data.results.find((r: any) => r.media_type === 'movie');
+          const tvMatch = res.data.results.find(
+            (r: any) => r.media_type === "tv",
+          );
+          const movieMatch = res.data.results.find(
+            (r: any) => r.media_type === "movie",
+          );
           const bestMatch = tvMatch || movieMatch;
-          
+
           if (bestMatch) {
-            this.logger.debug(`TMDB search: "${title}" -> ${bestMatch.id} (${bestMatch.media_type})`);
+            this.logger.debug(
+              `TMDB search: "${title}" -> ${bestMatch.id} (${bestMatch.media_type})`,
+            );
             return bestMatch.id.toString();
           }
         }
@@ -111,7 +130,7 @@ export class StreamingService {
       this.logger.debug(`Mesh-v11.1 Discovery: ${title} (AL: ${anilistId})`);
 
       const queries = [title, titleEnglish].filter(Boolean);
-      const broadTitle = title.split(':')[0].split('-')[0].trim();
+      const broadTitle = title.split(":")[0].split("-")[0].trim();
       if (broadTitle && !queries.includes(broadTitle)) {
         queries.push(broadTitle);
       }
@@ -120,23 +139,35 @@ export class StreamingService {
         try {
           const results = await Promise.race([
             this.consumetService.search(query),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 4000))
+            new Promise<any[]>((resolve) =>
+              setTimeout(() => resolve([]), 4000),
+            ),
           ]).catch(() => []);
 
           if (results.length > 0) {
-            this.logger.log(`Mesh Discovery Match: "${query}" -> ${results[0].id} (${results[0].provider})`);
+            this.logger.log(
+              `Mesh Discovery Match: "${query}" -> ${results[0].id} (${results[0].provider})`,
+            );
             return {
               id: results[0].id,
               title: results[0].title,
-              provider: results[0].provider
+              provider: results[0].provider,
             };
           }
         } catch (e) {}
       }
 
-      return { id: anilistId, title: titleEnglish || title, provider: "anilist" };
+      return {
+        id: anilistId,
+        title: titleEnglish || title,
+        provider: "anilist",
+      };
     } catch (error) {
-      return { id: anilistId, title: titleEnglish || title, provider: "anilist" };
+      return {
+        id: anilistId,
+        title: titleEnglish || title,
+        provider: "anilist",
+      };
     }
   }
 
@@ -147,7 +178,10 @@ export class StreamingService {
     try {
       this.logger.debug(`Resolving MAL ID for AniList: ${anilistId}`);
       // Correct Malsync URL for AniList mapping
-      const res = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 });
+      const res = await axios.get(
+        `https://api.malsync.moe/mal/anime/anilist:${anilistId}`,
+        { timeout: 3000 },
+      );
       return res.data?.mal_id || res.data?.id || null;
     } catch (e) {
       return null;
@@ -169,73 +203,86 @@ export class StreamingService {
     malIdParam?: string,
     episodeNumber?: string,
     tmdbIdParam?: string,
-    title?: string
+    title?: string,
   ) {
     try {
-      const anilistId = parseInt(malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""), 10);
+      const anilistId = parseInt(
+        malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""),
+        10,
+      );
       const epNum = parseInt(episodeNumber || "1", 10);
 
       // 1. Check Cache First (Anikai level speed)
       if (!isNaN(anilistId)) {
-        const cached = await this.cacheService.getCachedLinks(anilistId, epNum, "mesh-v12");
+        const cached = await this.cacheService.getCachedLinks(
+          anilistId,
+          epNum,
+          "mesh-v12",
+        );
         if (cached) {
-          this.logger.log(`Nuclear Mesh v12: CACHE HIT for AL=${anilistId}, EP=${epNum}`);
+          this.logger.log(
+            `Nuclear Mesh v12: CACHE HIT for AL=${anilistId}, EP=${epNum}`,
+          );
           return cached;
         }
       }
 
-      this.logger.log(`Nuclear Mesh v12: AL=${anilistId}, EP=${epNum}, Title="${title}"`);
+      this.logger.log(
+        `Nuclear Mesh v12: AL=${anilistId}, EP=${epNum}, Title="${title}"`,
+      );
 
       const servers: any[] = [];
 
       // ──────────────────────────────────────────────────────────────────────
       // TIER 1: MAL & AniList based embeds (VidLink - Most Stable 2026)
       // ──────────────────────────────────────────────────────────────────────
-      let malId = isNaN(anilistId) ? null : await this.resolveMalId(anilistId).catch(() => null);
-      
+      const malId = isNaN(anilistId)
+        ? null
+        : await this.resolveMalId(anilistId).catch(() => null);
+
       if (malId) {
         this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
-        
+
         // Mirror 1: VidLink via MAL ID (Best for Anime 2026)
         servers.push({
-          name: 'Mirror 1 (VidLink - Ultra)',
+          name: "Mirror 1 (VidLink - Ultra)",
           url: `https://vidlink.pro/anime/${malId}/${epNum}/sub`,
-          provider: 'vidlink',
-          isNative: false
+          provider: "vidlink",
+          isNative: false,
         });
 
         // Mirror 2: VidSrc.me (Extremely stable)
         servers.push({
-          name: 'Mirror 2 (VidSrc - Stable)',
+          name: "Mirror 2 (VidSrc - Stable)",
           url: `https://vidsrc.me/embed/anime/${malId}/${epNum}`,
-          provider: 'vidsrc',
-          isNative: false
+          provider: "vidsrc",
+          isNative: false,
         });
 
         // Mirror 3: VidSrc.to
         servers.push({
-          name: 'Mirror 3 (VidSrc.to)',
+          name: "Mirror 3 (VidSrc.to)",
           url: `https://vidsrc.to/embed/anime/${malId}/${epNum}`,
-          provider: 'vidsrc',
-          isNative: false
+          provider: "vidsrc",
+          isNative: false,
         });
 
         // Vidsrc.cc
         servers.push({
-          name: 'Mirror 4 (VidSrc.cc)',
+          name: "Mirror 4 (VidSrc.cc)",
           url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
-          provider: 'vidsrc',
-          isNative: false
+          provider: "vidsrc",
+          isNative: false,
         });
       }
 
       // AniList ID Direct (as a backup if MAL resolution fails)
       if (!isNaN(anilistId)) {
         servers.push({
-          name: 'Mirror 5 (VidLink - AL)',
+          name: "Mirror 5 (VidLink - AL)",
           url: `https://vidlink.pro/anime/${anilistId}/${epNum}/sub`,
-          provider: 'vidlink',
-          isNative: false
+          provider: "vidlink",
+          isNative: false,
         });
       }
 
@@ -244,11 +291,13 @@ export class StreamingService {
       // ──────────────────────────────────────────────────────────────────────
       const tmdbIdPromise = tmdbIdParam
         ? Promise.resolve(tmdbIdParam)
-        : this.getTmdbId(isNaN(anilistId) ? undefined : anilistId, title).catch(() => null);
+        : this.getTmdbId(isNaN(anilistId) ? undefined : anilistId, title).catch(
+            () => null,
+          );
 
       const tmdbId = await Promise.race([
         tmdbIdPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000))
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
       ]).catch(() => null);
 
       const secondaryId = tmdbId || anilistId;
@@ -257,19 +306,19 @@ export class StreamingService {
       if (secondaryId) {
         if (isTmdb) {
           servers.push({
-            name: 'Mirror 6 (VidLink - TMDB)',
+            name: "Mirror 6 (VidLink - TMDB)",
             url: `https://vidlink.pro/tv/${secondaryId}/1/${epNum}`,
-            provider: 'vidlink',
-            isNative: false
+            provider: "vidlink",
+            isNative: false,
           });
         }
 
         // Auto-embed fallback
         servers.push({
-          name: 'Mirror 7 (AutoEmbed)',
+          name: "Mirror 7 (AutoEmbed)",
           url: `https://player.vidsrc.nl/embed/anime/${malId || anilistId}/${epNum}`,
-          provider: 'mirror',
-          isNative: false
+          provider: "mirror",
+          isNative: false,
         });
       }
 
@@ -280,10 +329,18 @@ export class StreamingService {
       {
         try {
           const witanimeStreams = await Promise.race([
-            (!isNaN(anilistId) && anilistId > 0)
-              ? this.witanimeExtractor.extractEpisodeStreamsByAnilistId(anilistId, epNum, title)
-              : (title ? this.witanimeExtractor.extractEpisodeStreams(title, epNum) : Promise.resolve([])),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 12000)),
+            !isNaN(anilistId) && anilistId > 0
+              ? this.witanimeExtractor.extractEpisodeStreamsByAnilistId(
+                  anilistId,
+                  epNum,
+                  title,
+                )
+              : title
+                ? this.witanimeExtractor.extractEpisodeStreams(title, epNum)
+                : Promise.resolve([]),
+            new Promise<any[]>((resolve) =>
+              setTimeout(() => resolve([]), 12000),
+            ),
           ]);
 
           // Reverse the array to maintain the order when unshifting
@@ -293,23 +350,29 @@ export class StreamingService {
             if (stream.isNative && stream.streamUrl) {
               // Native .m3u8 — proxy through our server to handle CORS
               const proxiedUrl = proxyBaseUrl
-                ? `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || 'https://witanime.you/')}`
+                ? `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || "https://witanime.you/")}`
                 : stream.streamUrl;
 
               servers.unshift({
-                name: `Witanime ${stream.quality || 'HD'} (${stream.provider.replace('witanime-', '')})`,
+                name: `Witanime ${stream.quality || "HD"} (${stream.provider.replace("witanime-", "")})`,
                 url: proxiedUrl,
-                sources: [{ url: proxiedUrl, quality: stream.quality || 'auto', isM3U8: true }],
+                sources: [
+                  {
+                    url: proxiedUrl,
+                    quality: stream.quality || "auto",
+                    isM3U8: true,
+                  },
+                ],
                 provider: stream.provider,
                 isNative: true,
                 headers: {
-                  Referer: stream.referer || 'https://witanime.you/',
+                  Referer: stream.referer || "https://witanime.you/",
                 },
               });
             } else if (stream.embedUrl) {
               // Embed-only server (ok.ru, videa, etc.) — renderable as iframe
               servers.unshift({
-                name: `Witanime ${stream.quality || 'HD'} (${stream.provider.replace('witanime-', '')})`,
+                name: `Witanime ${stream.quality || "HD"} (${stream.provider.replace("witanime-", "")})`,
                 url: stream.embedUrl,
                 provider: stream.provider,
                 isNative: false,
@@ -317,7 +380,9 @@ export class StreamingService {
             }
           }
 
-          this.logger.log(`Witanime Tier 0: ${witanimeStreams.length} servers extracted`);
+          this.logger.log(
+            `Witanime Tier 0: ${witanimeStreams.length} servers extracted`,
+          );
         } catch (e) {
           this.logger.warn(`Witanime Tier 0 failed: ${e.message}`);
         }
@@ -330,10 +395,12 @@ export class StreamingService {
         try {
           const nativeServers = await Promise.race([
             this.extractNativeSources(title, epNum, anilistId, proxyBaseUrl),
-            new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 15000))
+            new Promise<any[]>((resolve) =>
+              setTimeout(() => resolve([]), 15000),
+            ),
           ]);
           if (nativeServers.length > 0) {
-            servers.unshift(...nativeServers); 
+            servers.unshift(...nativeServers);
           }
         } catch (e) {}
       }
@@ -345,14 +412,21 @@ export class StreamingService {
         malId,
         tmdbId: tmdbId || null,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': 'https://vidlink.pro/'
-        }
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Referer: "https://vidlink.pro/",
+        },
       };
 
       // Cache the result (Anikai strategy)
       if (!isNaN(anilistId) && servers.length > 0) {
-        await this.cacheService.cacheLinks(anilistId, epNum, "mesh-v12", response, 3);
+        await this.cacheService.cacheLinks(
+          anilistId,
+          epNum,
+          "mesh-v12",
+          response,
+          3,
+        );
       }
 
       return response;
@@ -365,7 +439,12 @@ export class StreamingService {
   /**
    * Internal: try to extract native .m3u8 sources via consumet providers.
    */
-  private async extractNativeSources(title: string, epNum: number, anilistId: number, proxyBaseUrl?: string): Promise<any[]> {
+  private async extractNativeSources(
+    title: string,
+    epNum: number,
+    anilistId: number,
+    proxyBaseUrl?: string,
+  ): Promise<any[]> {
     const nativeServers: any[] = [];
 
     const toProxiedUrl = (rawUrl: string, referer: string): string => {
@@ -378,86 +457,109 @@ export class StreamingService {
 
       const searchResults = await Promise.race([
         this.consumetService.search(title),
-        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000))
+        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 8000)),
       ]).catch(() => []);
 
       if (!searchResults?.length) return [];
 
       // 1. AnimePahe (Most reliable native source)
-      const paheResult = searchResults.find(r => r.provider === 'animepahe');
+      const paheResult = searchResults.find((r) => r.provider === "animepahe");
       if (paheResult) {
         try {
-          const paheEpId = await this.consumetService.resolveEpisodeId(paheResult.id, epNum, 'animepahe');
+          const paheEpId = await this.consumetService.resolveEpisodeId(
+            paheResult.id,
+            epNum,
+            "animepahe",
+          );
           if (paheEpId) {
-            const sources = await this.consumetService.getEpisodeSources(paheEpId, 'animepahe');
+            const sources = await this.consumetService.getEpisodeSources(
+              paheEpId,
+              "animepahe",
+            );
             if (sources?.sources?.length) {
-              const paheReferer = sources.headers?.Referer || 'https://animepahe.com/';
+              const paheReferer =
+                sources.headers?.Referer || "https://animepahe.com/";
               const proxiedSources = sources.sources.map((s: any) => ({
                 ...s,
-                url: toProxiedUrl(s.url, paheReferer)
+                url: toProxiedUrl(s.url, paheReferer),
               }));
               nativeServers.push({
-                name: 'Native 1 (AnimePahe)',
+                name: "Native 1 (AnimePahe)",
                 url: proxiedSources[0].url,
                 sources: proxiedSources,
                 subtitles: sources.subtitles || [],
-                provider: 'animepahe',
+                provider: "animepahe",
                 isNative: true,
-                headers: sources.headers
+                headers: sources.headers,
               });
-              this.logger.log(`Native AnimePahe extraction SUCCESS for EP${epNum}`);
+              this.logger.log(
+                `Native AnimePahe extraction SUCCESS for EP${epNum}`,
+              );
             }
           }
         } catch (e) {}
       }
 
       // 2. Anify (Fastest .m3u8 provider)
-      const anifyResult = searchResults.find(r => r.provider === 'anify');
+      const anifyResult = searchResults.find((r) => r.provider === "anify");
       if (anifyResult) {
         try {
-          const res = await axios.get(`https://api.anify.tv/sources?id=${anifyResult.id}&episodeNumber=${epNum}&providerId=gogoanime&watchId=${anifyResult.id}&subType=sub`, { timeout: 6000 });
+          const res = await axios.get(
+            `https://api.anify.tv/sources?id=${anifyResult.id}&episodeNumber=${epNum}&providerId=gogoanime&watchId=${anifyResult.id}&subType=sub`,
+            { timeout: 6000 },
+          );
           if (res.data?.sources?.length) {
             const sources = res.data.sources.map((s: any) => ({
-              url: toProxiedUrl(s.url, 'https://anify.tv/'),
+              url: toProxiedUrl(s.url, "https://anify.tv/"),
               quality: s.quality,
-              isM3U8: s.url.includes('.m3u8')
+              isM3U8: s.url.includes(".m3u8"),
             }));
             nativeServers.push({
-              name: 'Native 2 (Anify - High Speed)',
+              name: "Native 2 (Anify - High Speed)",
               url: sources[0].url,
               sources,
               subtitles: res.data.subtitles || [],
-              provider: 'anify',
+              provider: "anify",
               isNative: true,
-              headers: { Referer: 'https://anify.tv/' }
+              headers: { Referer: "https://anify.tv/" },
             });
             this.logger.log(`Native Anify extraction SUCCESS for EP${epNum}`);
           }
         } catch (e) {}
       }
       // 3. HiAnime (Zoro - High Quality Subs)
-      const hiResult = searchResults.find(r => r.provider === 'hianime');
+      const hiResult = searchResults.find((r) => r.provider === "hianime");
       if (hiResult) {
         try {
-          const hiEpId = await this.consumetService.resolveEpisodeId(hiResult.id, epNum, 'hianime');
+          const hiEpId = await this.consumetService.resolveEpisodeId(
+            hiResult.id,
+            epNum,
+            "hianime",
+          );
           if (hiEpId) {
-            const sources = await this.consumetService.getEpisodeSources(hiEpId, 'hianime');
+            const sources = await this.consumetService.getEpisodeSources(
+              hiEpId,
+              "hianime",
+            );
             if (sources?.sources?.length) {
-              const hiReferer = sources.headers?.Referer || 'https://hianime.to/';
+              const hiReferer =
+                sources.headers?.Referer || "https://hianime.to/";
               const proxiedSources = sources.sources.map((s: any) => ({
                 ...s,
-                url: toProxiedUrl(s.url, hiReferer)
+                url: toProxiedUrl(s.url, hiReferer),
               }));
               nativeServers.push({
-                name: 'Native 3 (HiAnime - Clean)',
+                name: "Native 3 (HiAnime - Clean)",
                 url: proxiedSources[0].url,
                 sources: proxiedSources,
                 subtitles: sources.subtitles || [],
-                provider: 'hianime',
+                provider: "hianime",
                 isNative: true,
-                headers: sources.headers
+                headers: sources.headers,
               });
-              this.logger.log(`Native HiAnime extraction SUCCESS for EP${epNum}`);
+              this.logger.log(
+                `Native HiAnime extraction SUCCESS for EP${epNum}`,
+              );
             }
           }
         } catch (e) {}

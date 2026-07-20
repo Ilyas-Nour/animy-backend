@@ -15,7 +15,7 @@ export class HomeService {
 
   async getHomeData() {
     const cacheKey = "home_data_v2";
-    
+
     try {
       const cached = await this.prisma.discoveryCache.findUnique({
         where: { key: cacheKey },
@@ -25,13 +25,14 @@ export class HomeService {
       const staleThreshold = 1000 * 60 * 30; // 30 minutes
 
       if (cached) {
-        const isStale = now.getTime() - cached.updatedAt.getTime() > staleThreshold;
-        
+        const isStale =
+          now.getTime() - cached.updatedAt.getTime() > staleThreshold;
+
         if (isStale) {
           this.logger.debug("Home data stale, triggering background refresh");
           // Non-blocking refresh, pass the old data so we can fallback to it if the fetch fails
-          this.refreshHomeData(cacheKey, cached.data).catch(err => 
-            this.logger.error(`Background refresh failed: ${err.message}`)
+          this.refreshHomeData(cacheKey, cached.data).catch((err) =>
+            this.logger.error(`Background refresh failed: ${err.message}`),
           );
         }
 
@@ -48,7 +49,7 @@ export class HomeService {
 
   async refreshHomeData(key: string, oldData?: any) {
     const data = await this.fetchFreshHomeData(oldData);
-    
+
     try {
       await this.prisma.discoveryCache.upsert({
         where: { key },
@@ -65,30 +66,53 @@ export class HomeService {
 
   private async fetchFreshHomeData(oldData?: any) {
     this.logger.debug("Fetching fresh home data from providers...");
-    
+
     // Parallel fetch with timeouts handled by individual services
-    const [trending, popular, upcoming, topManga, publishingManga] = await Promise.allSettled([
-      this.animeService.getTopAnime(undefined, "trending"),
-      this.animeService.getTopAnime(undefined, "airing"),
-      this.animeService.getUpcomingNextSeason(),
-      this.mangaService.searchManga({ order_by: "popularity", sort: "desc", limit: 15 }),
-      this.mangaService.searchManga({ order_by: "popularity", sort: "desc", limit: 15 }),
-    ]);
+    const [trending, popular, upcoming, topManga, publishingManga] =
+      await Promise.allSettled([
+        this.animeService.getTopAnime(undefined, "trending"),
+        this.animeService.getTopAnime(undefined, "airing"),
+        this.animeService.getUpcomingNextSeason(),
+        this.mangaService.searchManga({
+          order_by: "popularity",
+          sort: "desc",
+          limit: 15,
+        }),
+        this.mangaService.searchManga({
+          order_by: "popularity",
+          sort: "desc",
+          limit: 15,
+        }),
+      ]);
 
     const extractData = (res: any, fallbackKey: string) => {
       // If the fetch succeeded and returned data, use it
-      if (res.status === "fulfilled" && res.value?.data && Array.isArray(res.value.data) && res.value.data.length > 0) {
+      if (
+        res.status === "fulfilled" &&
+        res.value?.data &&
+        Array.isArray(res.value.data) &&
+        res.value.data.length > 0
+      ) {
         return res.value;
       }
-      
+
       // If fetch failed or returned empty array, try to fallback to old data
-      if (oldData && oldData[fallbackKey] && Array.isArray(oldData[fallbackKey]) && oldData[fallbackKey].length > 0) {
-        this.logger.warn(`Provider failed or returned empty for ${fallbackKey}, falling back to stale cache.`);
+      if (
+        oldData &&
+        oldData[fallbackKey] &&
+        Array.isArray(oldData[fallbackKey]) &&
+        oldData[fallbackKey].length > 0
+      ) {
+        this.logger.warn(
+          `Provider failed or returned empty for ${fallbackKey}, falling back to stale cache.`,
+        );
         return { data: oldData[fallbackKey] };
       }
-      
+
       // Complete failure and no fallback
-      this.logger.error(`Complete failure for ${fallbackKey} and no fallback data available.`);
+      this.logger.error(
+        `Complete failure for ${fallbackKey} and no fallback data available.`,
+      );
       return { data: [] };
     };
 
@@ -104,7 +128,7 @@ export class HomeService {
       upcomingAnime: upcomingData.data || [],
       topManga: topMangaData.data || [],
       publishingManga: publishingMangaData.data || [],
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 }

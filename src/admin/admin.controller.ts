@@ -6,7 +6,9 @@ import {
   Param,
   Body,
   Delete,
+  Req,
 } from "@nestjs/common";
+import { Public } from "../common/decorators/public.decorator";
 import { AdminService } from "./admin.service";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
@@ -79,5 +81,24 @@ export class AdminController {
     @Param("id") id: string,
   ) {
     return this.adminService.getMediaItemAnalytics(type, metric, parseInt(id));
+  }
+
+  // --- SETTINGS ---
+  @Get("settings")
+  @Public() // Make settings readable for global layout checks
+  async getSettings() {
+    return this.adminService.getSettings();
+  }
+
+  @Put("settings")
+  async updateSettings(@Body() data: any, @Req() req: any) {
+    const adminId = req.user?.id;
+    return this.adminService.updateSettings(data, adminId);
+  }
+
+  // --- ACTIVITIES ---
+  @Get("activities")
+  async getActivities() {
+    return this.adminService.getActivities(50);
   }
 }

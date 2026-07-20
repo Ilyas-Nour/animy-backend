@@ -76,6 +76,9 @@ model User {
   notifications Notification[] @relation("UserNotifications")
   sentNotifications Notification[] @relation("SenderNotifications")
 
+  // Admin Relations
+  activityLogs ActivityLog[]
+
   @@map("users")
 }
 
@@ -561,3 +564,31 @@ model DiscoveryCache {
 
   @@map("discovery_cache")
 }
+
+// --- ADMIN & ANALYTICS ---
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("system_settings")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?  // Can be null for system/anonymous events
+  action    String   // e.g., "USER_LOGIN", "MAINTENANCE_ENABLED"
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+

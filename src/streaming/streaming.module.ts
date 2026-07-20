@@ -14,7 +14,23 @@ import { StorageService } from "./storage.service";
 @Module({
   imports: [DatabaseModule],
   controllers: [StreamingController],
-  providers: [StreamingService, HiAnimeService, ConsumetService, StreamingProxyService, IdMappingService, EpisodeCacheService, WitanimeExtractorService, StorageService],
-  exports: [StreamingService, IdMappingService, StreamingProxyService, EpisodeCacheService, WitanimeExtractorService, StorageService],
+  providers: [
+    StreamingService,
+    HiAnimeService,
+    ConsumetService,
+    StreamingProxyService,
+    IdMappingService,
+    EpisodeCacheService,
+    WitanimeExtractorService,
+    StorageService,
+  ],
+  exports: [
+    StreamingService,
+    IdMappingService,
+    StreamingProxyService,
+    EpisodeCacheService,
+    WitanimeExtractorService,
+    StorageService,
+  ],
 })
 export class StreamingModule {}

@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
-import axios from 'axios';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../database/prisma.service";
+import axios from "axios";
 
 @Injectable()
 export class IdMappingService {
@@ -8,8 +8,8 @@ export class IdMappingService {
 
   // HiAnime API hosts in order of preference
   private readonly hiAnimeHosts = [
-    'https://aniwatch-api-net.vercel.app/api/v2/hianime',
-    'https://hianime-api.vercel.app/anime',
+    "https://aniwatch-api-net.vercel.app/api/v2/hianime",
+    "https://hianime-api.vercel.app/anime",
   ];
 
   constructor(private readonly prisma: PrismaService) {}
@@ -29,11 +29,15 @@ export class IdMappingService {
     });
 
     if (cached?.hiAnimeId) {
-      this.logger.debug(`DB HIT: AniList ${anilistId} -> HiAnime ${cached.hiAnimeId}`);
+      this.logger.debug(
+        `DB HIT: AniList ${anilistId} -> HiAnime ${cached.hiAnimeId}`,
+      );
       return cached.hiAnimeId;
     }
 
-    this.logger.debug(`DB MISS: Searching HiAnime for AniList ${anilistId} (${title})`);
+    this.logger.debug(
+      `DB MISS: Searching HiAnime for AniList ${anilistId} (${title})`,
+    );
 
     // Try primary title then English fallback
     const titlesToTry = [title, titleEnglish].filter(Boolean) as string[];
@@ -63,11 +67,15 @@ export class IdMappingService {
     });
 
     if (cached?.mangaDexId) {
-      this.logger.debug(`DB HIT: AniList ${anilistId} -> MangaDex ${cached.mangaDexId}`);
+      this.logger.debug(
+        `DB HIT: AniList ${anilistId} -> MangaDex ${cached.mangaDexId}`,
+      );
       return cached.mangaDexId;
     }
 
-    this.logger.debug(`DB MISS: Searching MangaDex for AniList ${anilistId} (${title})`);
+    this.logger.debug(
+      `DB MISS: Searching MangaDex for AniList ${anilistId} (${title})`,
+    );
 
     const mangaDexId = await this.searchMangaDex(title);
     if (mangaDexId) {
@@ -100,7 +108,10 @@ export class IdMappingService {
   /**
    * Resolves an AniList anime ID to an Anikai (MegaUp) provider ID.
    */
-  async resolveAnikaiId(anilistId: number, title: string): Promise<string | null> {
+  async resolveAnikaiId(
+    anilistId: number,
+    title: string,
+  ): Promise<string | null> {
     const cached = await this.prisma.animeMapping.findUnique({
       where: { id: anilistId },
     });
@@ -110,7 +121,7 @@ export class IdMappingService {
     try {
       this.logger.debug(`Searching Anikai for title: ${title}`);
       // Assuming a search mechanism exists or we use title-based matching
-      const anikaiId = title.toLowerCase().replace(/\s+/g, '-'); // Simple slug for now or actual search result
+      const anikaiId = title.toLowerCase().replace(/\s+/g, "-"); // Simple slug for now or actual search result
       await this.prisma.animeMapping.upsert({
         where: { id: anilistId },
         update: { anikaiId },
@@ -125,16 +136,23 @@ export class IdMappingService {
   /**
    * Saves (or updates) a HiAnime ID mapping for a given AniList ID.
    */
-  async saveHiAnimeMapping(anilistId: number, hiAnimeId: string): Promise<void> {
+  async saveHiAnimeMapping(
+    anilistId: number,
+    hiAnimeId: string,
+  ): Promise<void> {
     try {
       await this.prisma.animeMapping.upsert({
         where: { id: anilistId },
         update: { hiAnimeId, lastChecked: new Date() },
         create: { id: anilistId, hiAnimeId },
       });
-      this.logger.debug(`Saved mapping: AniList ${anilistId} -> HiAnime ${hiAnimeId}`);
+      this.logger.debug(
+        `Saved mapping: AniList ${anilistId} -> HiAnime ${hiAnimeId}`,
+      );
     } catch (e) {
-      this.logger.error(`Failed to save HiAnime mapping for ${anilistId}: ${e.message}`);
+      this.logger.error(
+        `Failed to save HiAnime mapping for ${anilistId}: ${e.message}`,
+      );
     }
   }
 
@@ -164,19 +182,28 @@ export class IdMappingService {
 
       if (cached?.idMal) return cached.idMal;
 
-      this.logger.debug(`Fetching MAL ID for AniList ${anilistId} from MALSync`);
-      const { data } = await axios.get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, { timeout: 3000 });
+      this.logger.debug(
+        `Fetching MAL ID for AniList ${anilistId} from MALSync`,
+      );
+      const { data } = await axios.get(
+        `https://api.malsync.moe/mal/anime/anilist:${anilistId}`,
+        { timeout: 3000 },
+      );
       if (data && data.malId) {
         const malId = Number(data.malId);
-        await this.prisma.animeMapping.upsert({
-          where: { id: anilistId },
-          update: { idMal: malId },
-          create: { id: anilistId, idMal: malId },
-        }).catch(() => null);
+        await this.prisma.animeMapping
+          .upsert({
+            where: { id: anilistId },
+            update: { idMal: malId },
+            create: { id: anilistId, idMal: malId },
+          })
+          .catch(() => null);
         return malId;
       }
     } catch (e) {
-      this.logger.warn(`MALSync resolution failed for AniList ${anilistId}: ${e.message}`);
+      this.logger.warn(
+        `MALSync resolution failed for AniList ${anilistId}: ${e.message}`,
+      );
     }
 
     return null;
@@ -185,16 +212,23 @@ export class IdMappingService {
   /**
    * Saves (or updates) a MangaDex ID mapping for a given AniList ID.
    */
-  async saveMangaDexMapping(anilistId: number, mangaDexId: string): Promise<void> {
+  async saveMangaDexMapping(
+    anilistId: number,
+    mangaDexId: string,
+  ): Promise<void> {
     try {
       await this.prisma.animeMapping.upsert({
         where: { id: anilistId },
         update: { mangaDexId, lastChecked: new Date() },
         create: { id: anilistId, mangaDexId },
       });
-      this.logger.debug(`Saved mapping: AniList ${anilistId} -> MangaDex ${mangaDexId}`);
+      this.logger.debug(
+        `Saved mapping: AniList ${anilistId} -> MangaDex ${mangaDexId}`,
+      );
     } catch (e) {
-      this.logger.error(`Failed to save MangaDex mapping for ${anilistId}: ${e.message}`);
+      this.logger.error(
+        `Failed to save MangaDex mapping for ${anilistId}: ${e.message}`,
+      );
     }
   }
 
@@ -209,10 +243,7 @@ export class IdMappingService {
         const url = `${host}/search?q=${encodeURIComponent(searchTitle)}`;
         const { data } = await axios.get(url, { timeout: 8000 });
         const results =
-          data.data?.animes ||
-          data.data?.results ||
-          data.data?.response ||
-          [];
+          data.data?.animes || data.data?.results || data.data?.response || [];
 
         if (results.length === 0) continue;
 
@@ -234,11 +265,11 @@ export class IdMappingService {
     try {
       const { data } = await axios.get(
         `https://api.mangadex.org/manga?title=${encodeURIComponent(title)}&limit=5`,
-        { 
+        {
           timeout: 15000,
           headers: {
-            'User-Agent': 'Animy/1.0.0 (https://animy.xyz)'
-          }
+            "User-Agent": "Animy/1.0.0 (https://animy.xyz)",
+          },
         },
       );
 
@@ -247,7 +278,11 @@ export class IdMappingService {
 
       // Pick entry with closest title match
       const normalize = (s: string) =>
-        s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+        s
+          .toLowerCase()
+          .replace(/[^\w\s]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
 
       const normalizedTarget = normalize(title);
 
@@ -255,7 +290,7 @@ export class IdMappingService {
         const attrs = entry.attributes;
         const titles = [
           attrs.title?.en,
-          attrs.title?.['ja-ro'],
+          attrs.title?.["ja-ro"],
           Object.values(attrs.title || {})[0],
         ].filter(Boolean) as string[];
 
@@ -282,13 +317,17 @@ export class IdMappingService {
     results: Array<{ id: string; title?: string; name?: string }>,
   ): { id: string; title: string } | null {
     const normalize = (s: string) =>
-      s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+      s
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
 
     const normalizedTarget = normalize(target);
 
     // Exact match first
     for (const r of results) {
-      const t = r.title || r.name || '';
+      const t = r.title || r.name || "";
       if (normalize(t) === normalizedTarget) {
         return { id: r.id, title: t };
       }
@@ -296,7 +335,7 @@ export class IdMappingService {
 
     // Substring match
     for (const r of results) {
-      const t = r.title || r.name || '';
+      const t = r.title || r.name || "";
       const normalizedResult = normalize(t);
       if (
         normalizedResult.includes(normalizedTarget) ||
@@ -311,7 +350,7 @@ export class IdMappingService {
     let bestResult: { id: string; title: string } | null = null;
 
     for (const r of results) {
-      const t = r.title || r.name || '';
+      const t = r.title || r.name || "";
       const score = this.overlapScore(normalizedTarget, normalize(t));
       if (score > bestScore) {
         bestScore = score;
@@ -320,15 +359,22 @@ export class IdMappingService {
     }
 
     // Only return if reasonable confidence
-    return bestScore > 0.5 ? bestResult : results.length > 0 ? { id: results[0].id, title: results[0].title || results[0].name || '' } : null;
+    return bestScore > 0.5
+      ? bestResult
+      : results.length > 0
+        ? {
+            id: results[0].id,
+            title: results[0].title || results[0].name || "",
+          }
+        : null;
   }
 
   /**
    * Computes a word-overlap similarity score between two normalized strings (0-1).
    */
   private overlapScore(a: string, b: string): number {
-    const wordsA = new Set(a.split(' '));
-    const wordsB = new Set(b.split(' '));
+    const wordsA = new Set(a.split(" "));
+    const wordsB = new Set(b.split(" "));
     let overlap = 0;
     for (const w of wordsA) {
       if (wordsB.has(w)) overlap++;

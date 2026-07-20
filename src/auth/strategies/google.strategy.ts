@@ -6,16 +6,18 @@ import { Strategy, VerifyCallback } from "passport-google-oauth20";
 export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
   constructor() {
     super({
-      clientID: (process.env.GOOGLE_CLIENT_ID?.trim()) || 'missing',
-      clientSecret: (process.env.GOOGLE_CLIENT_SECRET?.trim()) || 'missing',
-      callbackURL: (process.env.GOOGLE_CALLBACK_URL?.trim()) || 'http://localhost:3001/api/v1/auth/google/callback',
+      clientID: process.env.GOOGLE_CLIENT_ID?.trim() || "missing",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || "missing",
+      callbackURL:
+        process.env.GOOGLE_CALLBACK_URL?.trim() ||
+        "http://localhost:3001/api/v1/auth/google/callback",
       scope: ["email", "profile"],
     });
   }
 
   authorizationParams(): { [key: string]: string } {
     return {
-      prompt: 'select_account',
+      prompt: "select_account",
     };
   }
 

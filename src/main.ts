@@ -62,7 +62,9 @@ async function bootstrap() {
   // Must be registered AFTER setGlobalPrefix so it respects the prefix.
   const httpAdapter = app.getHttpAdapter();
   httpAdapter.get(`/${apiPrefix}/health`, (_req: any, res: any) => {
-    res.status(200).json({ status: 'ok', uptime: process.uptime(), ts: Date.now() });
+    res
+      .status(200)
+      .json({ status: "ok", uptime: process.uptime(), ts: Date.now() });
   });
 
   // CORS configuration

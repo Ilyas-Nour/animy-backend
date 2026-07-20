@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../database/prisma.service";
 
 @Injectable()
 export class EpisodeCacheService {
@@ -23,13 +23,19 @@ export class EpisodeCacheService {
       });
 
       if (cached && cached.expiresAt > new Date()) {
-        this.logger.debug(`CACHE HIT: ${provider} - ${animeId} EP ${episodeNum}`);
+        this.logger.debug(
+          `CACHE HIT: ${provider} - ${animeId} EP ${episodeNum}`,
+        );
         return cached.streamData;
       }
 
       if (cached) {
-        this.logger.debug(`CACHE EXPIRED: ${provider} - ${animeId} EP ${episodeNum}`);
-        await this.prisma.episodeCache.delete({ where: { id: cached.id } }).catch(() => null);
+        this.logger.debug(
+          `CACHE EXPIRED: ${provider} - ${animeId} EP ${episodeNum}`,
+        );
+        await this.prisma.episodeCache
+          .delete({ where: { id: cached.id } })
+          .catch(() => null);
       }
 
       return null;
@@ -47,7 +53,7 @@ export class EpisodeCacheService {
     episodeNum: number,
     provider: string,
     streamData: any,
-    expiryHours: number = 4
+    expiryHours: number = 4,
   ) {
     try {
       const expiresAt = new Date();
@@ -73,7 +79,9 @@ export class EpisodeCacheService {
           expiresAt,
         },
       });
-      this.logger.debug(`CACHED: ${provider} - ${animeId} EP ${episodeNum} (Expires in ${expiryHours}h)`);
+      this.logger.debug(
+        `CACHED: ${provider} - ${animeId} EP ${episodeNum} (Expires in ${expiryHours}h)`,
+      );
     } catch (e) {
       this.logger.error(`Failed to cache links: ${e.message}`);
     }

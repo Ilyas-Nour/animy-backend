@@ -228,10 +228,13 @@ export class AdminService {
   }
 
   async updateUserRole(userId: string, role: string) {
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { role: role as any },
     });
+
+    await this.logActivity("USER_ROLE_UPDATED", { role }, userId);
+    return updated;
   }
 
   async deleteUser(userId: string) {
@@ -363,5 +366,64 @@ export class AdminService {
       dailyGrowth,
       users: entries.map((e: any) => e.user),
     };
+  }
+
+  // --- SYSTEM SETTINGS ---
+  async getSettings() {
+    const settings = await this.prisma.systemSetting.findMany();
+    const config: Record<string, any> = {};
+    settings.forEach((s) => {
+      config[s.key] = s.value;
+    });
+    return config;
+  }
+
+  async updateSettings(settings: Record<string, any>, adminId: string) {
+    for (const [key, value] of Object.entries(settings)) {
+      await this.prisma.systemSetting.upsert({
+        where: { key },
+        update: { value, updatedBy: adminId },
+        create: { key, value, updatedBy: adminId },
+      });
+    }
+    await this.logActivity(
+      "SETTINGS_UPDATED",
+      { updatedKeys: Object.keys(settings) },
+      adminId,
+    );
+    return this.getSettings();
+  }
+
+  // --- ACTIVITY LOGS ---
+  async getActivities(limit: number = 50) {
+    return this.prisma.activityLog.findMany({
+      take: limit,
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: {
+          select: { id: true, username: true, email: true, avatar: true },
+        },
+      },
+    });
+  }
+
+  async logActivity(
+    action: string,
+    details?: any,
+    userId?: string,
+    ipAddress?: string,
+  ) {
+    try {
+      await this.prisma.activityLog.create({
+        data: {
+          action,
+          details: details ? details : undefined,
+          userId,
+          ipAddress,
+        },
+      });
+    } catch (e) {
+      console.error("[ActivityLog] Failed to log activity: ", e);
+    }
   }
 }

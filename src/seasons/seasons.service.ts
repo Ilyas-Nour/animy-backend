@@ -27,7 +27,9 @@ export class SeasonsService {
       const data = await this.anilistService.getThisSeason(season, year);
 
       return {
-        data: (data?.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter((a: any) => a !== null),
+        data: (data?.media || [])
+          .map((m: any) => this.mapAnilistToResponse(m))
+          .filter((a: any) => a !== null),
         season,
         year,
       };
@@ -35,7 +37,7 @@ export class SeasonsService {
       this.logger.warn(`AniList Current Season failed: ${e.message}`);
       const data = await this.jikanService.getSeason(year, season);
       return {
-        data: data.map(r => this.mapJikanToResponse(r)),
+        data: data.map((r) => this.mapJikanToResponse(r)),
         season,
         year,
       };
@@ -46,13 +48,15 @@ export class SeasonsService {
     try {
       const data = await this.anilistService.getNextSeason();
       return {
-        data: (data?.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter((a: any) => a !== null),
+        data: (data?.media || [])
+          .map((m: any) => this.mapAnilistToResponse(m))
+          .filter((a: any) => a !== null),
       };
     } catch (e) {
       this.logger.warn(`AniList Upcoming Season failed: ${e.message}`);
       const data = await this.jikanService.getUpcoming();
       return {
-        data: data.map(r => this.mapJikanToResponse(r)),
+        data: data.map((r) => this.mapJikanToResponse(r)),
       };
     }
   }
@@ -77,14 +81,16 @@ export class SeasonsService {
       );
       return {
         pagination: { last_visible_page: 100, has_next_page: true },
-        data: (data?.media || []).map((m: any) => this.mapAnilistToResponse(m)).filter((a: any) => a !== null),
+        data: (data?.media || [])
+          .map((m: any) => this.mapAnilistToResponse(m))
+          .filter((a: any) => a !== null),
       };
     } catch (e) {
       this.logger.warn(`AniList Season ${year} ${season} failed: ${e.message}`);
       const data = await this.jikanService.getSeason(year, seasonUpper);
       return {
         pagination: { last_visible_page: 1, has_next_page: false },
-        data: data.map(r => this.mapJikanToResponse(r)),
+        data: data.map((r) => this.mapJikanToResponse(r)),
       };
     }
   }
@@ -170,8 +176,12 @@ export class SeasonsService {
       },
       year: jikan.year,
       season: jikan.season,
-      genres: jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) || [],
-      studios: jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) || [],
+      genres:
+        jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) ||
+        [],
+      studios:
+        jikan.studios?.map((s: any) => ({ name: s.name, mal_id: s.mal_id })) ||
+        [],
     };
   }
 }

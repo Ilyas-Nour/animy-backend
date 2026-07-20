@@ -5,10 +5,7 @@ import { MangaController } from "./manga.controller";
 import { StreamingModule } from "../streaming/streaming.module";
 
 @Module({
-  imports: [
-    HttpModule,
-    StreamingModule,
-  ],
+  imports: [HttpModule, StreamingModule],
   controllers: [MangaController],
   providers: [MangaService],
   exports: [MangaService],

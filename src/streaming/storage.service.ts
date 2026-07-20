@@ -1,6 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 @Injectable()
@@ -14,7 +19,9 @@ export class StorageService {
     const region = this.configService.get<string>("AWS_REGION");
     const endpoint = this.configService.get<string>("AWS_S3_ENDPOINT"); // For Cloudflare R2 or MinIO
     const accessKeyId = this.configService.get<string>("AWS_ACCESS_KEY_ID");
-    const secretAccessKey = this.configService.get<string>("AWS_SECRET_ACCESS_KEY");
+    const secretAccessKey = this.configService.get<string>(
+      "AWS_SECRET_ACCESS_KEY",
+    );
     this.bucket = this.configService.get<string>("AWS_S3_BUCKET");
     this.publicUrl = this.configService.get<string>("AWS_S3_PUBLIC_URL"); // Optional public CDN URL
 
@@ -31,14 +38,20 @@ export class StorageService {
       });
       this.logger.log(`Initialized S3 Client for bucket: ${this.bucket}`);
     } else {
-      this.logger.warn("S3/R2 credentials not fully provided. StorageService will be disabled.");
+      this.logger.warn(
+        "S3/R2 credentials not fully provided. StorageService will be disabled.",
+      );
     }
   }
 
   /**
    * Uploads a buffer or stream to S3.
    */
-  async uploadFile(key: string, body: Buffer | any, contentType: string): Promise<string | null> {
+  async uploadFile(
+    key: string,
+    body: Buffer | any,
+    contentType: string,
+  ): Promise<string | null> {
     if (!this.s3Client || !this.bucket) return null;
 
     try {
@@ -74,7 +87,10 @@ export class StorageService {
       await this.s3Client.send(command);
       return true;
     } catch (error) {
-      if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) {
+      if (
+        error.name === "NotFound" ||
+        error.$metadata?.httpStatusCode === 404
+      ) {
         return false;
       }
       this.logger.error(`Error checking HeadObject for ${key}:`, error.message);
@@ -101,7 +117,9 @@ export class StorageService {
         Bucket: this.bucket,
         Key: key,
       });
-      const url = await getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
+      const url = await getSignedUrl(this.s3Client, command, {
+        expiresIn: 3600,
+      });
       return url;
     } catch (error) {
       this.logger.error(`Error getting signed URL for ${key}:`, error.message);
