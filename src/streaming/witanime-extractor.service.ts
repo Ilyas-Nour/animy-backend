@@ -288,15 +288,14 @@ export class WitanimeExtractorService {
   ): Promise<{ slug: string; name: string } | null> {
     // 1. Check DB cache
     try {
-      const cached = await this.prisma.animeMapping.findUnique({
-        where: { id: anilistId },
-      });
-      if (cached?.witanimeSlug) {
-        this.logger.debug(
-          `Witanime CACHE HIT: AL ${anilistId} → slug "${cached.witanimeSlug}"`,
-        );
-        return { slug: cached.witanimeSlug, name: cached.witanimeSlug };
-      }
+      // Temporarily disabled until production database schema is migrated
+      // const cached = await this.prisma.animeMapping.findUnique({
+      //   where: { id: anilistId },
+      // });
+      // if (cached?.witanimeSlug) {
+      //   this.logger.debug(`Witanime CACHE HIT: AL ${anilistId} → slug "${cached.witanimeSlug}"`);
+      //   return { slug: cached.witanimeSlug, name: cached.witanimeSlug };
+      // }
     } catch (e) {
       // DB miss or error, continue to live resolution
     }
@@ -340,11 +339,12 @@ export class WitanimeExtractorService {
 
         // 5. Cache the slug in DB
         try {
-          await this.prisma.animeMapping.upsert({
-            where: { id: anilistId },
-            update: { witanimeSlug: match.slug, lastChecked: new Date() },
-            create: { id: anilistId, witanimeSlug: match.slug },
-          });
+          // Temporarily disabled until production database schema is migrated
+          // await this.prisma.animeMapping.upsert({
+          //   where: { id: anilistId },
+          //   update: { witanimeSlug: match.slug, lastChecked: new Date() },
+          //   create: { id: anilistId, witanimeSlug: match.slug },
+          // });
         } catch (e) {
           this.logger.warn(
             `Failed to cache Witanime slug for AL ${anilistId}: ${e.message}`,

@@ -534,7 +534,6 @@ model AnimeMapping {
   anikaiId    String?       // Anikai/MegaUp ID
   mangaDexId  String?       // MangaDex UUID
   mangaPillId  String?       // MangaPill slug
-  witanimeSlug String?       // Witanime anime slug (cached from search)
   lastChecked  DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
