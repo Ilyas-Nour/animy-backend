@@ -36,13 +36,24 @@ export class AnimeService {
 
     // Map Jikan 'order_by' to AniList 'sort'
     let anilistSort = "POPULARITY_DESC";
-    if (order_by === "score") anilistSort = "SCORE_DESC";
-    else if (order_by === "title") anilistSort = "TITLE_ENGLISH";
-    else if (order_by === "start_date") anilistSort = "START_DATE_DESC";
-    else if (order_by === "favorites") anilistSort = "FAVOURITES_DESC";
-    else if (order_by === "rank") anilistSort = "SCORE_DESC";
-
-    if (sort === "asc" && order_by === "popularity") anilistSort = "POPULARITY";
+    
+    if (order_by === "score") {
+      anilistSort = sort === "asc" ? "SCORE" : "SCORE_DESC";
+    } else if (order_by === "title") {
+      anilistSort = sort === "desc" ? "TITLE_ENGLISH_DESC" : "TITLE_ENGLISH";
+    } else if (order_by === "start_date") {
+      anilistSort = sort === "asc" ? "START_DATE" : "START_DATE_DESC";
+    } else if (order_by === "favorites") {
+      anilistSort = sort === "asc" ? "FAVOURITES" : "FAVOURITES_DESC";
+    } else if (order_by === "rank") {
+      // Jikan rank 1 is best, so asc = SCORE_DESC
+      anilistSort = sort === "desc" ? "SCORE" : "SCORE_DESC";
+    } else if (order_by === "popularity") {
+      // Jikan popularity 1 is most popular, so asc = POPULARITY_DESC
+      anilistSort = sort === "desc" ? "POPULARITY" : "POPULARITY_DESC";
+    } else if (order_by === "episodes") {
+      anilistSort = sort === "asc" ? "EPISODES" : "EPISODES_DESC";
+    }
 
     // Cache key
     const cacheKey = `search:${JSON.stringify(searchDto)}`;
