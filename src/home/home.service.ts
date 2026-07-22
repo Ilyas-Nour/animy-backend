@@ -68,22 +68,28 @@ export class HomeService {
     this.logger.debug("Fetching fresh home data from providers...");
 
     // Parallel fetch with timeouts handled by individual services
-    const [trending, popular, upcoming, topManga, publishingManga] =
-      await Promise.allSettled([
-        this.animeService.getTopAnime(undefined, "trending"),
-        this.animeService.getTopAnime(undefined, "airing"),
-        this.animeService.getUpcomingNextSeason(),
-        this.mangaService.searchManga({
-          order_by: "popularity",
-          sort: "desc",
-          limit: 15,
-        }),
-        this.mangaService.searchManga({
-          order_by: "popularity",
-          sort: "desc",
-          limit: 15,
-        }),
-      ]);
+    // Execute sequentially with a small delay to avoid AniList rate limits / timeouts
+    const trending = await Promise.allSettled([this.animeService.getTopAnime(undefined, "trending")]);
+    await new Promise((r) => setTimeout(r, 500));
+    const popular = await Promise.allSettled([this.animeService.getTopAnime(undefined, "airing")]);
+    await new Promise((r) => setTimeout(r, 500));
+    const upcoming = await Promise.allSettled([this.animeService.getUpcomingNextSeason()]);
+    await new Promise((r) => setTimeout(r, 500));
+    const topManga = await Promise.allSettled([
+      this.mangaService.searchManga({
+        order_by: "popularity",
+        sort: "desc",
+        limit: 15,
+      }),
+    ]);
+    await new Promise((r) => setTimeout(r, 500));
+    const publishingManga = await Promise.allSettled([
+      this.mangaService.searchManga({
+        order_by: "popularity",
+        sort: "desc",
+        limit: 15,
+      }),
+    ]);
 
     const extractData = (res: any, fallbackKey: string) => {
       // If the fetch succeeded and returned data, use it
@@ -116,11 +122,11 @@ export class HomeService {
       return { data: [] };
     };
 
-    const trendingData = extractData(trending, "trendingAnime");
-    const popularData = extractData(popular, "popularAnime");
-    const upcomingData = extractData(upcoming, "upcomingAnime");
-    const topMangaData = extractData(topManga, "topManga");
-    const publishingMangaData = extractData(publishingManga, "publishingManga");
+    const trendingData = extractData(trending[0], "trendingAnime");
+    const popularData = extractData(popular[0], "popularAnime");
+    const upcomingData = extractData(upcoming[0], "upcomingAnime");
+    const topMangaData = extractData(topManga[0], "topManga");
+    const publishingMangaData = extractData(publishingManga[0], "publishingManga");
 
     return {
       trendingAnime: trendingData.data || [],

@@ -195,18 +195,20 @@ export class AnimeService {
 
       // Final fallback: try Jikan directly assuming id is a MAL ID
       try {
-        const [directJikanData, characters, recommendations] =
-          await Promise.all([
-            this.jikanService.getAnimeById(id),
-            this.jikanService.getAnimeCharacters(id).catch(() => []),
-            this.jikanService.getAnimeRecommendations(id).catch(() => []),
-          ]);
-        if (directJikanData)
+        const directJikanData = await this.jikanService.getAnimeById(id);
+        if (directJikanData) {
+          // Add small delay to respect Jikan's rate limits
+          await new Promise(r => setTimeout(r, 500));
+          const characters = await this.jikanService.getAnimeCharacters(id).catch(() => []);
+          await new Promise(r => setTimeout(r, 500));
+          const recommendations = await this.jikanService.getAnimeRecommendations(id).catch(() => []);
+          
           return this.mapJikanToResponse(
             directJikanData,
             characters,
             recommendations,
           );
+        }
       } catch (jikanErr: any) {
         this.logger.error(
           `Jikan fallback direct fetch failed for ${id}: ${jikanErr.message}`,
