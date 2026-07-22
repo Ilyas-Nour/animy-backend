@@ -311,6 +311,38 @@ export class StreamingService {
             provider: "vidlink",
             isNative: false,
           });
+
+          // SmashyStream - Top tier multi-language player (Arabic/English/Dub)
+          servers.push({
+            name: "SmashyStream (Multi-Sub & Dub)",
+            url: `https://player.smashy.stream/tv/${secondaryId}?s=1&e=${epNum}`,
+            provider: "smashystream",
+            isNative: false,
+          });
+
+          // AutoEmbed - High speed, multi-language
+          servers.push({
+            name: "AutoEmbed (Fast / Multi-Lang)",
+            url: `https://autoembed.cc/embed/tv/${secondaryId}/1/${epNum}`,
+            provider: "autoembed",
+            isNative: false,
+          });
+
+          // MultiEmbed - Solid fallback
+          servers.push({
+            name: "MultiEmbed (HD Backups)",
+            url: `https://multiembed.mov/directstream.php?video_id=${secondaryId}&tmdb=1&s=1&e=${epNum}`,
+            provider: "multiembed",
+            isNative: false,
+          });
+
+          // VidSrc.xyz - Anime-focused mirror
+          servers.push({
+            name: "VidSrc.xyz (Anime Backup)",
+            url: `https://vidsrc.xyz/embed/tv/${secondaryId}/1-${epNum}`,
+            provider: "vidsrc-xyz",
+            isNative: false,
+          });
         }
 
         // Auto-embed fallback
