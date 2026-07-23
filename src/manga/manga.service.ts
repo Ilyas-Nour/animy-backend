@@ -30,7 +30,7 @@ export class MangaService {
   ) {}
 
   async searchManga(searchDto: SearchMangaDto) {
-    const { query, page = 1, limit = 25 } = searchDto;
+    const { query, page = 1, limit = 25, status } = searchDto;
 
     // Map Jikan order_by/sort to AniList sort
     let sortStr = "POPULARITY_DESC";
@@ -53,6 +53,7 @@ export class MangaService {
           Number(page),
           Number(limit),
           sortStr,
+          status,
         ),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Manga Search Timeout")), 25000),

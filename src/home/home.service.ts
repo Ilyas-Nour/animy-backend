@@ -75,6 +75,8 @@ export class HomeService {
     await new Promise((r) => setTimeout(r, 500));
     const upcoming = await Promise.allSettled([this.animeService.getUpcomingNextSeason()]);
     await new Promise((r) => setTimeout(r, 500));
+    const recent = await Promise.allSettled([this.animeService.getRecentEpisodes()]);
+    await new Promise((r) => setTimeout(r, 500));
     const topManga = await Promise.allSettled([
       this.mangaService.searchManga({
         order_by: "popularity",
@@ -87,6 +89,7 @@ export class HomeService {
       this.mangaService.searchManga({
         order_by: "popularity",
         sort: "desc",
+        status: "RELEASING",
         limit: 15,
       }),
     ]);
@@ -128,12 +131,23 @@ export class HomeService {
     const topMangaData = extractData(topManga[0], "topManga");
     const publishingMangaData = extractData(publishingManga[0], "publishingManga");
 
+    const trendingAnimeRaw = trendingData.data || [];
+    const popularAnimeRaw = popularData.data || [];
+    const upcomingAnimeRaw = upcomingData.data || [];
+    const recentAnimeRaw = extractData(recent[0], "recentEpisodes").data || [];
+    const topMangaRaw = topMangaData.data || [];
+    const publishingMangaRaw = publishingMangaData.data || [];
+
+    // Deduplicate upcoming anime (AniList sometimes returns multiple nodes for the same anime across seasons)
+    const upcomingAnimeDeduplicated = Array.from(new Map(upcomingAnimeRaw.map((item: any) => [item.id, item])).values());
+
     return {
-      trendingAnime: trendingData.data || [],
-      popularAnime: popularData.data || [],
-      upcomingAnime: upcomingData.data || [],
-      topManga: topMangaData.data || [],
-      publishingManga: publishingMangaData.data || [],
+      trendingAnime: trendingAnimeRaw,
+      popularAnime: popularAnimeRaw,
+      upcomingAnime: upcomingAnimeDeduplicated,
+      recentEpisodes: recentAnimeRaw,
+      topManga: topMangaRaw,
+      publishingManga: publishingMangaRaw,
       timestamp: new Date().toISOString(),
     };
   }

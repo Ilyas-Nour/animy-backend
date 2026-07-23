@@ -312,6 +312,22 @@ export class AnimeService {
     }
   }
 
+  async getRecentEpisodes(page: number = 1) {
+    try {
+      const data = await this.anilistService.getRecentEpisodes(page);
+      return {
+        data: (data.media || [])
+          .map((item: any) => this.mapAnilistToResponse(item))
+          .filter((a: any) => a !== null),
+      };
+    } catch (e) {
+      this.logger.warn(
+        `AniList Recent Episodes failed: ${e.message}`,
+      );
+      return { data: [] };
+    }
+  }
+
   async getUpcomingSchedule() {
     const cacheKey = `schedule:today`;
     const cached = await this.cacheManager.get(cacheKey);

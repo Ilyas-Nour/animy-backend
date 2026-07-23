@@ -486,15 +486,17 @@ export class AnilistService {
     page = 1,
     perPage = 20,
     sort: string = "POPULARITY_DESC",
+    status?: string,
   ) {
     const variables: any = { page, perPage };
     if (query) variables.search = query;
+    if (status) variables.status = status;
 
     // Dynamic sort enum based on input
     const sortValue = sort;
 
     const queryGql = gql`
-            query ($search: String, $page: Int, $perPage: Int) {
+            query ($search: String, $page: Int, $perPage: Int, $status: MediaStatus) {
                 Page(page: $page, perPage: $perPage) {
                     pageInfo {
                         total
@@ -503,7 +505,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: [${sortValue}] ${query ? "" : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
+                    media(search: $search, type: MANGA, sort: [${sortValue}], status: $status ${query ? "" : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
@@ -938,6 +940,73 @@ export class AnilistService {
       this.logger.error(`Error fetching popular manga:`, error.message);
       throw new HttpException(
         "Failed to fetch popular manga from AniList",
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  /**
+   * Get recently aired episodes
+   */
+  async getRecentEpisodes(page = 1, perPage = 15) {
+    const queryGql = gql`
+      query ($page: Int, $perPage: Int, $now: Int) {
+        Page(page: $page, perPage: $perPage) {
+          airingSchedules(
+            airingAt_lesser: $now,
+            sort: TIME_DESC
+          ) {
+            episode
+            airingAt
+            media {
+              id
+              idMal
+              isAdult
+              title {
+                romaji
+                english
+              }
+              coverImage {
+                extraLarge
+                large
+              }
+              bannerImage
+              averageScore
+              popularity
+              genres
+              format
+              episodes
+              status
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const data: any = await this.requestWithTimeout(
+        queryGql,
+        { page, perPage, now },
+        8000,
+      );
+      
+      // Map it to match the expected 'media' structure for our frontend
+      if (data?.Page?.airingSchedules) {
+        return {
+          media: data.Page.airingSchedules.map((schedule: any) => {
+            const media = schedule.media;
+            media.recentEpisodeNumber = schedule.episode;
+            media.recentEpisodeAiringAt = schedule.airingAt;
+            return media;
+          }).filter((m: any) => !m.isAdult)
+        };
+      }
+      return { media: [] };
+    } catch (error) {
+      this.logger.error(`Error fetching recent episodes:`, error.message);
+      throw new HttpException(
+        "Failed to fetch recent episodes from AniList",
         HttpStatus.BAD_GATEWAY,
       );
     }

@@ -71,7 +71,7 @@ import * as redisStore from "cache-manager-redis-store";
     // Rate Limiting
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 200, // Allow 200 requests per minute globally
+      limit: 1200, // Allow 1200 requests per minute globally
     }]),
 
     // Shared Module
