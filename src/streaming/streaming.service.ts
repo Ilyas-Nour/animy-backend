@@ -356,10 +356,13 @@ export class StreamingService {
 
           for (const stream of reversedStreams) {
             if (stream.isNative && stream.streamUrl) {
-              // Native .m3u8 — proxy through our server to handle CORS
-              const proxiedUrl = proxyBaseUrl
-                ? `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || "https://witanime.you/")}`
-                : stream.streamUrl;
+              // Native .m3u8 proxy through our server or Cloudflare to handle CORS
+              let proxiedUrl = stream.streamUrl;
+              if (process.env.CLOUDFLARE_PROXY_URL) {
+                proxiedUrl = `${process.env.CLOUDFLARE_PROXY_URL}?url=${encodeURIComponent(stream.streamUrl)}&referer=${encodeURIComponent(stream.referer || "https://witanime.you/")}`;
+              } else if (proxyBaseUrl) {
+                proxiedUrl = `${proxyBaseUrl}/${encodeURIComponent(stream.streamUrl)}?referer=${encodeURIComponent(stream.referer || "https://witanime.you/")}`;
+              }
 
               servers.unshift({
                 name: `Witanime ${stream.quality || "HD"} (${stream.provider.replace("witanime-", "")})`,
@@ -456,7 +459,11 @@ export class StreamingService {
     const nativeServers: any[] = [];
 
     const toProxiedUrl = (rawUrl: string, referer: string): string => {
-      if (!proxyBaseUrl || !rawUrl) return rawUrl;
+      if (!rawUrl) return rawUrl;
+      if (process.env.CLOUDFLARE_PROXY_URL) {
+        return `${process.env.CLOUDFLARE_PROXY_URL}?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent(referer)}`;
+      }
+      if (!proxyBaseUrl) return rawUrl;
       return `${proxyBaseUrl}/${rawUrl}?referer=${encodeURIComponent(referer)}`;
     };
 
