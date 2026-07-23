@@ -68,6 +68,12 @@ import * as redisStore from "cache-manager-redis-store";
     // Database module
     DatabaseModule,
 
+    // Rate Limiting
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 200, // Allow 200 requests per minute globally
+    }]),
+
     // Shared Module
     CommonModule,
 
@@ -92,6 +98,11 @@ import * as redisStore from "cache-manager-redis-store";
     // ConsumetModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    }
+  ],
 })
 export class AppModule {}
