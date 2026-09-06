@@ -9,7 +9,7 @@ export class JikanService {
 
   async getTopAnime(filter?: string) {
     try {
-      const params: any = {};
+      const params: any = { sfw: true };
       if (filter) params.filter = filter;
       const res = await axios.get(`${this.baseUrl}/top/anime`, {
         params,
@@ -25,6 +25,7 @@ export class JikanService {
   async getUpcoming() {
     try {
       const res = await axios.get(`${this.baseUrl}/seasons/upcoming`, {
+        params: { sfw: true },
         timeout: 10000,
       });
       return res.data?.data || [];
@@ -38,7 +39,7 @@ export class JikanService {
     try {
       const res = await axios.get(
         `${this.baseUrl}/seasons/${year}/${season.toLowerCase()}`,
-        { timeout: 10000 },
+        { params: { sfw: true }, timeout: 10000 },
       );
       return res.data?.data || [];
     } catch (e) {
@@ -49,7 +50,7 @@ export class JikanService {
 
   async searchAnime(query: string, page = 1, limit = 25, type?: string) {
     try {
-      const params: any = { q: query, page, limit };
+      const params: any = { q: query, page, limit, sfw: true };
       if (type) params.type = type.toLowerCase();
 
       const res = await axios.get(`${this.baseUrl}/anime`, {
@@ -65,7 +66,7 @@ export class JikanService {
 
   async searchManga(query: string, page = 1, limit = 25) {
     try {
-      const params: any = { q: query, page, limit };
+      const params: any = { q: query, page, limit, sfw: true };
       const res = await axios.get(`${this.baseUrl}/manga`, {
         params,
         timeout: 10000,

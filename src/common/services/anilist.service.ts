@@ -999,7 +999,7 @@ export class AnilistService {
             media.recentEpisodeNumber = schedule.episode;
             media.recentEpisodeAiringAt = schedule.airingAt;
             return media;
-          }).filter((m: any) => !m.isAdult)
+          }).filter((m: any) => !m.isAdult && !m.genres?.includes('Hentai') && !m.genres?.includes('Ecchi'))
         };
       }
       return { media: [] };
