@@ -538,6 +538,7 @@ export class AnimeService {
 
   private mapAnilistToResponse(data: any) {
     if (!data) return null;
+    if (data.isAdult || data.genres?.includes("Hentai") || data.genres?.includes("Ecchi")) return null;
     return {
       id: data.id,
       anilistId: data.id,
@@ -723,6 +724,7 @@ export class AnimeService {
     jikanRecommendations: any[] = [],
   ) {
     if (!jikan) return null;
+    if (jikan.rating === "Rx - Hentai" || jikan.genres?.some((g: any) => g.name === "Hentai" || g.name === "Ecchi" || g.name === "Erotica")) return null;
     return {
       id: jikan.mal_id,
       anilistId: jikan.mal_id, // Fallback to MAL ID if AniList is down
