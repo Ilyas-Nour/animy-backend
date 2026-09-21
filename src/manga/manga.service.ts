@@ -72,8 +72,9 @@ export class MangaService {
           },
         },
         data: data.media
+          .filter((m: any) => !m.isAdult)
           .map(this.mapAnilistToResponse)
-          .filter((m) => m !== null),
+          .filter((m: any) => m !== null),
       };
     } catch (e) {
       this.logger.warn(
@@ -218,8 +219,9 @@ export class MangaService {
 
     return {
       data: (data.media || [])
+        .filter((m: any) => !m.isAdult)
         .map(this.mapAnilistToResponse)
-        .filter((m) => m !== null),
+        .filter((m: any) => m !== null),
       pageInfo: data.pageInfo,
     };
   }

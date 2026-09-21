@@ -509,7 +509,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: [${sortValue}], status: $status ${query ? "" : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
+                    media(search: $search, type: MANGA, sort: [${sortValue}], status: $status ${query ? "" : ', genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
@@ -849,7 +849,6 @@ export class AnilistService {
           media(
             sort: TRENDING_DESC
             type: MANGA
-            isAdult: false
             genre_not_in: ["Hentai", "Ecchi"]
           ) {
             id
@@ -908,7 +907,6 @@ export class AnilistService {
           media(
             sort: POPULARITY_DESC
             type: MANGA
-            isAdult: false
             genre_not_in: ["Hentai", "Ecchi"]
           ) {
             id
