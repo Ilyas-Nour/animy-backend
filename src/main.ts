@@ -121,7 +121,7 @@ async function bootstrap() {
   // Global interceptors
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`\n🚀 APPLICATION STARTED SUCCESSFULLY!`);
   console.log(`📍 PORT: ${port}`);
   console.log(`🔗 API PREFIX: /${apiPrefix}`);
