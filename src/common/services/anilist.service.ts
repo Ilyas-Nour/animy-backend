@@ -51,7 +51,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}] ${query ? "" : ', isAdult: false, genre_not_in: ["Hentai", "Ecchi"]'}) {
+                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}] ${query ? "" : ', isAdult: false, countryOfOrigin: "JP", genre_not_in: ["Hentai", "Ecchi", "Kids"]'}) {
                         id
                         idMal
                         isAdult
@@ -265,7 +265,8 @@ export class AnilistService {
             sort: TRENDING_DESC
             type: ANIME
             isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
+            countryOfOrigin: "JP"
+            genre_not_in: ["Hentai", "Ecchi", "Kids"]
           ) {
             id
             idMal
@@ -318,7 +319,8 @@ export class AnilistService {
             sort: POPULARITY_DESC
             type: ANIME
             isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
+            countryOfOrigin: "JP"
+            genre_not_in: ["Hentai", "Ecchi", "Kids"]
           ) {
             id
             idMal
@@ -372,7 +374,8 @@ export class AnilistService {
             sort: POPULARITY_DESC
             type: ANIME
             isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
+            countryOfOrigin: "JP"
+            genre_not_in: ["Hentai", "Ecchi", "Kids"]
           ) {
             id
             idMal
@@ -432,7 +435,8 @@ export class AnilistService {
             type: ANIME
             sort: POPULARITY_DESC
             isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
+            countryOfOrigin: "JP"
+            genre_not_in: ["Hentai", "Ecchi", "Kids"]
           ) {
             id
             idMal
@@ -779,7 +783,8 @@ export class AnilistService {
             type: ANIME
             sort: POPULARITY_DESC
             isAdult: false
-            genre_not_in: ["Hentai", "Ecchi"]
+            countryOfOrigin: "JP"
+            genre_not_in: ["Hentai", "Ecchi", "Kids"]
           ) {
             id
             isAdult
@@ -974,6 +979,7 @@ export class AnilistService {
               averageScore
               popularity
               genres
+              countryOfOrigin
               format
               episodes
               status
@@ -993,13 +999,29 @@ export class AnilistService {
       
       // Map it to match the expected 'media' structure for our frontend
       if (data?.Page?.airingSchedules) {
-        return {
-          media: data.Page.airingSchedules.map((schedule: any) => {
-            const media = schedule.media;
+        const uniqueMedia = new Map<number, any>();
+        
+        data.Page.airingSchedules.forEach((schedule: any) => {
+          const media = schedule.media;
+          
+          // Filter out unwanted genres and non-JP country of origin
+          if (media.isAdult || 
+              media.countryOfOrigin !== 'JP' ||
+              media.genres?.includes('Hentai') || 
+              media.genres?.includes('Ecchi') || 
+              media.genres?.includes('Kids')) {
+            return;
+          }
+
+          if (!uniqueMedia.has(media.id)) {
             media.recentEpisodeNumber = schedule.episode;
             media.recentEpisodeAiringAt = schedule.airingAt;
-            return media;
-          }).filter((m: any) => !m.isAdult && !m.genres?.includes('Hentai') && !m.genres?.includes('Ecchi'))
+            uniqueMedia.set(media.id, media);
+          }
+        });
+
+        return {
+          media: Array.from(uniqueMedia.values())
         };
       }
       return { media: [] };
