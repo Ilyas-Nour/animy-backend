@@ -51,7 +51,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}] ${query ? "" : ', isAdult: false, countryOfOrigin: "JP", genre_not_in: ["Hentai", "Ecchi", "Kids"]'}) {
+                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false, countryOfOrigin: "JP" ${query ? "" : ', genre_not_in: ["Hentai", "Ecchi", "Kids"]'}) {
                         id
                         idMal
                         isAdult

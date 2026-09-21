@@ -69,18 +69,21 @@ export class AnimeService {
         anilistSort,
       );
 
-      const response = {
+        const mappedData = data.media.map((item) => this.mapAnilistToResponse(item));
+        const uniqueData = Array.from(new Map(mappedData.map(item => [item.mal_id || item.id, item])).values());
+
+        const response = {
         pagination: {
           last_visible_page: data.pageInfo.lastPage,
           has_next_page: data.pageInfo.hasNextPage,
           current_page: data.pageInfo.currentPage,
           items: {
-            count: data.media.length,
+            count: uniqueData.length,
             total: data.pageInfo.total,
             per_page: data.pageInfo.perPage,
           },
         },
-        data: data.media.map((item) => this.mapAnilistToResponse(item)),
+        data: uniqueData,
       };
 
       await this.cacheManager.set(cacheKey, response, 1800000); // 30 mins

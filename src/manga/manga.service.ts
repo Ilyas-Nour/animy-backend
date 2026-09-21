@@ -1185,45 +1185,41 @@ export class MangaService {
         jikan.genres?.map((g: any) => ({ name: g.name, mal_id: g.mal_id })) ||
         [],
       relations:
-        jikan.relations?.flatMap((r: any) =>
-          r.entry.map((entry: any) => ({
-            relationType: r.relation.toUpperCase().replace(/\s+/g, "_"),
-            node: {
-              id: entry.mal_id,
-              title: { english: entry.name, romaji: entry.name },
-              type: entry.type.toUpperCase(),
-              coverImage: { large: "" },
+        jikan.relations?.map((r: any) => ({
+          relation: r.relation,
+          entry: r.entry?.map((entry: any) => ({
+            mal_id: entry.mal_id,
+            type: entry.type,
+            name: entry.name,
+            images: {
+              jpg: { image_url: "" },
             },
-          })),
-        ) || [],
+          })) || [],
+        })) || [],
       recommendations:
         jikanRecommendations?.map((r: any) => ({
-          mediaRecommendation: {
-            id: r.entry.mal_id,
-            title: { romaji: r.entry.title, english: r.entry.title },
-            coverImage: {
-              large:
-                r.entry.images?.jpg?.large_image_url ||
-                r.entry.images?.jpg?.image_url,
+          entry: {
+            mal_id: r.entry.mal_id,
+            title: r.entry.title,
+            images: {
+              jpg: {
+                image_url:
+                  r.entry.images?.webp?.image_url ||
+                  r.entry.images?.jpg?.image_url,
+              },
             },
           },
         })) || [],
       characters:
         jikanCharacters?.map((c: any) => ({
           role: c.role,
-          node: {
-            id: c.character.mal_id,
-            name: { full: c.character.name },
-            image: { large: c.character.images?.jpg?.image_url },
+          character: {
+            mal_id: c.character.mal_id,
+            name: c.character.name,
+            images: {
+              jpg: { image_url: c.character.images?.jpg?.image_url },
+            },
           },
-          voiceActors:
-            c.voice_actors
-              ?.filter((va: any) => va.language === "Japanese")
-              .map((va: any) => ({
-                id: va.person.mal_id,
-                name: { full: va.person.name },
-                image: { large: va.person.images?.jpg?.image_url },
-              })) || [],
         })) || [],
       staff: [],
     };
