@@ -44,9 +44,13 @@ export class AnilistService {
 
     // Dynamic sort enum based on input
     const sortValue = sort;
+    
+    const querySignature = query 
+        ? "query ($search: String, $page: Int, $perPage: Int, $format: MediaFormat)" 
+        : "query ($page: Int, $perPage: Int, $format: MediaFormat)";
 
     const queryGql = gql`
-            query ($search: String, $page: Int, $perPage: Int, $format: MediaFormat) {
+            ${querySignature} {
                 Page(page: $page, perPage: $perPage) {
                     pageInfo {
                         total
@@ -502,9 +506,13 @@ export class AnilistService {
 
     // Dynamic sort enum based on input
     const sortValue = sort;
+    
+    const querySignature = query
+        ? "query ($search: String, $page: Int, $perPage: Int, $status: MediaStatus)"
+        : "query ($page: Int, $perPage: Int, $status: MediaStatus)";
 
     const queryGql = gql`
-            query ($search: String, $page: Int, $perPage: Int, $status: MediaStatus) {
+            ${querySignature} {
                 Page(page: $page, perPage: $perPage) {
                     pageInfo {
                         total
@@ -513,7 +521,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, type: MANGA, sort: [${sortValue}], status: $status ${query ? "" : ', genre_not_in: ["Hentai", "Ecchi"]'}) {
+                    media(${query ? "search: $search, " : ""}type: MANGA, sort: [${sortValue}], status: $status ${query ? "" : ', genre_not_in: ["Hentai", "Ecchi"]'}) {
                         id
                         idMal
                         isAdult
