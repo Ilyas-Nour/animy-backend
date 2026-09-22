@@ -337,7 +337,6 @@ export class AnimeService {
     if (cached) return cached;
 
     try {
-      // Jikan /schedules endpoint returns today's schedule by default or can specify a day
       const days = [
         "sunday",
         "monday",
@@ -349,12 +348,22 @@ export class AnimeService {
       ];
       const today = days[new Date().getDay()];
       const res = await fetch(
-        `https://api.jikan.moe/v4/schedules?filter=${today}`,
+        `https://api.jikan.moe/v4/schedules?filter=${today}&kids=false&sfw=true`,
       );
       if (!res.ok) throw new Error("Jikan schedule failed");
       const json = await res.json();
 
-      const response = { data: json.data || [] };
+      let data = json.data || [];
+      
+      // Filter out Kids genre explicitly just in case, and sort by score
+      data = data.filter((item: any) => 
+        !item.genres?.some((g: any) => g.name.toLowerCase() === "kids")
+      ).sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+
+      // Remove duplicates by mal_id
+      const uniqueData = Array.from(new Map(data.map((item: any) => [item.mal_id, item])).values());
+
+      const response = { data: uniqueData };
       await this.cacheManager.set(cacheKey, response, 3600000); // cache for 1 hour
       return response;
     } catch (e) {

@@ -35,7 +35,11 @@ export class AnilistService {
     sort: string = "POPULARITY_DESC",
   ) {
     const variables: any = { page, perPage };
-    if (query) variables.search = query;
+    let searchParam = "";
+    if (query) {
+      variables.search = query;
+      searchParam = "search: $search, ";
+    }
     if (format) variables.format = format;
 
     // Dynamic sort enum based on input
@@ -51,7 +55,7 @@ export class AnilistService {
                         hasNextPage
                         perPage
                     }
-                    media(search: $search, format: $format, type: ANIME, sort: [${sortValue}], isAdult: false, countryOfOrigin: "JP" ${query ? "" : ', genre_not_in: ["Hentai", "Ecchi", "Kids"]'}) {
+                    media(${searchParam}format: $format, type: ANIME, sort: [${sortValue}], isAdult: false, countryOfOrigin: "JP" ${query ? "" : ', genre_not_in: ["Hentai", "Ecchi", "Kids"]'}) {
                         id
                         idMal
                         isAdult
