@@ -89,4 +89,26 @@ export class MangaController {
   async getReadChapters(@Param("id", ParseIntPipe) id: number) {
     return this.mangaService.getMangaChapters(id);
   }
+
+  @Get("malsync-proxy/:id")
+  async proxyMalsync(@Param("id") id: string) {
+    try {
+      const url = id.includes(':') 
+        ? `https://api.malsync.moe/mal/manga/${id}`
+        : `https://api.malsync.moe/mal/manga/${id}`;
+        
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'curl/7.88.1',
+          'Accept': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new HttpException(`MalSync responded with ${response.status}`, response.status);
+      }
+      return await response.json();
+    } catch (e: any) {
+      throw new HttpException(e.message || 'Error fetching MalSync', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }
