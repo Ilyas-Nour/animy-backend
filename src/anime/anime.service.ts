@@ -69,8 +69,8 @@ export class AnimeService {
         anilistSort,
       );
 
-        const mappedData = data.media.map((item) => this.mapAnilistToResponse(item));
-        const uniqueData = Array.from(new Map(mappedData.map(item => [item.mal_id || item.id, item])).values());
+        const mappedData = data.media.map((item: any) => this.mapAnilistToResponse(item)).filter(Boolean);
+        const uniqueData = Array.from(new Map(mappedData.map((item: any) => [item.mal_id || item.id, item])).values());
 
         const response = {
         pagination: {
