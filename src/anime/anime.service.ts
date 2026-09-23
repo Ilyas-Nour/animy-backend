@@ -671,7 +671,7 @@ export class AnimeService {
       id: dbAnime.id,
       mal_id: dbAnime.id, // Consistent with mapAnilistToResponse (AniList ID)
       anilistId: dbAnime.id,
-      idMal: dbAnime.idMal || dbAnime.id, // Real MAL ID for streaming
+      idMal: dbAnime.idMal, // Real MAL ID for streaming
       tmdbId: dbAnime.idTmdb,
       title: dbAnime.title,
       title_english: dbAnime.titleEnglish,
