@@ -141,7 +141,10 @@ export class MangaService {
       this.logger.debug(`DB STALE/MISS: Manga ${id} -> Fetching AniList`);
 
       // 2. Fetch from AniList
-      const data = await this.anilistService.getMangaById(id);
+      let data = await this.anilistService.getMangaById(id);
+      if (!data) {
+        data = await this.anilistService.getMangaById(id, true);
+      }
       if (!data)
         throw new HttpException("Not found on AniList", HttpStatus.NOT_FOUND);
       await this.saveMangaToDb(data);
@@ -228,7 +231,10 @@ export class MangaService {
 
   async getMangaCharacters(id: number) {
     try {
-      const data = await this.anilistService.getMangaById(id);
+      let data = await this.anilistService.getMangaById(id);
+      if (!data) {
+        data = await this.anilistService.getMangaById(id, true);
+      }
       const characters = data.characters?.nodes || [];
 
       return characters.map((char: any) => ({
@@ -293,7 +299,10 @@ export class MangaService {
 
       if (!title) {
         try {
-          const anilistInfo = await this.anilistService.getMangaById(id);
+          let anilistInfo = await this.anilistService.getMangaById(id);
+          if (!anilistInfo) {
+            anilistInfo = await this.anilistService.getMangaById(id, true);
+          }
           if (anilistInfo) {
             title =
               anilistInfo.title.english ||
@@ -302,6 +311,7 @@ export class MangaService {
             englishTitle = anilistInfo.title.english || "";
             nativeTitle = anilistInfo.title.native || "";
             malId = anilistInfo.idMal || null;
+            id = anilistInfo.id;
           }
         } catch (e) {
           this.logger.error(

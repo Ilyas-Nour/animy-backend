@@ -169,7 +169,10 @@ export class AnimeService {
 
       const fetchPromise = (async () => {
         try {
-          const data = await this.anilistService.getAnimeById(id);
+          let data = await this.anilistService.getAnimeById(id);
+          if (!data) {
+            data = await this.anilistService.getAnimeById(id, true);
+          }
           if (!data)
             throw new HttpException(
               "Not found on AniList",
@@ -451,7 +454,10 @@ export class AnimeService {
     if (this.activeRequests.has(id)) return;
     const fetchPromise = (async () => {
       try {
-        const data = await this.anilistService.getAnimeById(id);
+        let data = await this.anilistService.getAnimeById(id);
+        if (!data) {
+            data = await this.anilistService.getAnimeById(id, true);
+        }
         if (data) {
           await this.saveAnimeToDb(data);
           const resp = this.mapAnilistToResponse(data);

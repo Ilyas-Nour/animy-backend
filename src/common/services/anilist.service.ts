@@ -110,10 +110,10 @@ export class AnilistService {
   /**
    * Get anime details by ID (AniList ID)
    */
-  async getAnimeById(id: number) {
+  async getAnimeById(id: number, isMal: boolean = false) {
     const queryGql = gql`
       query ($id: Int) {
-        Media(id: $id, type: ANIME) {
+        Media(${isMal ? 'idMal' : 'id'}: $id, type: ANIME) {
           id
           idMal
           isAdult
@@ -575,10 +575,10 @@ export class AnilistService {
   /**
    * Get manga details by ID
    */
-  async getMangaById(id: number) {
+  async getMangaById(id: number, isMal: boolean = false) {
     const queryGql = gql`
       query ($id: Int) {
-        Media(id: $id, type: MANGA) {
+        Media(${isMal ? 'idMal' : 'id'}: $id, type: MANGA) {
           id
           idMal
           isAdult
