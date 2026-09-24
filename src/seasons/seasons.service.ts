@@ -112,6 +112,7 @@ export class SeasonsService {
   private mapAnilistToResponse(data: any) {
     if (!data) return null;
     return {
+      id: data.id,
       mal_id: data.id, // Use AniList ID
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
@@ -150,6 +151,7 @@ export class SeasonsService {
   private mapJikanToResponse(jikan: any) {
     if (!jikan) return null;
     return {
+      id: jikan.mal_id,
       mal_id: jikan.mal_id,
       title: jikan.title,
       title_english: jikan.title_english,

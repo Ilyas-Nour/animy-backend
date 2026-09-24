@@ -42,7 +42,7 @@ export class PeopleService {
                   medium
                 }
               }
-              characterNode {
+              characters {
                 id
                 name {
                   full
