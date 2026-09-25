@@ -1027,6 +1027,7 @@ export class MangaService {
   private mapAnilistToResponse(data: any) {
     if (!data) return null;
     return {
+      id: data.id,
       mal_id: data.id,
       title: data.title.romaji || data.title.english || data.title.native,
       title_english: data.title.english,
@@ -1117,6 +1118,7 @@ export class MangaService {
 
   private mapDbToResponse(dbManga: any) {
     return {
+      id: dbManga.id,
       mal_id: dbManga.id,
       title: dbManga.title,
       title_english: dbManga.titleEnglish,
@@ -1164,6 +1166,7 @@ export class MangaService {
   ) {
     if (!jikan) return null;
     return {
+      id: jikan.mal_id,
       mal_id: jikan.mal_id,
       title: jikan.title,
       title_english: jikan.title_english,

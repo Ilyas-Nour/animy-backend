@@ -287,7 +287,8 @@ export class AnimeService {
 
   async getAnimeByType(type: string, page: number = 1) {
     try {
-      const data = await this.anilistService.getPopular(page);
+      const format = type.toLowerCase() === "movie" ? "MOVIE" : "TV";
+      const data = await this.anilistService.searchAnime("", page, 20, format, "POPULARITY_DESC");
       return {
         data: (data.media || [])
           .map((item) => this.mapAnilistToResponse(item))
