@@ -248,8 +248,13 @@ export class AnilistService {
       const media = data.Media;
 
       return media;
-    } catch (error) {
-      if (error?.response?.status === 404) {
+    } catch (error: any) {
+      if (
+        error?.response?.status === 404 || 
+        error?.response?.errors?.[0]?.status === 404 || 
+        error?.message?.includes("Not Found") || 
+        error?.message?.includes("404")
+      ) {
         this.logger.warn(`AniList: Anime ${id} not found (404)`);
         return null;
       }
@@ -270,7 +275,7 @@ export class AnilistService {
       query ($page: Int, $perPage: Int) {
         Page(page: $page, perPage: $perPage) {
           media(
-            sort: TRENDING_DESC
+            sort: [TRENDING_DESC]
             type: ANIME
             isAdult: false
             countryOfOrigin: "JP"
@@ -324,7 +329,7 @@ export class AnilistService {
       query ($page: Int, $perPage: Int) {
         Page(page: $page, perPage: $perPage) {
           media(
-            sort: POPULARITY_DESC
+            sort: [POPULARITY_DESC]
             type: ANIME
             isAdult: false
             countryOfOrigin: "JP"
@@ -379,7 +384,7 @@ export class AnilistService {
         Page(page: $page, perPage: $perPage) {
           media(
             status: RELEASING
-            sort: POPULARITY_DESC
+            sort: [POPULARITY_DESC]
             type: ANIME
             isAdult: false
             countryOfOrigin: "JP"
@@ -441,7 +446,7 @@ export class AnilistService {
             season: $season
             seasonYear: $year
             type: ANIME
-            sort: POPULARITY_DESC
+            sort: [POPULARITY_DESC]
             isAdult: false
             countryOfOrigin: "JP"
             genre_not_in: ["Hentai", "Ecchi", "Kids"]
@@ -653,7 +658,16 @@ export class AnilistService {
       const media = data.Media;
 
       return media;
-    } catch (error) {
+    } catch (error: any) {
+      if (
+        error?.response?.status === 404 || 
+        error?.response?.errors?.[0]?.status === 404 || 
+        error?.message?.includes("Not Found") || 
+        error?.message?.includes("404")
+      ) {
+        this.logger.warn(`AniList: Manga ${id} not found (404)`);
+        return null;
+      }
       if (error instanceof HttpException) throw error;
       this.logger.error(`Error fetching manga details for ID ${id}:`, error);
       throw new HttpException(
@@ -793,7 +807,7 @@ export class AnilistService {
             season: $season
             seasonYear: $year
             type: ANIME
-            sort: POPULARITY_DESC
+            sort: [POPULARITY_DESC]
             isAdult: false
             countryOfOrigin: "JP"
             genre_not_in: ["Hentai", "Ecchi", "Kids"]
@@ -859,7 +873,7 @@ export class AnilistService {
             perPage
           }
           media(
-            sort: TRENDING_DESC
+            sort: [TRENDING_DESC]
             type: MANGA
             genre_not_in: ["Hentai", "Ecchi"]
           ) {
@@ -917,7 +931,7 @@ export class AnilistService {
             perPage
           }
           media(
-            sort: POPULARITY_DESC
+            sort: [POPULARITY_DESC]
             type: MANGA
             genre_not_in: ["Hentai", "Ecchi"]
           ) {
@@ -969,7 +983,7 @@ export class AnilistService {
         Page(page: $page, perPage: $perPage) {
           airingSchedules(
             airingAt_lesser: $now,
-            sort: TIME_DESC
+            sort: [TIME_DESC]
           ) {
             episode
             airingAt
