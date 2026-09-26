@@ -14,8 +14,18 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
+    let url = process.env.DATABASE_URL;
+    if (url && url.includes(':6543') && !url.includes('pgbouncer=true')) {
+      url += (url.includes('?') ? '&' : '?') + 'pgbouncer=true';
+    }
+
     super({
       log: ["error", "warn"],
+      datasources: {
+        db: {
+          url: url,
+        },
+      },
     });
   }
 

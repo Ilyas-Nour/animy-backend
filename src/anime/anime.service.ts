@@ -371,7 +371,7 @@ export class AnimeService {
       await this.cacheManager.set(cacheKey, response, 3600000); // cache for 1 hour
       return response;
     } catch (e) {
-      this.logger.error(`Failed to fetch schedule: ${e.message}`);
+      this.logger.warn(`Failed to fetch schedule: ${e.message}`);
       return { data: [] };
     }
   }

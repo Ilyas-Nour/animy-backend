@@ -114,7 +114,7 @@ export class StreamingController {
    * Uses a wildcard path so HLS relative URLs resolve natively in the browser.
    * GET /api/v1/streaming/proxy/https://cdn...
    */
-  @Get(["proxy", "proxy/*"])
+  @Get(["proxy", "proxy/*path"])
   async proxyStream(@Req() req: any, @Res() res: any) {
     // Extract the full target URL from the request URL
     // e.g., /api/v1/streaming/proxy/https://cdn.com/video.m3u8?token=123

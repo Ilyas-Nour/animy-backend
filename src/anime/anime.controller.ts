@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param } from "@nestjs/common";
+import { Controller, Get, Query, Param, BadRequestException } from "@nestjs/common";
 import { AnimeService } from "./anime.service";
 import { SearchAnimeDto } from "./dto/search-anime.dto";
 import { Public } from "../common/decorators/public.decorator";
@@ -68,24 +68,32 @@ export class AnimeController {
   @Public()
   @Get(":id/full")
   async getAnimeFullById(@Param("id") id: string) {
-    return this.animeService.getAnimeById(parseInt(id, 10));
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) throw new BadRequestException(`Invalid anime ID: ${id}`);
+    return this.animeService.getAnimeById(numericId);
   }
 
   @Public()
   @Get(":id/characters")
   async getAnimeCharacters(@Param("id") id: string) {
-    return this.animeService.getAnimeCharacters(parseInt(id, 10));
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) throw new BadRequestException(`Invalid anime ID: ${id}`);
+    return this.animeService.getAnimeCharacters(numericId);
   }
 
   @Public()
   @Get(":id/recommendations")
   async getAnimeRecommendations(@Param("id") id: string) {
-    return this.animeService.getAnimeRecommendations(parseInt(id, 10));
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) throw new BadRequestException(`Invalid anime ID: ${id}`);
+    return this.animeService.getAnimeRecommendations(numericId);
   }
 
   @Public()
   @Get(":id")
   async getAnimeById(@Param("id") id: string) {
-    return this.animeService.getAnimeById(parseInt(id, 10));
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) throw new BadRequestException(`Invalid anime ID: ${id}`);
+    return this.animeService.getAnimeById(numericId);
   }
 }

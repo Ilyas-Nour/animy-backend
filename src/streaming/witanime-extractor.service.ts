@@ -105,7 +105,7 @@ export class WitanimeExtractorService {
       );
       return Array.isArray(data) ? data : [];
     } catch (e) {
-      this.logger.warn(`Witanime search failed: ${e.message}`);
+      this.logger.debug(`Witanime search failed: ${e.message}`);
       return [];
     }
   }

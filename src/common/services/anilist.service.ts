@@ -255,7 +255,7 @@ export class AnilistService {
         error?.message?.includes("Not Found") || 
         error?.message?.includes("404")
       ) {
-        this.logger.warn(`AniList: Anime ${id} not found (404)`);
+        this.logger.debug(`AniList: Anime ${id} not found (404)`);
         return null;
       }
       if (error instanceof HttpException) throw error;
@@ -665,7 +665,7 @@ export class AnilistService {
         error?.message?.includes("Not Found") || 
         error?.message?.includes("404")
       ) {
-        this.logger.warn(`AniList: Manga ${id} not found (404)`);
+        this.logger.debug(`AniList: Manga ${id} not found (404)`);
         return null;
       }
       if (error instanceof HttpException) throw error;
