@@ -370,12 +370,17 @@ export class AdminService {
 
   // --- SYSTEM SETTINGS ---
   async getSettings() {
-    const settings = await this.prisma.systemSetting.findMany();
-    const config: Record<string, any> = {};
-    settings.forEach((s) => {
-      config[s.key] = s.value;
-    });
-    return config;
+    try {
+      const settings = await this.prisma.systemSetting.findMany();
+      const config: Record<string, any> = {};
+      settings.forEach((s) => {
+        config[s.key] = s.value;
+      });
+      return config;
+    } catch (error) {
+      console.warn("[AdminStats] system_settings table might not exist, returning empty config.");
+      return {};
+    }
   }
 
   async updateSettings(settings: Record<string, any>, adminId: string) {
