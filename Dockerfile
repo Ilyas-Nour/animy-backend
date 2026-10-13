@@ -42,6 +42,6 @@ ENV PORT=7860
 ENV NODE_ENV=production
 
 # Start the application
-# Run prisma db push synchronously first, then start the server directly.
-# Avoids SIGTERM from health-check timeouts caused by long migration delays.
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/src/main"]
+# DIRECT_URL is used for prisma db push (bypasses PgBouncer transaction-mode hang).
+# Falls back to DATABASE_URL if DIRECT_URL is not set, so the container never crashes on startup.
+CMD ["sh", "-c", "export DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} && npx prisma db push --accept-data-loss && node dist/src/main"]
