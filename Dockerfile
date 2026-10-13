@@ -37,11 +37,14 @@ COPY --from=builder /app/prisma ./prisma
 # Expose the default Hugging Face port
 EXPOSE 7860
 
+# Cache-bust: force rebuild when CMD changes
+LABEL build-date="2026-10-13"
+
 # Set required environment variables for Hugging Face
 ENV PORT=7860
 ENV NODE_ENV=production
 
 # Start the application
-# DIRECT_URL is used for prisma db push (bypasses PgBouncer transaction-mode hang).
-# Falls back to DATABASE_URL if DIRECT_URL is not set, so the container never crashes on startup.
-CMD ["sh", "-c", "export DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} && npx prisma db push --accept-data-loss && node dist/src/main"]
+# Schema is already synced — do NOT run prisma db push at boot (it hangs on PgBouncer pooler).
+# To sync schema changes, run: npx prisma db push manually with a direct DB connection.
+CMD ["node", "dist/src/main"]
