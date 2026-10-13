@@ -42,5 +42,6 @@ ENV PORT=7860
 ENV NODE_ENV=production
 
 # Start the application
-# We background the migration (&) so the app starts IMMEDIATELY to satisfy Hugging Face probes.
-CMD ["sh", "-c", "npx prisma migrate deploy & npm run start:prod"]
+# Run prisma db push synchronously first, then start the server directly.
+# Avoids SIGTERM from health-check timeouts caused by long migration delays.
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/src/main"]
