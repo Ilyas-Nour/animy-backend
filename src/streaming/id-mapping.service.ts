@@ -15,6 +15,24 @@ export class IdMappingService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Resolves external provider mappings (TMDB, MAL, TVDB) via AniZip
+   */
+  async resolveAniZipMappings(anilistId: number): Promise<any | null> {
+    try {
+      const res = await axios.get(
+        `https://api.ani.zip/mappings?anilist_id=${anilistId}`,
+        { timeout: 3500 },
+      );
+      return res.data?.mappings || null;
+    } catch (e) {
+      this.logger.debug(
+        `AniZip lookup failed for AniList ${anilistId}: ${e.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Resolves an AniList anime ID to a HiAnime provider ID.
    * Checks the DB first, then falls back to title-similarity search.
    */
