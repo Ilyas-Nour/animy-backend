@@ -42,10 +42,14 @@ export class StreamingService {
   }
 
   /**
-   * Resolve TMDB ID from AniList ID or title
-   * Uses manual mapping, malsync.moe, or TMDB Search API
+   * Resolve TMDB ID from AniList ID, MAL ID, or title
+   * Uses manual mapping, AniZip mappings, or malsync.moe
    */
-  async getTmdbId(anilistId?: number, title?: string): Promise<string | null> {
+  async getTmdbId(
+    anilistId?: number,
+    title?: string,
+    malId?: number,
+  ): Promise<string | null> {
     try {
       // 0. Manual Fast-Track Mapping for Top Anime
       const manualMap: Record<number, string> = {
@@ -56,6 +60,7 @@ export class StreamingService {
         21087: "62018", // One Punch Man
         113415: "95479", // Jujutsu Kaisen
         101922: "85937", // Demon Slayer
+        178083: "105009", // Tokyo Revengers: Santen Sensou-hen
         199221: "86031", // Dr. STONE: SCIENCE FUTURE
       };
 
@@ -66,11 +71,40 @@ export class StreamingService {
         return manualMap[anilistId];
       }
 
-      // 1. First try malsync (fastest)
+      // 1. AniZip (Comprehensive, free, highly accurate for all anime)
+      if (anilistId && !isNaN(anilistId)) {
+        try {
+          const res = await axios.get(
+            `https://api.ani.zip/mappings?anilist_id=${anilistId}`,
+            { timeout: 3500 },
+          );
+          if (res?.data?.mappings?.themoviedb_id) {
+            const tmdbId = String(res.data.mappings.themoviedb_id);
+            this.logger.debug(`AniZip: AniList ${anilistId} -> TMDB ${tmdbId}`);
+            return tmdbId;
+          }
+        } catch (e) {}
+      }
+
+      if (malId && !isNaN(malId)) {
+        try {
+          const res = await axios.get(
+            `https://api.ani.zip/mappings?mal_id=${malId}`,
+            { timeout: 3500 },
+          );
+          if (res?.data?.mappings?.themoviedb_id) {
+            const tmdbId = String(res.data.mappings.themoviedb_id);
+            this.logger.debug(`AniZip: MAL ${malId} -> TMDB ${tmdbId}`);
+            return tmdbId;
+          }
+        } catch (e) {}
+      }
+
+      // 2. MalSync mapping
       if (anilistId && !isNaN(anilistId)) {
         try {
           const res = await axios
-            .get(`https://api.malsync.moe/anilist/anime/${anilistId}`, {
+            .get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, {
               timeout: 3000,
             })
             .catch(() => null);
@@ -84,35 +118,7 @@ export class StreamingService {
               return tmdbId;
             }
           }
-          if (res?.data?.title) {
-            title = res.data.title;
-          }
         } catch (e) {}
-      }
-
-      // 2. Aggressive TMDB Search
-      if (title) {
-        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=5220615c4f292398606c4068305f8841&query=${encodeURIComponent(title)}&language=en-US&page=1&include_adult=false`;
-        const res = await axios
-          .get(searchUrl, { timeout: 5000 })
-          .catch(() => null);
-        if (res?.data?.results?.length) {
-          // Prioritize TV shows for anime, then movies
-          const tvMatch = res.data.results.find(
-            (r: any) => r.media_type === "tv",
-          );
-          const movieMatch = res.data.results.find(
-            (r: any) => r.media_type === "movie",
-          );
-          const bestMatch = tvMatch || movieMatch;
-
-          if (bestMatch) {
-            this.logger.debug(
-              `TMDB search: "${title}" -> ${bestMatch.id} (${bestMatch.media_type})`,
-            );
-            return bestMatch.id.toString();
-          }
-        }
       }
 
       return null;
@@ -177,12 +183,24 @@ export class StreamingService {
   async resolveMalId(anilistId: number): Promise<number | null> {
     try {
       this.logger.debug(`Resolving MAL ID for AniList: ${anilistId}`);
-      // Correct Malsync URL for AniList mapping
-      const res = await axios.get(
-        `https://api.malsync.moe/mal/anime/anilist:${anilistId}`,
-        { timeout: 3000 },
-      );
-      return res.data?.mal_id || res.data?.id || null;
+      // 1. Try AniZip first (fastest and most accurate)
+      try {
+        const aniZip = await axios.get(
+          `https://api.ani.zip/mappings?anilist_id=${anilistId}`,
+          { timeout: 3000 },
+        );
+        if (aniZip?.data?.mappings?.mal_id) {
+          return Number(aniZip.data.mappings.mal_id);
+        }
+      } catch (e) {}
+
+      // 2. Try Malsync
+      const res = await axios
+        .get(`https://api.malsync.moe/mal/anime/anilist:${anilistId}`, {
+          timeout: 3000,
+        })
+        .catch(() => null);
+      return res?.data?.malId || res?.data?.mal_id || null;
     } catch (e) {
       return null;
     }
@@ -194,7 +212,7 @@ export class StreamingService {
    * Builds a large set of working mirrors across multiple strategies:
    *  Tier 1 — High-quality embeds using MAL ID (VidLink - Gold Standard)
    *  Tier 2 — Iframe embeds using TMDB/AniList ID (VidSrc - Stable backups)
-   *  Tier 3 — Native .m3u8 extraction via Anify (Ultra-fast, proxy-enabled)
+   *  Tier 3 — Native .m3u8 extraction via Consumet/Witanime
    */
   async getEpisodeLinks(
     episodeId: string,
@@ -204,83 +222,89 @@ export class StreamingService {
     episodeNumber?: string,
     tmdbIdParam?: string,
     title?: string,
+    subDub: string = "sub",
   ) {
     try {
-      const anilistId = parseInt(
+      const parsedId = parseInt(
         malIdParam || (!isNaN(Number(episodeId)) ? episodeId : ""),
         10,
       );
       const epNum = parseInt(episodeNumber || "1", 10);
+      const cleanSubDub = subDub === "dub" ? "dub" : "sub";
 
       // 1. Check Cache First (Anikai level speed)
-      if (!isNaN(anilistId)) {
+      if (!isNaN(parsedId)) {
         const cached = await this.cacheService.getCachedLinks(
-          anilistId,
+          parsedId,
           epNum,
-          "mesh-v12",
+          `mesh-v12-${cleanSubDub}`,
         );
         if (cached) {
           this.logger.log(
-            `Nuclear Mesh v12: CACHE HIT for AL=${anilistId}, EP=${epNum}`,
+            `Nuclear Mesh v12: CACHE HIT for ID=${parsedId}, EP=${epNum}, Track=${cleanSubDub}`,
           );
           return cached;
         }
       }
 
       this.logger.log(
-        `Nuclear Mesh v12: AL=${anilistId}, EP=${epNum}, Title="${title}"`,
+        `Nuclear Mesh v12: ID=${parsedId}, EP=${epNum}, Track=${cleanSubDub}, Title="${title}"`,
       );
 
       const servers: any[] = [];
 
       // ──────────────────────────────────────────────────────────────────────
-      // TIER 1: MAL & AniList based embeds (VidLink - Most Stable 2026)
+      // Resolve MAL ID and AniList ID
       // ──────────────────────────────────────────────────────────────────────
-      const malId = isNaN(anilistId)
-        ? null
-        : await this.resolveMalId(anilistId).catch(() => null);
+      let malId: number | null = null;
+      let anilistId: number = parsedId;
 
+      if (!isNaN(parsedId)) {
+        // Resolve MAL ID
+        const resolved = await this.resolveMalId(parsedId).catch(() => null);
+        if (resolved) {
+          malId = resolved;
+        } else {
+          malId = parsedId;
+        }
+      }
+
+      // ──────────────────────────────────────────────────────────────────────
+      // TIER 1: MAL & AniList based embeds (VidLink - Gold Standard)
+      // ──────────────────────────────────────────────────────────────────────
       if (malId) {
         this.logger.debug(`MAL ID resolved: ${malId} -> Adding VidLink Tier 1`);
 
-        // Mirror 1: VidLink via MAL ID (Best for Anime 2026)
+        // Mirror 1: VidLink via MAL ID
         servers.push({
-          name: "Mirror 1 (VidLink - Ultra)",
-          url: `https://vidlink.pro/anime/${malId}/${epNum}/sub`,
+          name: `VidLink (${cleanSubDub.toUpperCase()})`,
+          url: `https://vidlink.pro/anime/${malId}/${epNum}/${cleanSubDub}?primaryColor=f97316&autoplay=0`,
           provider: "vidlink",
           isNative: false,
         });
 
-        // Mirror 2: VidSrc.me (Extremely stable)
+        // Mirror 2: VidSrc.me
         servers.push({
-          name: "Mirror 2 (VidSrc - Stable)",
-          url: `https://vidsrc.me/embed/anime/${malId}/${epNum}`,
+          name: `VidSrc ME (${cleanSubDub.toUpperCase()})`,
+          url: `https://vidsrc.me/embed/anime?mal=${malId}&ep=${epNum}&sub=${cleanSubDub}`,
           provider: "vidsrc",
           isNative: false,
         });
 
-        // Mirror 3: VidSrc.to
+        // Mirror 3: VidSrc.su
         servers.push({
-          name: "Mirror 3 (VidSrc.to)",
-          url: `https://vidsrc.to/embed/anime/${malId}/${epNum}`,
-          provider: "vidsrc",
-          isNative: false,
-        });
-
-        // Vidsrc.cc
-        servers.push({
-          name: "Mirror 4 (VidSrc.cc)",
-          url: `https://vidsrc.cc/v2/embed/anime/${malId}/${epNum}/sub`,
+          name: "VidSrc SU",
+          url: `https://vidsrc.su/embed/anime/${malId}/${epNum}`,
           provider: "vidsrc",
           isNative: false,
         });
       }
 
-      // AniList ID Direct (as a backup if MAL resolution fails)
-      if (!isNaN(anilistId)) {
+      // AniList direct fallback
+      if (!isNaN(anilistId) && anilistId !== malId) {
         servers.push({
-          name: "Mirror 5 (VidLink - AL)",
-          url: `https://vidlink.pro/anime/${anilistId}/${epNum}/sub`,
+          name: `VidLink AL (${cleanSubDub.toUpperCase()})`,
+          url: `https://vidlink.pro/anime/${anilistId}/${epNum}/${cleanSubDub}?primaryColor=f97316&autoplay=0`,
           provider: "vidlink",
           isNative: false,
         });
@@ -291,41 +315,37 @@ export class StreamingService {
       // ──────────────────────────────────────────────────────────────────────
       const tmdbIdPromise = tmdbIdParam
         ? Promise.resolve(tmdbIdParam)
-        : this.getTmdbId(isNaN(anilistId) ? undefined : anilistId, title).catch(
-            () => null,
-          );
+        : this.getTmdbId(
+            isNaN(anilistId) ? undefined : anilistId,
+            title,
+            malId || undefined,
+          ).catch(() => null);
 
       const tmdbId = await Promise.race([
         tmdbIdPromise,
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
       ]).catch(() => null);
 
-      const secondaryId = tmdbId || anilistId;
-      const isTmdb = !!tmdbId;
-
-      if (secondaryId) {
-        if (isTmdb) {
-          servers.push({
-            name: "Mirror 6 (VidLink - TMDB)",
-            url: `https://vidlink.pro/tv/${secondaryId}/1/${epNum}`,
-            provider: "vidlink",
-            isNative: false,
-          });
-
-          // 2Embed Backup
-          servers.push({
-            name: "2Embed (Backup)",
-            url: `https://www.2embed.skin/embedtv/${secondaryId}&s=1&e=${epNum}`,
-            provider: "2embed",
-            isNative: false,
-          });
-        }
-
-        // Auto-embed fallback
+      if (tmdbId) {
         servers.push({
-          name: "Mirror 7 (AutoEmbed)",
-          url: `https://player.vidsrc.nl/embed/anime/${malId || anilistId}/${epNum}`,
-          provider: "mirror",
+          name: `VidLink TMDB (${cleanSubDub.toUpperCase()})`,
+          url: `https://vidlink.pro/tv/${tmdbId}/1/${epNum}?primaryColor=f97316&autoplay=0&player=${cleanSubDub}&type=${cleanSubDub}`,
+          provider: "vidlink",
+          isNative: false,
+        });
+
+        servers.push({
+          name: `VidSrc PM (${cleanSubDub.toUpperCase()})`,
+          url: `https://vidsrc.pm/embed/tv/${tmdbId}/1/${epNum}?sub=${cleanSubDub}`,
+          provider: "vidsrc",
+          isNative: false,
+        });
+
+        // 2Embed Backup
+        servers.push({
+          name: "2Embed (Backup)",
+          url: `https://www.2embed.skin/embedtv/${tmdbId}&s=1&e=${epNum}`,
+          provider: "2embed",
           isNative: false,
         });
       }
