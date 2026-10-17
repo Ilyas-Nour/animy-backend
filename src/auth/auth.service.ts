@@ -313,20 +313,17 @@ export class AuthService {
 
     const user = await this.usersService.findByEmail(email);
 
-    // OWASP Security Best Practice: Never reveal if an email is registered or not
-    const genericResponse = {
-      message:
-        "If an account exists with this email address, a password reset link has been sent.",
-    };
-
+    // Only accept emails that are already in the database
     if (!user) {
-      return genericResponse;
+      throw new BadRequestException(
+        "No account found with this email address. Please check your spelling or create an account.",
+      );
     }
 
     if (user.provider !== AuthProvider.EMAIL) {
-      // If user registered with OAuth (e.g. Google), we don't reset their password
-      // but still return the generic message to avoid email enumeration
-      return genericResponse;
+      throw new BadRequestException(
+        `This account is registered using ${user.provider} Sign-In. Please sign in with ${user.provider}.`,
+      );
     }
 
     // Generate cryptographically secure reset token
@@ -377,7 +374,9 @@ export class AuthService {
       })
       .catch((err) => console.error("[ActivityLog] Error:", err));
 
-    return genericResponse;
+    return {
+      message: `Password reset link has been successfully sent to ${user.email}. Please check your inbox.`,
+    };
   }
 
   // Verify Reset Token Validity

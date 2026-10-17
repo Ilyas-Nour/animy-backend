@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Resend } from "resend";
 
@@ -276,20 +276,29 @@ export class EmailService {
         `,
       });
 
+      console.log(`[PASSWORD_RESET_LINK] Recovery URL for ${email}: ${resetLink}`);
+
       if (error) {
         console.error(
           `[EmailService] Resend API Error for ${email}:`,
           JSON.stringify(error, null, 2),
+        );
+        throw new BadRequestException(
+          `Email delivery service error: ${error.message || 'Unable to deliver reset email'}. Please verify your RESEND_API_KEY.`,
         );
       } else {
         console.log(
           `[EmailService] Password reset email successfully sent to ${email}. ID: ${data?.id}`,
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(
         `[EmailService] Password reset email failed (Exception) for ${email}:`,
         error,
+      );
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        error.message || "Failed to dispatch password reset email.",
       );
     }
   }
