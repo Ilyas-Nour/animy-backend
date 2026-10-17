@@ -11,7 +11,10 @@ import { UsersService } from "../users/users.service";
 import { EmailService } from "../email/email.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { AuthProvider } from "@prisma/client";
+import * as crypto from "crypto";
 
 @Injectable()
 export class AuthService {
@@ -299,5 +302,199 @@ export class AuthService {
 
   async validateUser(userId: string) {
     return this.usersService.findById(userId);
+  }
+
+  // Forgot Password (OWASP Safe)
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const email = dto.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException("Email is required");
+    }
+
+    const user = await this.usersService.findByEmail(email);
+
+    // OWASP Security Best Practice: Never reveal if an email is registered or not
+    const genericResponse = {
+      message:
+        "If an account exists with this email address, a password reset link has been sent.",
+    };
+
+    if (!user) {
+      return genericResponse;
+    }
+
+    if (user.provider !== AuthProvider.EMAIL) {
+      // If user registered with OAuth (e.g. Google), we don't reset their password
+      // but still return the generic message to avoid email enumeration
+      return genericResponse;
+    }
+
+    // Generate cryptographically secure reset token
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour expiration
+
+    try {
+      // Store in passwordResetTokens table
+      await this.prisma.passwordResetToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      await this.prisma.passwordResetToken.create({
+        data: {
+          token,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+    } catch (e: any) {
+      console.warn(
+        "[AuthService] PasswordResetToken table query fallback:",
+        e.message,
+      );
+      // Resilient Fallback: If table has not yet migrated in database, reuse verification_tokens table with prefix
+      await this.prisma.verificationToken.deleteMany({
+        where: {
+          userId: user.id,
+          token: { startsWith: "pwdreset_" },
+        },
+      });
+
+      await this.prisma.verificationToken.create({
+        data: {
+          token: `pwdreset_${token}`,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+    }
+
+    // Send transactional email
+    await this.emailService.sendPasswordResetEmail(user.email, token);
+
+    await this.prisma.activityLog
+      .create({
+        data: { action: "PASSWORD_RESET_REQUESTED", userId: user.id },
+      })
+      .catch((err) => console.error("[ActivityLog] Error:", err));
+
+    return genericResponse;
+  }
+
+  // Verify Reset Token Validity
+  async verifyResetToken(token: string) {
+    if (!token) {
+      throw new BadRequestException("Token is required");
+    }
+
+    let resetRecord: any = null;
+
+    try {
+      resetRecord = await this.prisma.passwordResetToken.findUnique({
+        where: { token },
+        include: { user: true },
+      });
+    } catch (e) {
+      resetRecord = null;
+    }
+
+    if (!resetRecord) {
+      // Also check fallback table
+      resetRecord = await this.prisma.verificationToken.findUnique({
+        where: { token: `pwdreset_${token}` },
+        include: { user: true },
+      });
+    }
+
+    if (!resetRecord) {
+      throw new BadRequestException(
+        "This password reset link is invalid or has already been used.",
+      );
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      throw new BadRequestException(
+        "This password reset link has expired. Please request a new one.",
+      );
+    }
+
+    return {
+      valid: true,
+      message: "Reset token is valid",
+    };
+  }
+
+  // Reset Password
+  async resetPassword(dto: ResetPasswordDto) {
+    const { token, password } = dto;
+    if (!token) {
+      throw new BadRequestException("Reset token is required");
+    }
+
+    let resetRecord: any = null;
+    let isFallback = false;
+
+    try {
+      resetRecord = await this.prisma.passwordResetToken.findUnique({
+        where: { token },
+        include: { user: true },
+      });
+    } catch (e) {
+      resetRecord = null;
+    }
+
+    if (!resetRecord) {
+      resetRecord = await this.prisma.verificationToken.findUnique({
+        where: { token: `pwdreset_${token}` },
+        include: { user: true },
+      });
+      if (resetRecord) isFallback = true;
+    }
+
+    if (!resetRecord) {
+      throw new BadRequestException(
+        "This password reset link is invalid or has already been used.",
+      );
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      throw new BadRequestException(
+        "This password reset link has expired. Please request a new one.",
+      );
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Update user password and ensure verified
+    await this.usersService.update(resetRecord.userId, {
+      password: hashedPassword,
+      emailVerified: true, // Proved ownership of mailbox
+    });
+
+    // Delete token so it can never be used again
+    try {
+      if (!isFallback) {
+        await this.prisma.passwordResetToken.delete({
+          where: { id: resetRecord.id },
+        });
+      } else {
+        await this.prisma.verificationToken.delete({
+          where: { id: resetRecord.id },
+        });
+      }
+    } catch (e) {
+      console.error("[AuthService] Error deleting reset token:", e);
+    }
+
+    await this.prisma.activityLog
+      .create({
+        data: { action: "PASSWORD_RESET_COMPLETED", userId: resetRecord.userId },
+      })
+      .catch((err) => console.error("[ActivityLog] Error:", err));
+
+    return {
+      message:
+        "Password has been reset successfully. You can now log in with your new password.",
+    };
   }
 }

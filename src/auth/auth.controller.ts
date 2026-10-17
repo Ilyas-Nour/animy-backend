@@ -14,6 +14,8 @@ import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { Public } from "../common/decorators/public.decorator";
 import { UsersService } from "../users/users.service";
 
@@ -47,6 +49,24 @@ export class AuthController {
   @Post("resend-verification")
   async resendVerification(@Body("email") email: string) {
     return this.authService.resendVerification(email);
+  }
+
+  @Public()
+  @Post("forgot-password")
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Public()
+  @Get("verify-reset-token")
+  async verifyResetToken(@Query("token") token: string) {
+    return this.authService.verifyResetToken(token);
+  }
+
+  @Public()
+  @Post("reset-password")
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
   }
 
   @Get("me")
