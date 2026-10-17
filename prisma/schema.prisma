@@ -70,6 +70,7 @@ model User {
   // Badge Relations
   badges            UserBadge[]
   VerificationToken VerificationToken[]
+  PasswordResetToken PasswordResetToken[]
 
   // News Relations
   comments     Comment[]
@@ -148,6 +149,18 @@ model VerificationToken {
   createdAt DateTime @default(now())
 
   @@map("verification_tokens")
+}
+
+// Password Reset Token for Account Recovery
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
 }
 
 enum AuthProvider {
