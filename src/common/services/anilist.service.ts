@@ -621,7 +621,21 @@ export class AnilistService {
               }
             }
           }
-          characters(sort: ROLE, page: 1, perPage: 10) {
+          characters(sort: [ROLE, RELEVANCE, ID], page: 1, perPage: 16) {
+            edges {
+              role
+              node {
+                id
+                name {
+                  full
+                  native
+                }
+                image {
+                  large
+                  medium
+                }
+              }
+            }
             nodes {
               id
               name {
@@ -630,9 +644,6 @@ export class AnilistService {
               image {
                 large
               }
-            }
-            edges {
-              role
             }
           }
           recommendations(sort: RATING_DESC, page: 1, perPage: 10) {
