@@ -132,7 +132,10 @@ export class MangaService {
         cachedManga &&
         cachedManga.lastUpdated > sevenDaysAgo &&
         cachedManga.imageUrl &&
-        cachedManga.synopsis
+        cachedManga.synopsis &&
+        Array.isArray(cachedManga.characters) &&
+        cachedManga.characters.length > 0 &&
+        cachedManga.characters.some((c: any) => c?.character?.name || c?.name)
       ) {
         this.logger.debug(`DB HIT: Manga ${id}`);
         return this.mapDbToResponse(cachedManga);
@@ -235,18 +238,45 @@ export class MangaService {
       if (!data) {
         data = await this.anilistService.getMangaById(id, true);
       }
-      const characters = data.characters?.nodes || [];
+      if (!data) return [];
 
-      return characters.map((char: any) => ({
-        character: {
-          mal_id: char.id,
-          name: char.name.full,
-          images: {
-            jpg: { image_url: char.image.large },
-          },
-        },
-        role: "Main",
-      }));
+      if (data.characters?.edges?.length > 0) {
+        return data.characters.edges
+          .map((edge: any, index: number) => {
+            const node = edge?.node || data.characters?.nodes?.[index];
+            if (!node || (!node.name?.full && !node.name?.native)) return null;
+            return {
+              role: edge?.role || "Main",
+              character: {
+                mal_id: node.id,
+                name: node.name?.full || node.name?.native || "Unknown",
+                images: {
+                  jpg: { image_url: node.image?.large || node.image?.medium || "" },
+                  webp: { image_url: node.image?.large || node.image?.medium || "" },
+                },
+              },
+            };
+          })
+          .filter(Boolean);
+      }
+
+      const characters = data.characters?.nodes || [];
+      return characters
+        .map((char: any) => {
+          if (!char || (!char.name?.full && !char.name?.native)) return null;
+          return {
+            character: {
+              mal_id: char.id,
+              name: char.name?.full || char.name?.native || "Unknown",
+              images: {
+                jpg: { image_url: char.image?.large || char.image?.medium || "" },
+                webp: { image_url: char.image?.large || char.image?.medium || "" },
+              },
+            },
+            role: "Main",
+          };
+        })
+        .filter(Boolean);
     } catch (e) {
       return [];
     }
@@ -344,13 +374,24 @@ export class MangaService {
       // MangaDex direct uses browser headers to bypass Cloudflare.
       // ─────────────────────────────────────────────────────────────
 
-      // Round 1: Consumet clone via AniList meta (fastest + most reliable)
-      let chapters = await this.fetchConsumetByAnilistId(id);
+      // Fetch MangaPill and MangaDex in parallel for rapid response and maximum chapters
+      const [mangaPillChapters, mangaDexChapters] = await Promise.all([
+        this.fetchMangaPillByTitle(titlesToSearch).catch(() => []),
+        this.fetchConsumetByAnilistId(id).catch(() => []),
+      ]);
 
-      // Round 2: MangaDex via MAL-Sync resolution (highly reliable ID mapping)
+      let chapters = (mangaPillChapters && mangaPillChapters.length >= (mangaDexChapters?.length || 0))
+        ? mangaPillChapters
+        : mangaDexChapters;
+
+      if (!chapters || chapters.length === 0) {
+        chapters = (mangaPillChapters && mangaPillChapters.length > 0) ? mangaPillChapters : (mangaDexChapters || []);
+      }
+
+      // If still empty, try secondary fallbacks: MangaDex via MAL-Sync and Consumet title search
       if (!chapters || chapters.length === 0) {
         this.logger.debug(
-          `Consumet meta failed for ${id}, trying MangaDex via MALSync`,
+          `Primary providers failed for ${id}, trying MangaDex via MALSync`,
         );
         chapters = await this.fetchMangaDexViaMalSync(
           id,
@@ -359,20 +400,11 @@ export class MangaService {
         );
       }
 
-      // Round 3: Consumet clone via title search across providers
       if (!chapters || chapters.length === 0) {
         this.logger.debug(
           `MangaDex failed for ${id}, trying Consumet title search`,
         );
         chapters = await this.fetchConsumetByTitleSearch(titlesToSearch);
-      }
-
-      // Round 4: MangaPill via Consumet
-      if (!chapters || chapters.length === 0) {
-        this.logger.debug(
-          `All main providers failed for ${id}, trying MangaPill`,
-        );
-        chapters = await this.fetchMangaPillByTitle(titlesToSearch);
       }
 
       this.logger.log(
@@ -440,7 +472,7 @@ export class MangaService {
           `https://api.malsync.moe/mal/manga/anilist:${anilistId}`,
           { timeout: 6000, headers: curlHeaders },
         );
-        const mdSite = syncRes?.data?.Sites?.MangaDex;
+        const mdSite = syncRes?.data?.Sites?.Mangadex || syncRes?.data?.Sites?.MangaDex;
         if (mdSite) {
           const keys = Object.keys(mdSite);
           if (keys.length > 0) {
@@ -524,7 +556,7 @@ export class MangaService {
       const syncRes = await axios
         .get(malsyncUrl, { timeout: 5000, headers: curlHeaders })
         .catch(() => null);
-      const mdSite = syncRes?.data?.Sites?.MangaDex;
+      const mdSite = syncRes?.data?.Sites?.Mangadex || syncRes?.data?.Sites?.MangaDex;
       if (mdSite) {
         mangaDexId = Object.keys(mdSite)[0] || null;
         this.logger.debug(
@@ -636,9 +668,8 @@ export class MangaService {
   private async fetchConsumetByTitleSearch(titles: string[]): Promise<any[]> {
     const baseUrls = [
       "https://consumet-api-clone.vercel.app",
-      "https://api.consumet.org",
     ];
-    const providers = ["mangadex", "mangasee123"];
+    const providers = ["mangadex", "mangapill", "mangasee123"];
 
     const attempts: Promise<any[]>[] = [];
 
@@ -669,8 +700,8 @@ export class MangaService {
                 return infoRes.data.chapters.map((c: any) => ({
                   id: `${provider}___${Buffer.from(String(c.id)).toString("base64url")}___${Buffer.from(baseUrl).toString("base64url")}`,
                   title:
-                    c.title || `Chapter ${c.chapterNumber || c.number || ""}`,
-                  chapterNumber: String(c.chapterNumber || c.number || "0"),
+                    c.title || `Chapter ${c.chapterNumber || c.chapter || c.number || ""}`,
+                  chapterNumber: String(c.chapterNumber || c.chapter || c.number || "0"),
                   volumeNumber: String(c.volumeNumber || c.volume || "0"),
                 }));
               } catch (e: any) {
@@ -697,7 +728,6 @@ export class MangaService {
   private async fetchMangaPillByTitle(titles: string[]): Promise<any[]> {
     const baseUrls = [
       "https://consumet-api-clone.vercel.app",
-      "https://api.consumet.org",
     ];
 
     for (const baseUrl of baseUrls) {
@@ -705,14 +735,14 @@ export class MangaService {
         try {
           const searchRes = await axios.get(
             `${baseUrl}/manga/mangapill/${encodeURIComponent(title)}`,
-            { timeout: 10000 },
+            { timeout: 8000 },
           );
           if (!searchRes.data?.results?.length) continue;
 
           const providerId = searchRes.data.results[0].id;
           const infoRes = await axios.get(
-            `${baseUrl}/manga/mangapill/info?id=${providerId}`,
-            { timeout: 10000 },
+            `${baseUrl}/manga/mangapill/info?id=${encodeURIComponent(providerId)}`,
+            { timeout: 8000 },
           );
           if (infoRes.data?.chapters?.length > 0) {
             this.logger.debug(
@@ -720,8 +750,8 @@ export class MangaService {
             );
             return infoRes.data.chapters.map((c: any) => ({
               id: `mangapill___${Buffer.from(String(c.id)).toString("base64url")}___${Buffer.from(baseUrl).toString("base64url")}`,
-              title: c.title || `Chapter ${c.chapterNumber || c.number || ""}`,
-              chapterNumber: String(c.chapterNumber || c.number || "0"),
+              title: c.title || `Chapter ${c.chapterNumber || c.chapter || c.number || ""}`,
+              chapterNumber: String(c.chapterNumber || c.chapter || c.number || "0"),
               volumeNumber: String(c.volumeNumber || c.volume || "0"),
             }));
           }
@@ -977,16 +1007,35 @@ export class MangaService {
       members: data.popularity,
       favorites: data.favourites,
       characters:
-        data.characters?.edges?.map((edge: any) => ({
-          role: edge?.role,
-          character: {
-            mal_id: edge?.node?.id,
-            name: edge?.node?.name?.full,
-            images: {
-              jpg: { image_url: edge?.node?.image?.large },
-            },
-          },
-        })) || [],
+        (data.characters?.edges?.length > 0
+          ? data.characters.edges.map((edge: any, index: number) => {
+              const node = edge?.node || data.characters?.nodes?.[index];
+              if (!node) return null;
+              return {
+                role: edge?.role || "Main",
+                character: {
+                  mal_id: node.id,
+                  name: node.name?.full || node.name?.native || "Unknown",
+                  images: {
+                    jpg: { image_url: node.image?.large || node.image?.medium || "" },
+                  },
+                },
+              };
+            })
+          : data.characters?.nodes?.map((char: any) => {
+              if (!char) return null;
+              return {
+                role: "Main",
+                character: {
+                  mal_id: char.id,
+                  name: char.name?.full || char.name?.native || "Unknown",
+                  images: {
+                    jpg: { image_url: char.image?.large || char.image?.medium || "" },
+                  },
+                },
+              };
+            }) || []
+        ).filter(Boolean),
       relations:
         data.relations?.edges?.map((edge: any) => ({
           relation: edge?.relationType,
@@ -1062,27 +1111,37 @@ export class MangaService {
         data.staff?.nodes?.map((s: any) => ({ name: s.name.full })) || [],
       genres: data.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
       characters:
-        data.characters?.edges?.map((edge: any) => ({
-          role: edge?.role,
-          character: {
-            mal_id: edge?.node?.id,
-            name: edge?.node?.name?.full,
-            images: {
-              jpg: { image_url: edge?.node?.image?.large },
-            },
-          },
-        })) ||
-        data.characters?.nodes?.map((char: any) => ({
-          character: {
-            mal_id: char?.id,
-            name: char?.name?.full,
-            images: {
-              jpg: { image_url: char?.image?.large },
-            },
-          },
-          role: "Main",
-        })) ||
-        [],
+        (data.characters?.edges?.length > 0
+          ? data.characters.edges.map((edge: any, index: number) => {
+              const node = edge?.node || data.characters?.nodes?.[index];
+              if (!node) return null;
+              return {
+                role: edge?.role || "Main",
+                character: {
+                  mal_id: node.id,
+                  name: node.name?.full || node.name?.native || "Unknown",
+                  images: {
+                    jpg: { image_url: node.image?.large || node.image?.medium || "" },
+                    webp: { image_url: node.image?.large || node.image?.medium || "" },
+                  },
+                },
+              };
+            })
+          : data.characters?.nodes?.map((char: any) => {
+              if (!char) return null;
+              return {
+                role: "Main",
+                character: {
+                  mal_id: char.id,
+                  name: char.name?.full || char.name?.native || "Unknown",
+                  images: {
+                    jpg: { image_url: char.image?.large || char.image?.medium || "" },
+                    webp: { image_url: char.image?.large || char.image?.medium || "" },
+                  },
+                },
+              };
+            }) || []
+        ).filter(Boolean),
       relations:
         data.relations?.edges?.map((edge: any) => ({
           relation: edge?.relationType,
